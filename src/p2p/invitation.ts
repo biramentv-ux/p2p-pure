@@ -24,6 +24,8 @@ import type { Ed25519KeyPair } from "../identity/types";
 import { base64UrlToBytes, bytesToBase64Url, deflateRaw, inflateRaw } from "./encoding";
 
 export const INVITATION_PREFIX = "p2p1:";
+/** Same bytes as INVITATION_PREFIX, written as hex for typing or copy-paste without a camera. */
+export const INVITATION_HEX_PREFIX = "p2p1h:";
 export const INVITATION_TTL_MS = 10 * 60 * 1000;
 
 const VERSION = 2;
@@ -178,12 +180,35 @@ export async function encodeInvitation(inv: Invitation): Promise<string> {
   return INVITATION_PREFIX + bytesToBase64Url(body);
 }
 
+/** Hex form of the same invitation. Use when the other device has no camera. */
+export async function encodeInvitationHex(inv: Invitation): Promise<string> {
+  const b64 = await encodeInvitation(inv);
+  const bytes = base64UrlToBytes(b64.slice(INVITATION_PREFIX.length));
+  let hex = "";
+  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
+  return INVITATION_HEX_PREFIX + hex;
+}
+
+/** Converts either accepted text form to the canonical "p2p1:" base64url form. */
+function normalizePayload(payload: string): string {
+  const trimmed = payload.replace(/\s+/g, "");
+  if (!trimmed.startsWith(INVITATION_HEX_PREFIX)) return trimmed;
+  const hex = trimmed.slice(INVITATION_HEX_PREFIX.length);
+  if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new InvitationError("Invitation hex is malformed.", "MALFORMED");
+  }
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return INVITATION_PREFIX + bytesToBase64Url(bytes);
+}
+
 /**
  * Parses and verifies an invitation. Rejects bad signatures, expired
  * invitations, and malformed input. Does NOT decide whether the sender is
  * a known contact — that is the caller's job.
  */
-export async function decodeInvitation(payload: string, now = Date.now()): Promise<Invitation> {
+export async function decodeInvitation(rawPayload: string, now = Date.now()): Promise<Invitation> {
+  const payload = normalizePayload(rawPayload);
   if (!payload.startsWith(INVITATION_PREFIX)) {
     throw new InvitationError("Not a P2P invitation.", "MALFORMED");
   }
