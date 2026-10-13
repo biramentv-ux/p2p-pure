@@ -9,7 +9,12 @@
  * Only public STUN is used (hard constraint). No TURN: some NATs will fail.
  */
 
-export const ICE_SERVERS: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302"] }];
+export const ICE_SERVERS: RTCIceServer[] = [
+  { urls: ["stun:stun.l.google.com:19302"] },
+  // A second public STUN server (no data passes through it). Helps reflexive candidates on IPv6 networks.
+];
+/** Pause sending while this many bytes wait in the browser's buffer (photos are many frames). */
+const SEND_BUFFER_HIGH = 512 * 1024;
 export const DATA_CHANNEL_LABEL = "p2pm";
 const ICE_GATHER_TIMEOUT_MS = 8_000;
 export const CONNECT_TIMEOUT_MS = 30_000;
@@ -97,6 +102,22 @@ export class PeerLink {
       throw new PeerLinkError("Data channel is not open.");
     }
     this.channel.send(text);
+  }
+
+  /** Resolves when the outgoing buffer has drained enough to send more. */
+  async waitForDrain(): Promise<void> {
+    const ch = this.channel;
+    if (!ch || ch.bufferedAmount < SEND_BUFFER_HIGH) return;
+    await new Promise<void>((resolve) => {
+      ch.bufferedAmountLowThreshold = SEND_BUFFER_HIGH / 4;
+      const done = () => {
+        ch.removeEventListener("bufferedamountlow", done);
+        ch.removeEventListener("close", done);
+        resolve();
+      };
+      ch.addEventListener("bufferedamountlow", done);
+      ch.addEventListener("close", done);
+    });
   }
 
   onMessage(handler: MessageHandler): () => void {
