@@ -119,3 +119,29 @@ describe("encrypted message history", () => {
     await expect(loadHistory(deriveHistoryKey(intruder), peer)).rejects.toThrow();
   });
 });
+
+describe("photos in history", () => {
+  const dataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==";
+
+  it("round-trips a photo and keeps text records readable", async () => {
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    await appendMessage(key, "did:key:zPeer", { text: "hi", direction: "in", timestamp: 1 });
+    await appendMessage(key, "did:key:zPeer", { text: "", image: dataUrl, direction: "out", timestamp: 2 });
+    const history = await loadHistory(key, "did:key:zPeer");
+    expect(history[0]).toMatchObject({ text: "hi" });
+    expect(history[0].image).toBeUndefined();
+    expect(history[1]).toMatchObject({ text: "", image: dataUrl, direction: "out" });
+  });
+
+  it("does not show a tampered non-image payload as a photo", async () => {
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    await appendMessage(key, "did:key:zPeer2", {
+      text: "",
+      image: "data:text/html;base64,PHNjcmlwdD4=",
+      direction: "in",
+      timestamp: 1,
+    });
+    const [m] = await loadHistory(key, "did:key:zPeer2");
+    expect(m.image).toBeUndefined();
+  });
+});

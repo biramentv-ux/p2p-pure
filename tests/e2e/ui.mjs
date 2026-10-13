@@ -168,6 +168,37 @@ try {
     (await alice.page.locator(".messages .msg.in").first().innerText()).includes("Чувам те"),
   );
 
+  // Photo Alice -> Bob (gallery input), then Bob -> Alice (camera input)
+  const pngB64 = await alice.page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 1600;
+    c.height = 900;
+    const x = c.getContext("2d");
+    const g = x.createLinearGradient(0, 0, 1600, 900);
+    g.addColorStop(0, "#d33");
+    g.addColorStop(1, "#33d");
+    x.fillStyle = g;
+    x.fillRect(0, 0, 1600, 900);
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  const png = Buffer.from(pngB64, "base64");
+  await alice.page
+    .locator('input[type="file"]')
+    .nth(1)
+    .setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: png });
+  await bob.page.locator(".messages .msg.in img.msg-image").waitFor({ timeout: 30_000 });
+  const widthB = await bob.page.locator(".messages .msg.in img.msg-image").evaluate((i) => i.naturalWidth);
+  check("photo from the gallery arrives and renders in the other chat", widthB > 0, `width=${widthB}`);
+  await alice.page.locator(".messages .msg.out img.msg-image").waitFor({ timeout: 10_000 });
+  check("sender also sees the photo it sent", true);
+
+  await bob.page
+    .locator('input[type="file"]')
+    .nth(0)
+    .setInputFiles({ name: "kamera.png", mimeType: "image/png", buffer: png });
+  await alice.page.locator(".messages .msg.in img.msg-image").waitFor({ timeout: 30_000 });
+  check("photo taken with the camera input arrives", true);
+
   // Contact is saved and listed as verified
   await alice.page.getByRole("button", { name: "Назад" }).click();
   await alice.page.getByRole("button", { name: "Контакти" }).click();
