@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import worker, { type Env } from "../../worker/index";
 import { encodeChatCode } from "../../worker/logic";
+import { MemoryKV } from "./memoryKv";
 
-const env: Env = { TELEGRAM_BOT_TOKEN: "123:TEST", TELEGRAM_WEBHOOK_SECRET: "webhook-secret-value" };
+const env: Env = {
+  TELEGRAM_BOT_TOKEN: "123:TEST",
+  TELEGRAM_WEBHOOK_SECRET: "webhook-secret-value",
+  DELIVERIES: new MemoryKV() as unknown as KVNamespace,
+};
 const INVITE = "p2p1:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8";
 
 interface Sent {
@@ -15,12 +20,14 @@ let telegramOk: boolean;
 
 beforeEach(() => {
   sent = [];
+  (env.DELIVERIES as unknown as MemoryKV).clear();
   telegramOk = true;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: RequestInit) => {
       sent.push({ url, body: JSON.parse(String(init.body)) });
-      return new Response(JSON.stringify({ ok: telegramOk }), { status: telegramOk ? 200 : 403 });
+      const result = { message_id: 4242 };
+      return new Response(JSON.stringify({ ok: telegramOk, result }), { status: telegramOk ? 200 : 403 });
     }),
   );
 });

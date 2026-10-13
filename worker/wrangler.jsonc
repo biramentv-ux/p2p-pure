@@ -1,5 +1,8 @@
 // Cloudflare Worker config for the Telegram signaling relay.
-// No storage bindings: the Worker is stateless by design.
+// Storage: one KV namespace that holds only pending deliveries (token -> chat and
+// message ids), each removed when the recipient clicks the button or when it is due.
+// Create it once: npx wrangler kv namespace create DELIVERIES
+// and paste the printed id below.
 // Secrets (set with wrangler secret put, never committed):
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET
 {
@@ -13,5 +16,11 @@
   },
   "routes": [
     { "pattern": "tg.dyrakarmy.online", "custom_domain": true },
+  ],
+  "triggers": {
+    "crons": ["* * * * *"],
+  },
+  "kv_namespaces": [
+    { "binding": "DELIVERIES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" },
   ],
 }
