@@ -19,6 +19,15 @@ interface TelegramUpdate {
 
 const TELEGRAM_API = "https://api.telegram.org";
 
+/** Shown by /help. Keep in sync with BOT_COMMANDS in setup-bot.mjs. */
+export const HELP_TEXT =
+  "Как работи ботът:\n\n" +
+  "1. /start — показва твоя код за получаване.\n" +
+  "2. Дай кода си на човека, с когото искаш да се свържеш.\n" +
+  "3. Той изпраща: /send <твоят код>, нов ред, после поканата от приложението.\n" +
+  "4. Поканата се препраща до теб. Постави я в приложението: Свържи се → Постави покана.\n\n" +
+  "Ботът не съхранява съобщения и покани. Съдържанието се проверява в приложението, не тук.";
+
 async function sendText(env: Env, chatId: number, text: string): Promise<boolean> {
   const res = await fetch(`${TELEGRAM_API}/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
@@ -67,6 +76,10 @@ export default {
           `Твоят код за получаване: ${encodeChatCode(msg.chat.id)}\n\n` +
             "Дай този код на другия човек. Той ще изпрати: /send <код>, нов ред, и поканата от приложението.",
         );
+        break;
+
+      case "help":
+        await sendText(env, msg.chat.id, HELP_TEXT);
         break;
 
       case "send": {

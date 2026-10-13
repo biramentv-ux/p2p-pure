@@ -78,6 +78,12 @@ describe("commands", () => {
     expect(sent[0].body.text).toContain(encodeChatCode(555));
   });
 
+  it("/help replies with the instructions", async () => {
+    await worker.fetch(webhook(privateMsg(555, "/help")), env);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].body.text).toContain("/send");
+  });
+
   it("/send forwards the invitation verbatim to the recipient and confirms to the sender", async () => {
     const code = encodeChatCode(777);
     await worker.fetch(webhook(privateMsg(555, `/send ${code}\n${INVITE}`)), env);
