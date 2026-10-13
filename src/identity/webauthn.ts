@@ -21,6 +21,7 @@
  */
 import { IdentityError } from "./types";
 import { asBufferSource } from "./bufferUtils";
+import { getMobileBridge } from "../platform/mobile";
 
 const RP_NAME = "P2P Messenger";
 const PRF_SALT = new TextEncoder().encode("p2p-messenger/webauthn-prf/v1");
@@ -56,7 +57,7 @@ export interface CreatePasskeyResult {
  */
 export async function createPasskey(
   userIdentifierLabel: string,
-  rpId: string = typeof window !== "undefined" ? window.location.hostname : "localhost",
+  rpId: string = getMobileBridge().passkeyRpId(),
 ): Promise<CreatePasskeyResult> {
   requireWebAuthn();
 
@@ -112,7 +113,7 @@ export interface GetPasskeyResult {
  */
 export async function getPasskey(
   credentialId?: ArrayBuffer,
-  rpId: string = typeof window !== "undefined" ? window.location.hostname : "localhost",
+  rpId: string = getMobileBridge().passkeyRpId(),
 ): Promise<GetPasskeyResult> {
   requireWebAuthn();
 

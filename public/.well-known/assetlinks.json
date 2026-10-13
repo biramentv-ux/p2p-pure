@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.get_login_creds"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.dyrakarmy.p2pmessenger",
+      "sha256_cert_fingerprints": ["REPLACE_WITH_SHA256_FINGERPRINT"]
+    }
+  }
+]
