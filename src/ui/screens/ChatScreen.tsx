@@ -3,6 +3,8 @@ import type { Contact } from "../../contacts/contacts";
 import { appendMessage, loadHistory, type ChatMessage } from "../../history/messageStore";
 import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
+import { buildPhotoFrames, PhotoReceiver, sanitizeText, sniffMime } from "../../p2p/photo";
+import { prepareImage } from "../image";
 
 interface ChatScreenProps {
   contact: Contact;
@@ -17,6 +19,10 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [connected, setConnected] = useState(link.isOpen());
+  const [transfer, setTransfer] = useState<{ label: string; done: number; total: number } | null>(null);
+  const receiverRef = useRef(new PhotoReceiver());
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const galleryInput = useRef<HTMLInputElement>(null);
 
   // Sends and receives are chained so counters and chain keys advance in order.
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -39,9 +45,27 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       void enqueue(async () => {
         try {
           const plaintext = await session.open(text);
-          const msg: ChatMessage = { text: plaintext, direction: "in", timestamp: Date.now() };
+          const result = receiverRef.current.feed(plaintext);
+          if (result.kind === "progress") {
+            if (alive) setTransfer({ label: "Получавам снимка", done: result.received, total: result.total });
+            return;
+          }
+          if (result.kind === "rejected") {
+            if (alive) {
+              setTransfer(null);
+              setNotice(result.reason);
+            }
+            return;
+          }
+          const msg: ChatMessage =
+            result.kind === "photo"
+              ? { text: "", image: result.dataUrl, direction: "in", timestamp: Date.now() }
+              : { text: result.text, direction: "in", timestamp: Date.now() };
           await appendMessage(historyKey, contact.did, msg);
-          if (alive) setMessages((prev) => [...prev, msg]);
+          if (alive) {
+            setTransfer(null);
+            setMessages((prev) => [...prev, msg]);
+          }
         } catch (err) {
           if (alive) setNotice(err instanceof Error ? err.message : "Съобщението не можа да се разшифрова.");
         }
@@ -60,7 +84,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
   function onSend(e: FormEvent) {
     e.preventDefault();
-    const text = draft.trim();
+    const text = sanitizeText(draft).trim();
     if (!text) return;
     setDraft("");
     void enqueue(async () => {
@@ -74,6 +98,35 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         setNotice(err instanceof Error ? err.message : "Съобщението не беше изпратено.");
       }
     });
+  }
+
+  async function onPickPhoto(file: File | undefined) {
+    if (!file) return;
+    setNotice(null);
+    try {
+      const bytes = await prepareImage(file);
+      const mime = sniffMime(bytes);
+      if (!mime) throw new Error("Снимката не може да се обработи.");
+      const frames = buildPhotoFrames(bytes, mime);
+      await enqueue(async () => {
+        try {
+          for (let i = 0; i < frames.length; i++) {
+            link.send(await session.seal(frames[i]));
+            setTransfer({ label: "Изпращам снимка", done: i, total: frames.length });
+            await link.waitForDrain();
+          }
+          const url = `data:${mime};base64,${btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""))}`;
+          const msg: ChatMessage = { text: "", image: url, direction: "out", timestamp: Date.now() };
+          await appendMessage(historyKey, contact.did, msg);
+          setMessages((prev) => [...prev, msg]);
+        } finally {
+          setTransfer(null);
+        }
+      });
+    } catch (err) {
+      setTransfer(null);
+      setNotice(err instanceof Error ? err.message : "Снимката не беше изпратена.");
+    }
   }
 
   return (
@@ -95,14 +148,64 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       <ol className="messages">
         {messages.map((m, i) => (
           <li key={`${m.timestamp}-${i}`} className={m.direction === "out" ? "msg out" : "msg in"}>
-            <span className="msg-text">{m.text}</span>
+            {m.image ? (
+              <img className="msg-image" src={m.image} alt="Снимка" />
+            ) : (
+              <span className="msg-text">{m.text}</span>
+            )}
             <time>{new Date(m.timestamp).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" })}</time>
           </li>
         ))}
         {messages.length === 0 && <li className="empty">Няма съобщения още. Кажи здравей.</li>}
       </ol>
 
+      {transfer && (
+        <p className="chat-notice" role="status">
+          {transfer.label}: {Math.min(100, Math.round((transfer.done / transfer.total) * 100))}%
+        </p>
+      )}
+
+      <input
+        ref={cameraInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          void onPickPhoto(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={galleryInput}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          void onPickPhoto(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+
       <form className="composer" onSubmit={onSend}>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!connected || !!transfer}
+          onClick={() => cameraInput.current?.click()}
+          aria-label="Снимай с камерата"
+        >
+          Камера
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!connected || !!transfer}
+          onClick={() => galleryInput.current?.click()}
+          aria-label="Избери снимка от галерията"
+        >
+          Галерия
+        </button>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
