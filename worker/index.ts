@@ -3,17 +3,40 @@
 // logged, and the Worker never reads or changes invitation contents beyond
 // format validation (the client verifies the signature).
 
-import { encodeChatCode, isAuthorizedWebhook, parseCommand } from "./logic";
+import {
+  DELETE_CALLBACK_PREFIX,
+  DELIVERY_TTL_MS,
+  deliveryKey,
+  encodeChatCode,
+  isAuthorizedWebhook,
+  newDeliveryToken,
+  parseCommand,
+  parseDeleteCallback,
+} from "./logic";
 
 export interface Env {
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET: string;
+  /** Holds only pending deliveries (token -> chat and message ids), each with a due time. */
+  DELIVERIES: KVNamespace;
+}
+
+/** What the Worker remembers about one delivered invitation. Nothing else is stored. */
+export interface Delivery {
+  recipientChatId: number;
+  messageId: number;
+  dueAt: number;
 }
 
 interface TelegramUpdate {
   message?: {
     chat: { id: number; type: string };
     text?: string;
+  };
+  callback_query?: {
+    id: string;
+    data?: string;
+    message?: { message_id: number; chat: { id: number } };
   };
 }
 
@@ -28,16 +51,80 @@ export const HELP_TEXT =
   "4. Поканата се препраща до теб. Постави я в приложението: Свържи се → Постави покана.\n\n" +
   "Ботът не съхранява съобщения и покани. Съдържанието се проверява в приложението, не тук.";
 
-async function sendText(env: Env, chatId: number, text: string): Promise<boolean> {
-  const res = await fetch(`${TELEGRAM_API}/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+async function callApi(env: Env, method: string, body: unknown): Promise<unknown | null> {
+  const res = await fetch(`${TELEGRAM_API}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+    body: JSON.stringify(body),
   });
-  return res.ok;
+  if (!res.ok) return null;
+  const data = (await res.json().catch(() => null)) as { ok?: boolean; result?: unknown } | null;
+  return data?.ok ? data.result ?? true : null;
+}
+
+async function sendText(
+  env: Env,
+  chatId: number,
+  text: string,
+  extra: Record<string, unknown> = {},
+): Promise<{ messageId: number } | null> {
+  const result = (await callApi(env, "sendMessage", {
+    chat_id: chatId,
+    text,
+    disable_web_page_preview: true,
+    ...extra,
+  })) as { message_id?: number } | null;
+  return result && typeof result.message_id === "number" ? { messageId: result.message_id } : null;
+}
+
+/** Deletes a message the bot sent. Returns false if Telegram refuses (already gone, too old). */
+async function deleteBotMessage(env: Env, chatId: number, messageId: number): Promise<boolean> {
+  return (await callApi(env, "deleteMessage", { chat_id: chatId, message_id: messageId })) !== null;
+}
+
+/**
+ * Deletes deliveries whose time has passed. Runs on a cron trigger, so messages
+ * the recipient never clicked on still disappear after DELIVERY_TTL_MS.
+ */
+export async function purgeDueDeliveries(env: Env, now = Date.now()): Promise<number> {
+  let purged = 0;
+  let cursor: string | undefined;
+  do {
+    const page: { keys: { name: string }[]; list_complete: boolean; cursor?: string } =
+      await env.DELIVERIES.list({ prefix: "d:", cursor });
+    for (const { name } of page.keys) {
+      const delivery = (await env.DELIVERIES.get(name, "json")) as Delivery | null;
+      if (!delivery || delivery.dueAt > now) continue;
+      await deleteBotMessage(env, delivery.recipientChatId, delivery.messageId);
+      await env.DELIVERIES.delete(name);
+      purged++;
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return purged;
+}
+
+/** Handles the "Копирах — изтрий" button press. */
+async function handleDeleteButton(env: Env, cb: NonNullable<TelegramUpdate["callback_query"]>): Promise<void> {
+  const token = parseDeleteCallback(cb.data);
+  const pressedIn = cb.message?.chat.id;
+  const delivery = token ? ((await env.DELIVERIES.get(deliveryKey(token!), "json")) as Delivery | null) : null;
+
+  // Only the recipient's own chat may delete the message, and only while it is pending.
+  if (!delivery || pressedIn !== delivery.recipientChatId) {
+    await callApi(env, "answerCallbackQuery", { callback_query_id: cb.id, text: "Вече е изтрито." });
+    return;
+  }
+  await env.DELIVERIES.delete(deliveryKey(token!));
+  await deleteBotMessage(env, delivery.recipientChatId, delivery.messageId);
+  await callApi(env, "answerCallbackQuery", { callback_query_id: cb.id, text: "Поканата е изтрита." });
 }
 
 export default {
+  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+    await purgeDueDeliveries(env);
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
@@ -59,6 +146,13 @@ export default {
       update = (await request.json()) as TelegramUpdate;
     } catch {
       return new Response("Bad request", { status: 400 });
+    }
+
+    if (update.callback_query) {
+      if (update.callback_query.data?.startsWith(DELETE_CALLBACK_PREFIX)) {
+        await handleDeleteButton(env, update.callback_query);
+      }
+      return new Response("ok", { status: 200 });
     }
 
     const msg = update.message;
@@ -83,11 +177,28 @@ export default {
         break;
 
       case "send": {
+        const token = newDeliveryToken();
         const delivered = await sendText(
           env,
           cmd.targetChatId,
-          `Покана за P2P връзка:\n${cmd.invitation}\n\nПостави я в приложението: Свържи се → Постави покана.`,
+          `Покана за P2P връзка:\n${cmd.invitation}\n\nПостави я в приложението: Свържи се → Постави покана.\nСлед като я копираш, натисни бутона, за да се изтрие.`,
+          {
+            reply_markup: {
+              inline_keyboard: [[{ text: "Копирах — изтрий", callback_data: DELETE_CALLBACK_PREFIX + token }]],
+            },
+          },
         );
+        if (delivered) {
+          const record: Delivery = {
+            recipientChatId: cmd.targetChatId,
+            messageId: delivered.messageId,
+            dueAt: Date.now() + DELIVERY_TTL_MS,
+          };
+          // Saved only after the message exists, so a failed send leaves no record.
+          await env.DELIVERIES.put(deliveryKey(token), JSON.stringify(record), {
+            expirationTtl: Math.ceil(DELIVERY_TTL_MS / 1000) + 300,
+          });
+        }
         await sendText(
           env,
           msg.chat.id,
