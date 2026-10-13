@@ -52,7 +52,7 @@ try {
   await call("setWebhook", {
     url: webhookUrl,
     secret_token: secret,
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "callback_query"],
     drop_pending_updates: true,
   });
   console.log("Готово. Изпрати /start на бота, за да провериш.");

@@ -95,3 +95,25 @@ export function isAuthorizedWebhook(header: string | null, expected: string): bo
   for (let i = 0; i < header.length; i++) diff |= header.charCodeAt(i) ^ expected.charCodeAt(i);
   return diff === 0;
 }
+
+/** Prefix of the inline button's callback data. Telegram allows up to 64 bytes. */
+export const DELETE_CALLBACK_PREFIX = "d:";
+/** Time after which an unclicked delivery message is deleted anyway. */
+export const DELIVERY_TTL_MS = 10 * 60 * 1000;
+
+/** Random 128-bit token, base64url. It is never part of the invitation itself. */
+export function newDeliveryToken(random: (n: number) => Uint8Array = (n) => crypto.getRandomValues(new Uint8Array(n))): string {
+  return bytesToBase64Url(random(16));
+}
+
+/** Returns the token from callback data, or null if the data is not ours. */
+export function parseDeleteCallback(data: string | undefined): string | null {
+  if (!data || !data.startsWith(DELETE_CALLBACK_PREFIX)) return null;
+  const token = data.slice(DELETE_CALLBACK_PREFIX.length);
+  return /^[A-Za-z0-9_-]{22}$/.test(token) ? token : null;
+}
+
+/** KV key for a pending delivery. */
+export function deliveryKey(token: string): string {
+  return `d:${token}`;
+}
