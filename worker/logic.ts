@@ -52,6 +52,7 @@ export function isValidInvitation(text: string): boolean {
 
 export type Command =
   | { kind: "start" }
+  | { kind: "help" }
   | { kind: "send"; targetChatId: number; invitation: string }
   | { kind: "error"; reason: string }
   | { kind: "ignore" };
@@ -59,11 +60,13 @@ export type Command =
 /**
  * Parses one incoming Telegram text message.
  *   /start                      -> show the sender's own code
+ *   /help                       -> show instructions
  *   /send <code>\n<invitation>  -> forward the invitation to the code's chat
  */
 export function parseCommand(text: string): Command {
   const trimmed = text.trim();
   if (trimmed === "/start" || trimmed.startsWith("/start ")) return { kind: "start" };
+  if (trimmed === "/help" || trimmed.startsWith("/help ")) return { kind: "help" };
   if (!trimmed.startsWith("/send")) return { kind: "ignore" };
 
   const rest = trimmed.slice("/send".length).trim();

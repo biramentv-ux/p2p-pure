@@ -51,6 +51,10 @@ describe("parseCommand", () => {
     expect(parseCommand("/start ref123")).toEqual({ kind: "start" });
   });
 
+  it("handles /help", () => {
+    expect(parseCommand("/help")).toEqual({ kind: "help" });
+  });
+
   it("forwards a valid /send", () => {
     expect(parseCommand(`/send ${code}\n${INVITE}`)).toEqual({
       kind: "send",
