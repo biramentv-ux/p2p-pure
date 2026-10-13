@@ -1,0 +1,120 @@
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import type { Contact } from "../../contacts/contacts";
+import { appendMessage, loadHistory, type ChatMessage } from "../../history/messageStore";
+import type { PeerLink } from "../../p2p/peer";
+import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
+
+interface ChatScreenProps {
+  contact: Contact;
+  link: PeerLink;
+  session: SecureSession;
+  historyKey: Uint8Array;
+  onClose: () => void;
+}
+
+export function ChatScreen({ contact, link, session, historyKey, onClose }: ChatScreenProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [connected, setConnected] = useState(link.isOpen());
+
+  // Sends and receives are chained so counters and chain keys advance in order.
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
+    const next = queueRef.current.then(task, task);
+    queueRef.current = next.catch(() => undefined);
+    return next;
+  };
+
+  useEffect(() => {
+    let alive = true;
+    loadHistory(historyKey, contact.did)
+      .then((history) => {
+        if (alive) setMessages(history);
+      })
+      .catch(() => alive && setNotice("Историята не можа да се прочете."));
+
+    const off = link.onMessage((text) => {
+      if (!isEncryptedMessage(text)) return;
+      void enqueue(async () => {
+        try {
+          const plaintext = await session.open(text);
+          const msg: ChatMessage = { text: plaintext, direction: "in", timestamp: Date.now() };
+          await appendMessage(historyKey, contact.did, msg);
+          if (alive) setMessages((prev) => [...prev, msg]);
+        } catch (err) {
+          if (alive) setNotice(err instanceof Error ? err.message : "Съобщението не можа да се разшифрова.");
+        }
+      });
+    });
+
+    const timer = setInterval(() => alive && setConnected(link.isOpen()), 1000);
+    return () => {
+      alive = false;
+      off();
+      clearInterval(timer);
+    };
+    // Mount-only: the link and session are owned by the parent for this chat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function onSend(e: FormEvent) {
+    e.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    void enqueue(async () => {
+      try {
+        const wire = await session.seal(text);
+        link.send(wire);
+        const msg: ChatMessage = { text, direction: "out", timestamp: Date.now() };
+        await appendMessage(historyKey, contact.did, msg);
+        setMessages((prev) => [...prev, msg]);
+      } catch (err) {
+        setNotice(err instanceof Error ? err.message : "Съобщението не беше изпратено.");
+      }
+    });
+  }
+
+  return (
+    <div className="chat">
+      <header className="chat-header">
+        <button className="secondary" onClick={onClose}>
+          Назад
+        </button>
+        <div>
+          <strong>{contact.name}</strong>
+          <span className={connected ? "status on" : "status off"}>
+            {connected ? " · свързан" : " · връзката е прекъсната"}
+          </span>
+        </div>
+      </header>
+
+      {notice && <p role="alert" className="chat-notice">{notice}</p>}
+
+      <ol className="messages">
+        {messages.map((m, i) => (
+          <li key={`${m.timestamp}-${i}`} className={m.direction === "out" ? "msg out" : "msg in"}>
+            <span className="msg-text">{m.text}</span>
+            <time>{new Date(m.timestamp).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" })}</time>
+          </li>
+        ))}
+        {messages.length === 0 && <li className="empty">Няма съобщения още. Кажи здравей.</li>}
+      </ol>
+
+      <form className="composer" onSubmit={onSend}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Съобщение"
+          maxLength={4000}
+          aria-label="Съобщение"
+          disabled={!connected}
+        />
+        <button type="submit" disabled={!connected || !draft.trim()}>
+          Изпрати
+        </button>
+      </form>
+    </div>
+  );
+}
