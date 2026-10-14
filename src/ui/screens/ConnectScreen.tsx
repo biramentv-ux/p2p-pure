@@ -8,10 +8,12 @@ import {
   createInvitation,
   decodeInvitation,
   encodeInvitation,
+  encodeInvitationHex,
   InvitationError,
   type Invitation,
 } from "../../p2p/invitation";
 import { PeerLink, CONNECT_TIMEOUT_MS } from "../../p2p/peer";
+import { describeReachability, summarizeCandidates } from "../../p2p/network";
 import { completeHandshake } from "../../p2p/session";
 import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "../../p2p/secureSession";
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
@@ -39,10 +41,10 @@ const RESPONDER_TIMEOUT_MS = 5 * 60_000;
 type View =
   | { k: "choose" }
   | { k: "busy"; label: string }
-  | { k: "offer-qr"; payload: string }
+  | { k: "offer-qr"; payload: string; hex: string; net: string }
   | { k: "scan-answer" }
   | { k: "scan-offer" }
-  | { k: "answer-qr"; payload: string }
+  | { k: "answer-qr"; payload: string; hex: string; net: string }
   | {
       k: "confirm";
       peerPublicKey: Uint8Array;
@@ -50,6 +52,29 @@ type View =
       link: PeerLink;
       session: SecureSession;
     };
+
+/** Text version of the QR payload, for a device without a camera. Selectable and copyable. */
+function HexFallback({ hex }: { hex: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(hex);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <details>
+      <summary>Няма камера на другото устройство?</summary>
+      <p>Копирай този код и го изпрати по сигурен начин. Другият човек го поставя с „Няма камера?“.</p>
+      <textarea readOnly rows={4} value={hex} aria-label="Покана като hex" onFocus={(e) => e.target.select()} />
+      <button type="button" className="secondary" onClick={() => void copy()}>
+        {copied ? "Копирано" : "Копирай кода"}
+      </button>
+    </details>
+  );
+}
 
 export function ConnectScreen({ identity, expected, onConnected, onCancel }: ConnectScreenProps) {
   const [view, setView] = useState<View>({ k: "choose" });
@@ -119,7 +144,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
-      setView({ k: "offer-qr", payload });
+      const hex = await encodeInvitationHex(offer);
+      setView({ k: "offer-qr", payload, hex, net: describeReachability(summarizeCandidates(sdp)) });
     } catch (err) {
       fail(err);
     }
@@ -178,9 +204,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         answersNonce: offer.nonce,
       });
       const payload = await encodeInvitation(answer);
+      const hex = await encodeInvitationHex(answer);
       // Start waiting before showing the QR, so the handshake can't be missed.
       const handshake = completeHandshake(link, identity.did, offer.publicKey, RESPONDER_TIMEOUT_MS);
-      setView({ k: "answer-qr", payload });
+      setView({ k: "answer-qr", payload, hex, net: describeReachability(summarizeCandidates(sdp)) });
       await handshake;
       const session = SecureSession.derive({
         role: "responder",
@@ -256,6 +283,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         <h1>Покана</h1>
         <p>Другият човек сканира този код. След това натисни „Сканирай отговора“.</p>
         <QrCode data={view.payload} size={360} />
+        <p className="net-hint">{view.net}</p>
+        <HexFallback hex={view.hex} />
         <p>Не може да сканира? Използвай кратък код:</p>
         <ShortCodeShare payload={view.payload} />
         <button onClick={() => setView({ k: "scan-answer" })}>Сканирай отговора</button>
@@ -302,6 +331,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         <h1>Отговор</h1>
         <p>Нека другият човек сканира този код. Чакаме връзката…</p>
         <QrCode data={view.payload} size={360} />
+        <p className="net-hint">{view.net}</p>
+        <HexFallback hex={view.hex} />
         <p>Не може да сканира? Използвай кратък код:</p>
         <ShortCodeShare payload={view.payload} />
         <button className="secondary" onClick={reset}>

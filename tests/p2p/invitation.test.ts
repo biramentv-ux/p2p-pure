@@ -8,6 +8,8 @@ import {
   InvitationError,
   INVITATION_TTL_MS,
   INVITATION_PREFIX,
+  INVITATION_HEX_PREFIX,
+  encodeInvitationHex,
 } from "../../src/p2p/invitation";
 import { createEphemeralKeyPair } from "../../src/p2p/secureSession";
 
@@ -138,5 +140,38 @@ describe("invitation codec", () => {
 
   it("refuses an ephemeral key of the wrong length", () => {
     expect(() => createInvitation("offer", fakeSdp(), alice, new Uint8Array(31))).toThrow(InvitationError);
+  });
+});
+
+describe("hex invitation form", () => {
+  it("round-trips an offer through the hex form", async () => {
+    const sdp = fakeSdp();
+    const inv = createInvitation("offer", sdp, alice, ephA);
+    const hex = await encodeInvitationHex(inv);
+    expect(hex.startsWith(INVITATION_HEX_PREFIX)).toBe(true);
+    expect(hex.length).toBeGreaterThan(120);
+    const decoded = await decodeInvitation(hex);
+    expect(decoded.sdp).toBe(sdp);
+    expect(decoded.publicKey).toEqual(alice.publicKey);
+  });
+
+  it("accepts hex pasted with spaces and line breaks", async () => {
+    const hex = await encodeInvitationHex(createInvitation("offer", fakeSdp(), alice, ephA));
+    const spaced = hex.replace(/(.{40})/g, "$1\n  ");
+    expect((await decodeInvitation(spaced)).kind).toBe("offer");
+  });
+
+  it("rejects malformed hex", async () => {
+    await expect(decodeInvitation("p2p1h:abc")).rejects.toThrow(InvitationError);
+    await expect(decodeInvitation("p2p1h:zz")).rejects.toThrow(InvitationError);
+    await expect(decodeInvitation("p2p1h:")).rejects.toThrow(InvitationError);
+  });
+
+  it("the hex and base64 forms decode to the same invitation", async () => {
+    const inv = createInvitation("offer", fakeSdp(), alice, ephA);
+    const b64 = await decodeInvitation(await encodeInvitation(inv));
+    const hx = await decodeInvitation(await encodeInvitationHex(inv));
+    expect(hx.nonce).toEqual(b64.nonce);
+    expect(hx.sdp).toBe(b64.sdp);
   });
 });
