@@ -34,13 +34,16 @@ Files in this folder:
 1. `npx cap add android` (creates `android/`). Then `npm run build && npx cap sync android`.
 2. Copy `PasskeyBridgePlugin.kt` to `android/app/src/main/java/com/dyrakarmy/p2pmessenger/`.
 3. Replace `MainActivity` with the snippet in `MainActivity.snippet.kt`.
-4. In `android/app/build.gradle` add (check the latest stable versions first):
+4. In `android/app/build.gradle` add the dependencies (latest stable versions, checked against
+   developer.android.com on 2026-10-14; re-check before a release):
 
    ```gradle
-   implementation "androidx.credentials:credentials:<latest>"
-   implementation "androidx.credentials:credentials-play-services-auth:<latest>"
-   implementation "androidx.lifecycle:lifecycle-runtime-ktx:<latest>"
+   implementation "androidx.credentials:credentials:1.6.0"
+   implementation "androidx.credentials:credentials-play-services-auth:1.6.0"
+   implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.11.0"
    ```
+
+   Do not use the 1.7.0-alpha or 2.12.0-alpha versions: they are not stable.
 
 5. Put the real SHA-256 fingerprint into `assetlinks.json` (see above). Without it Credential
    Manager refuses the rpId and the call fails.
