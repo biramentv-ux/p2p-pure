@@ -1,15 +1,24 @@
-// Telegram signaling Worker: forwards signed p2p1 invitations between two
-// private Telegram chats. Stateless: nothing is stored, invitations are never
-// logged, and the Worker never reads or changes invitation contents beyond
-// format validation (the client verifies the signature).
+// Signaling Worker for signed p2p1 invitations. Two paths:
+//  - Telegram: forwards an invitation between two private chats. Stores only
+//    pending deliveries (token -> chat and message ids) until the button is pressed
+//    or the 10-minute TTL passes.
+//  - Short codes (/invite): holds one invitation under a 10-character code for
+//    10 minutes. The first GET returns it and deletes it. Invitations are not logged.
+// The Worker never changes invitation contents beyond format validation; the
+// client verifies the signature.
 
 import {
   DELETE_CALLBACK_PREFIX,
   DELIVERY_TTL_MS,
+  INVITE_TTL_SEC,
   deliveryKey,
   encodeChatCode,
+  inviteKey,
   isAuthorizedWebhook,
+  isValidInvitation,
   newDeliveryToken,
+  newInviteCode,
+  normalizeInviteCode,
   parseCommand,
   parseDeleteCallback,
 } from "./logic";
@@ -17,8 +26,57 @@ import {
 export interface Env {
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_WEBHOOK_SECRET: string;
-  /** Holds only pending deliveries (token -> chat and message ids), each with a due time. */
+  /**
+   * Pending deliveries (token -> chat and message ids), each with a due time,
+   * and short-code invitations (code -> signed invitation), each with a TTL.
+   */
   DELIVERIES: KVNamespace;
+}
+
+/** Short-code bodies are small JSON objects; anything larger is refused before parsing. */
+const MAX_INVITE_BODY_CHARS = 4096;
+const MAX_INVITE_ATTEMPTS = 5;
+
+const CORS_HEADERS: Record<string, string> = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+  "access-control-max-age": "600",
+};
+
+function safeDecode(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+
+/** Stores an invitation under a fresh short code. Retries on the rare code collision. */
+async function storeInvitation(env: Env, invitation: string): Promise<string | null> {
+  for (let attempt = 0; attempt < MAX_INVITE_ATTEMPTS; attempt++) {
+    const code = newInviteCode();
+    if ((await env.DELIVERIES.get(inviteKey(code))) !== null) continue;
+    await env.DELIVERIES.put(inviteKey(code), invitation, { expirationTtl: INVITE_TTL_SEC });
+    return code;
+  }
+  return null;
+}
+
+/** Returns the invitation for a code and deletes it, so each code works once. */
+async function takeInvitation(env: Env, code: string): Promise<string | null> {
+  const key = inviteKey(code);
+  const invitation = await env.DELIVERIES.get(key);
+  if (invitation === null) return null;
+  await env.DELIVERIES.delete(key);
+  return invitation;
 }
 
 /** What the Worker remembers about one delivered invitation. Nothing else is stored. */
@@ -128,8 +186,38 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/invite")) {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
     if (request.method === "GET" && url.pathname === "/") {
       return new Response("ok", { status: 200 });
+    }
+
+    if (request.method === "POST" && url.pathname === "/invite") {
+      const text = await request.text();
+      if (text.length > MAX_INVITE_BODY_CHARS) return json({ error: "too_large" }, 413);
+      let invitation: unknown;
+      try {
+        invitation = (JSON.parse(text) as { invitation?: unknown }).invitation;
+      } catch {
+        return json({ error: "bad_request" }, 400);
+      }
+      if (typeof invitation !== "string" || !isValidInvitation(invitation)) {
+        return json({ error: "invalid_invitation" }, 400);
+      }
+      const code = await storeInvitation(env, invitation);
+      if (!code) return json({ error: "busy" }, 503);
+      return json({ code, expiresInSec: INVITE_TTL_SEC }, 201);
+    }
+
+    const codeMatch = /^\/invite\/([^/]+)$/.exec(url.pathname);
+    if (request.method === "GET" && codeMatch) {
+      const code = normalizeInviteCode(safeDecode(codeMatch[1]) ?? "");
+      if (!code) return json({ error: "invalid_code" }, 400);
+      const invitation = await takeInvitation(env, code);
+      if (!invitation) return json({ error: "not_found" }, 404);
+      return json({ invitation });
     }
     if (request.method !== "POST" || url.pathname !== "/webhook") {
       return new Response("Not found", { status: 404 });

@@ -19,6 +19,7 @@ import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "..
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
 import { QrCode } from "../components/QrCode";
 import { QrScanner } from "../components/QrScanner";
+import { ShortCodeEnter, ShortCodeShare } from "../components/ShortCode";
 
 export interface ConnectedResult {
   contact: Contact;
@@ -284,6 +285,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         <QrCode data={view.payload} size={360} />
         <p className="net-hint">{view.net}</p>
         <HexFallback hex={view.hex} />
+        <p>Не може да сканира? Използвай кратък код:</p>
+        <ShortCodeShare payload={view.payload} />
         <button onClick={() => setView({ k: "scan-answer" })}>Сканирай отговора</button>
         <button className="secondary" onClick={reset}>
           Отказ
@@ -298,6 +301,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         <h1>Сканирай отговора</h1>
         <p>Сканирай QR кода, който се показва на другото устройство.</p>
         <QrScanner onDetected={onAnswerScanned} />
+        <p>Или въведи кратък код:</p>
+        <ShortCodeEnter onPayload={onAnswerScanned} />
         <button className="secondary" onClick={reset}>
           Отказ
         </button>
@@ -311,6 +316,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         <h1>Сканирай поканата</h1>
         <p>Сканирай QR кода, който показва другият човек.</p>
         <QrScanner onDetected={onOfferScanned} />
+        <p>Или въведи кратък код:</p>
+        <ShortCodeEnter onPayload={onOfferScanned} />
         <button className="secondary" onClick={reset}>
           Отказ
         </button>
@@ -326,6 +333,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         <QrCode data={view.payload} size={360} />
         <p className="net-hint">{view.net}</p>
         <HexFallback hex={view.hex} />
+        <p>Не може да сканира? Използвай кратък код:</p>
+        <ShortCodeShare payload={view.payload} />
         <button className="secondary" onClick={reset}>
           Отказ
         </button>
