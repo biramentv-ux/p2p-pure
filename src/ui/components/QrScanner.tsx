@@ -92,7 +92,7 @@ export function QrScanner({ onDetected }: QrScannerProps) {
           value={pasted}
           onChange={(e) => setPasted(e.target.value)}
           rows={4}
-          placeholder="p2p1:…"
+          placeholder="p2p1: или p2p1h: (hex)…"
           aria-label="Поканен код"
         />
         <button

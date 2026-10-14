@@ -16,8 +16,27 @@ export type Direction = "in" | "out";
 
 export interface ChatMessage {
   text: string;
+  /** Photo as a data URL (jpeg, png or webp). When set, `text` is empty. */
+  image?: string;
   direction: Direction;
   timestamp: number;
+}
+
+const IMAGE_MARK = "\u0001I|";
+const IMAGE_URL_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+
+/** Text and photos share one encrypted field; photos are marked so old text records stay valid. */
+function toPayload(m: ChatMessage): string {
+  return m.image ? IMAGE_MARK + m.image : m.text;
+}
+
+function fromPayload(payload: string): Pick<ChatMessage, "text" | "image"> {
+  if (payload.startsWith(IMAGE_MARK)) {
+    const url = payload.slice(IMAGE_MARK.length);
+    if (IMAGE_URL_RE.test(url)) return { text: "", image: url };
+    return { text: "" };
+  }
+  return { text: payload };
 }
 
 interface StoredMessage {
@@ -57,7 +76,7 @@ export async function appendMessage(
         additionalData: asBufferSource(aadFor(peerDid, message.direction, message.timestamp)),
       },
       key,
-      asBufferSource(new TextEncoder().encode(message.text)),
+      asBufferSource(new TextEncoder().encode(toPayload(message))),
     ),
   );
   const random = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(9)));
@@ -91,7 +110,7 @@ export async function loadHistory(historyKey: Uint8Array, peerDid: string): Prom
       asBufferSource(base64UrlToBytes(row.ct)),
     );
     out.push({
-      text: new TextDecoder().decode(pt),
+      ...fromPayload(new TextDecoder().decode(pt)),
       direction: row.direction,
       timestamp: row.timestamp,
     });
