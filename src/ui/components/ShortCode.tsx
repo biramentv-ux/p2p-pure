@@ -77,7 +77,7 @@ export function ShortCodeEnter({ onPayload }: { onPayload: (payload: string) => 
         />
       </label>
       <button className="secondary" onClick={onUse} disabled={busy || value.trim() === ""}>
-        {busy ? "Проверявам…" : "Използвай кода"}
+        {busy ? "Проверявам…" : "Провери кода"}
       </button>
     </div>
   );
