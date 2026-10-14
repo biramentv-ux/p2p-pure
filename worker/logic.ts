@@ -117,3 +117,39 @@ export function parseDeleteCallback(data: string | undefined): string | null {
 export function deliveryKey(token: string): string {
   return `d:${token}`;
 }
+
+/**
+ * Short invitation codes: a 10-character code (~49 bits) maps to one signed
+ * invitation for INVITE_TTL_SEC seconds, and the first fetch consumes it.
+ * The alphabet drops 0, O, 1, I, L and U so codes read aloud or copied by hand
+ * are unambiguous.
+ */
+export const INVITE_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ";
+export const INVITE_CODE_LENGTH = 10;
+/** KV minimum expiration is 60 s; invitations live as long as the app's own TTL. */
+export const INVITE_TTL_SEC = 600;
+
+/** Random short code. Rejection sampling keeps every character equally likely. */
+export function newInviteCode(random: (n: number) => Uint8Array = (n) => crypto.getRandomValues(new Uint8Array(n))): string {
+  const limit = 256 - (256 % INVITE_CODE_ALPHABET.length); // 240: bytes below this are unbiased
+  let out = "";
+  while (out.length < INVITE_CODE_LENGTH) {
+    for (const b of random(INVITE_CODE_LENGTH)) {
+      if (b < limit && out.length < INVITE_CODE_LENGTH) out += INVITE_CODE_ALPHABET[b % INVITE_CODE_ALPHABET.length];
+    }
+  }
+  return out;
+}
+
+/** Accepts what a person types: any case, spaces or dashes. Returns null if invalid. */
+export function normalizeInviteCode(input: string): string | null {
+  const code = input.toUpperCase().replace(/[\s-]/g, "");
+  if (code.length !== INVITE_CODE_LENGTH) return null;
+  for (const ch of code) if (!INVITE_CODE_ALPHABET.includes(ch)) return null;
+  return code;
+}
+
+/** KV key for a pending short invitation. */
+export function inviteKey(code: string): string {
+  return `i:${code}`;
+}
