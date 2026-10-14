@@ -19,11 +19,39 @@ Google checks the Digital Asset Links file on the domain.
 4. Capacitor Android WebView: passkeys go through the Credential Manager. The WebView must be
    configured for WebAuthn; this is the native part still to write (see `MainActivity` note below).
 
-## Native part still to write (not in this repo yet)
+## Native bridge (Credential Manager)
 
-`WebAuthnBridge` in `MainActivity`: the WebView must hand `navigator.credentials` calls to the
-Android Credential Manager. Until it exists, passkey calls inside the Android WebView may fail; the app then
-shows the error and the user can use the browser flow as a fallback.
+Files in this folder:
+
+- `PasskeyBridgePlugin.kt`: Capacitor plugin `PasskeyBridge` with `create` and `get`. Each takes
+  `{ requestJson }` (WebAuthn options as JSON) and returns `{ responseJson }`.
+- `MainActivity.snippet.kt`: registers the plugin in `MainActivity`.
+- JS side: `src/platform/mobile/nativePasskeys.ts` and `passkeyJson.ts`. `src/identity/webauthn.ts`
+  uses the bridge only when the platform is Android. Web and iOS keep `navigator.credentials`.
+
+### Setup
+
+1. `npx cap add android` (creates `android/`). Then `npm run build && npx cap sync android`.
+2. Copy `PasskeyBridgePlugin.kt` to `android/app/src/main/java/com/dyrakarmy/p2pmessenger/`.
+3. Replace `MainActivity` with the snippet in `MainActivity.snippet.kt`.
+4. In `android/app/build.gradle` add (check the latest stable versions first):
+
+   ```gradle
+   implementation "androidx.credentials:credentials:<latest>"
+   implementation "androidx.credentials:credentials-play-services-auth:<latest>"
+   implementation "androidx.lifecycle:lifecycle-runtime-ktx:<latest>"
+   ```
+
+5. Put the real SHA-256 fingerprint into `assetlinks.json` (see above). Without it Credential
+   Manager refuses the rpId and the call fails.
+
+### What is not verified
+
+- The Kotlin file has not been compiled. Gradle or Kotlin errors are possible.
+- PRF (the device unlock secret) through Credential Manager depends on the device and the Play
+  Services version. If PRF is missing, `prfSecret` is `null` and identity code falls back to the
+  password path, as it does on the web.
+- The web path is unchanged. Test on a real Android device before shipping.
 
 ## Not verified here
 

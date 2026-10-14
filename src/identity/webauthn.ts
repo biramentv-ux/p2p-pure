@@ -21,7 +21,8 @@
  */
 import { IdentityError } from "./types";
 import { asBufferSource } from "./bufferUtils";
-import { getMobileBridge } from "../platform/mobile";
+import { getMobileBridge, nativePasskeys } from "../platform/mobile";
+import { creationOptionsToJson, parseCredentialResponse, requestOptionsToJson } from "../platform/mobile/passkeyJson";
 
 const RP_NAME = "P2P Messenger";
 const PRF_SALT = new TextEncoder().encode("p2p-messenger/webauthn-prf/v1");
@@ -59,6 +60,27 @@ export async function createPasskey(
   userIdentifierLabel: string,
   rpId: string = getMobileBridge().passkeyRpId(),
 ): Promise<CreatePasskeyResult> {
+  const native = nativePasskeys();
+  if (native) {
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+    const { responseJson } = await native.create({
+      requestJson: creationOptionsToJson({
+        challenge: randomChallenge(),
+        rp: { name: RP_NAME, id: rpId },
+        user: { id: userId, name: userIdentifierLabel, displayName: userIdentifierLabel },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -8 },
+        ],
+        authenticatorSelection: { residentKey: "required", userVerification: "required" },
+        extensions: { prf: { eval: { first: PRF_SALT } } },
+        timeout: 60_000,
+      }),
+    });
+    const parsed = parseCredentialResponse(responseJson);
+    return { credentialId: parsed.credentialId, prfSecret: parsed.prfSecret };
+  }
+
   requireWebAuthn();
 
   const userId = crypto.getRandomValues(new Uint8Array(16));
@@ -115,6 +137,24 @@ export async function getPasskey(
   credentialId?: ArrayBuffer,
   rpId: string = getMobileBridge().passkeyRpId(),
 ): Promise<GetPasskeyResult> {
+  const native = nativePasskeys();
+  if (native) {
+    const { responseJson } = await native.get({
+      requestJson: requestOptionsToJson({
+        challenge: randomChallenge(),
+        rpId,
+        allowCredentials: credentialId
+          ? [{ type: "public-key", id: new Uint8Array(credentialId) }]
+          : undefined,
+        userVerification: "required",
+        extensions: { prf: { eval: { first: PRF_SALT } } },
+        timeout: 60_000,
+      }),
+    });
+    const parsed = parseCredentialResponse(responseJson);
+    return { credentialId: parsed.credentialId, prfSecret: parsed.prfSecret };
+  }
+
   requireWebAuthn();
 
   const assertion = (await navigator.credentials.get({

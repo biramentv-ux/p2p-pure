@@ -3,6 +3,8 @@ import type { MobileBridge } from "./types";
 
 export type { MobileBridge, PlatformInfo, PlatformKind } from "./types";
 export { resolveRpId, detectKind, createWebBridge } from "./webBridge";
+export { nativePasskeys, type PasskeyBridgePlugin } from "./nativePasskeys";
+export { creationOptionsToJson, requestOptionsToJson, parseCredentialResponse } from "./passkeyJson";
 
 let bridge: MobileBridge = createWebBridge();
 
