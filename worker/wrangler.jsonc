@@ -1,6 +1,7 @@
 // Cloudflare Worker config for the Telegram signaling relay.
-// Storage: one KV namespace that holds only pending deliveries (token -> chat and
-// message ids), each removed when the recipient clicks the button or when it is due.
+// Storage: one KV namespace that holds pending deliveries (token -> chat and message
+// ids), removed when the recipient clicks the button or when due, and short-code
+// invitations (code -> signed invitation, 10 minutes, deleted on first fetch).
 // Create it once: npx wrangler kv namespace create DELIVERIES
 // and paste the printed id below.
 // Secrets (set with wrangler secret put, never committed):
@@ -21,6 +22,6 @@
     "crons": ["* * * * *"],
   },
   "kv_namespaces": [
-    { "binding": "DELIVERIES", "id": "REPLACE_WITH_KV_NAMESPACE_ID" },
+    { "binding": "DELIVERIES", "id": "735f0036ab7a449f8935c147f5a0a28a" },
   ],
 }
