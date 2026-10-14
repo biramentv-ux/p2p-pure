@@ -1,4 +1,4 @@
-package com.dyrakarmy.p2pmessenger
+package bg.p2pmessenger.app
 
 import androidx.credentials.CredentialManager
 import androidx.credentials.CreatePublicKeyCredentialRequest

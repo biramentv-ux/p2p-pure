@@ -11,7 +11,7 @@ Google checks the Digital Asset Links file on the domain.
 
 ## Steps
 
-1. Pick the package name (placeholder: `com.dyrakarmy.p2pmessenger`, same as in `capacitor.config`).
+1. Package name: `bg.p2pmessenger.app` (same as `appId` in `capacitor.config.ts`).
 2. Get the SHA-256 of the signing key:
    `keytool -list -v -keystore <keystore> -alias <alias>` (use the upload key and, when Play App
    Signing is on, also the Play signing key from Play Console).

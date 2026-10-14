@@ -17,7 +17,7 @@ domain. Apple checks two files:
 ## Steps
 
 1. In Apple Developer, note the Team ID (10 characters) and create the App ID with the bundle id
-   (placeholder used here: `com.dyrakarmy.p2pmessenger`).
+   (bundle id: `bg.p2pmessenger.app`, same as `capacitor.config.ts`).
 2. Replace `TEAMID` in `public/.well-known/apple-app-site-association` and deploy the site.
 3. Check: `curl -sI https://dyrakarmy.online/.well-known/apple-app-site-association` → `200` and
    `content-type: application/json`.
