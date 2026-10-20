@@ -14,23 +14,56 @@ const HISTORY_INFO = new TextEncoder().encode("p2p-messenger/history-key/v1");
 
 export type Direction = "in" | "out";
 
+/** A location the person chose to share. Coordinates in degrees, accuracy in metres. */
+export interface LocationFix {
+  lat: number;
+  lng: number;
+  accuracy: number;
+}
+
 export interface ChatMessage {
   text: string;
   /** Photo as a data URL (jpeg, png or webp). When set, `text` is empty. */
   image?: string;
+  /** Shared location. When set, `text` is empty. */
+  location?: LocationFix;
   direction: Direction;
   timestamp: number;
 }
 
 const IMAGE_MARK = "\u0001I|";
+const LOCATION_MARK = "\u0001G|";
 const IMAGE_URL_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
-/** Text and photos share one encrypted field; photos are marked so old text records stay valid. */
+/** Returns the fix if the values are real coordinates, otherwise null. */
+export function validLocation(fix: LocationFix): LocationFix | null {
+  const ok =
+    Number.isFinite(fix.lat) &&
+    Number.isFinite(fix.lng) &&
+    Number.isFinite(fix.accuracy) &&
+    Math.abs(fix.lat) <= 90 &&
+    Math.abs(fix.lng) <= 180 &&
+    fix.accuracy >= 0 &&
+    fix.accuracy <= 100_000;
+  return ok ? { lat: fix.lat, lng: fix.lng, accuracy: Math.round(fix.accuracy) } : null;
+}
+
+/** Text, photos and locations share one encrypted field; the marker tells them apart. */
 function toPayload(m: ChatMessage): string {
+  if (m.location) return LOCATION_MARK + JSON.stringify(m.location);
   return m.image ? IMAGE_MARK + m.image : m.text;
 }
 
-function fromPayload(payload: string): Pick<ChatMessage, "text" | "image"> {
+function fromPayload(payload: string): Pick<ChatMessage, "text" | "image" | "location"> {
+  if (payload.startsWith(LOCATION_MARK)) {
+    try {
+      const fix = validLocation(JSON.parse(payload.slice(LOCATION_MARK.length)) as LocationFix);
+      if (fix) return { text: "", location: fix };
+    } catch {
+      /* fall through */
+    }
+    return { text: "" };
+  }
   if (payload.startsWith(IMAGE_MARK)) {
     const url = payload.slice(IMAGE_MARK.length);
     if (IMAGE_URL_RE.test(url)) return { text: "", image: url };
@@ -116,4 +149,17 @@ export async function loadHistory(historyKey: Uint8Array, peerDid: string): Prom
     });
   }
   return out.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/** Deletes every stored message with this contact. Returns how many were removed. */
+export async function deleteHistory(peerDid: string): Promise<number> {
+  const keys =
+    (await withStore<IDBValidKey[]>(STORE_MESSAGES, "readonly", (s) =>
+      s.index("byPeer").getAllKeys(IDBKeyRange.only(peerDid)),
+    )) ?? [];
+  if (keys.length === 0) return 0;
+  await withStore(STORE_MESSAGES, "readwrite", (s) => {
+    for (const key of keys) s.delete(key);
+  });
+  return keys.length;
 }

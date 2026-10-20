@@ -22,6 +22,8 @@ const MEDIA_PERMISSIONS = [
   '    <uses-permission android:name="android.permission.CAMERA" />',
   '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
   '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
+  '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+  '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
 ];
 const GRADLE_DEPS = [
   'implementation "androidx.credentials:credentials:1.6.0"',
@@ -30,6 +32,7 @@ const GRADLE_DEPS = [
 const IOS_USAGE = [
   ["NSCameraUsageDescription", "Камерата се използва, за да сканираш QR код и за видео разговори."],
   ["NSMicrophoneUsageDescription", "Микрофонът се използва за аудио и видео разговори."],
+  ["NSLocationWhenInUseUsageDescription", "Локацията се споделя с човека, когото избереш, само когато натиснеш бутона."],
 ];
 
 /** Copies native-overlays/android/java/** to android/app/src/main/java/**. */

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Contact } from "../../contacts/contacts";
-import { appendMessage, loadHistory, type ChatMessage } from "../../history/messageStore";
+import {
+  appendMessage,
+  deleteHistory,
+  loadHistory,
+  validLocation,
+  type ChatMessage,
+} from "../../history/messageStore";
+import { decodeControl, encodeControl, isControlMessage } from "../../p2p/control";
 import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
 import { buildPhotoFrames, PhotoReceiver, sanitizeText, sniffMime } from "../../p2p/photo";
@@ -9,6 +16,9 @@ import { CallController, type CallSnapshot } from "../../call/callController";
 import { encodeSignal, isCallSignal, SignalAssembler } from "../../call/signal";
 import { acquireMedia } from "../../call/media";
 import { CallPanel } from "../components/CallPanel";
+
+/** Longer than the browser's own 20 s timeout, so it only fires when the browser says nothing. */
+const LOCATION_GUARD_MS = 25_000;
 
 interface ChatScreenProps {
   contact: Contact;
@@ -28,6 +38,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const [call, setCall] = useState<CallSnapshot | null>(null);
   const callRef = useRef<CallController | null>(null);
   const assemblerRef = useRef(new SignalAssembler());
+  const [locating, setLocating] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
 
@@ -68,6 +80,23 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             const signal = assemblerRef.current.feed(plaintext);
             // Not awaited: the controller may send a reply, which needs this queue to be free.
             if (signal) void callRef.current?.handle(signal);
+            return;
+          }
+          if (isControlMessage(plaintext)) {
+            const control = decodeControl(plaintext);
+            if (!control) return;
+            if (control.t === "wipe") {
+              await deleteHistory(contact.did);
+              if (alive) {
+                setTransfer(null);
+                setMessages([]);
+                setNotice("Другият човек изтри чата. Историята е изтрита и тук.");
+              }
+              return;
+            }
+            const located: ChatMessage = { text: "", location: control.fix, direction: "in", timestamp: Date.now() };
+            await appendMessage(historyKey, contact.did, located);
+            if (alive) setMessages((prev) => [...prev, located]);
             return;
           }
           const result = receiverRef.current.feed(plaintext);
@@ -128,6 +157,87 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     });
   }
 
+  /** Asks the device for a precise fix once, then sends it. Nothing is sent without a tap. */
+  function onShareLocation() {
+    setNotice(null);
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setNotice("Устройството не поддържа локация.");
+      return;
+    }
+    setLocating(true);
+    // Some browsers never answer an unanswered permission prompt. Do not leave the button stuck.
+    let answered = false;
+    const guard = setTimeout(() => {
+      if (answered) return;
+      answered = true;
+      setLocating(false);
+      setNotice("Не успях да определя локацията навреме. Провери разрешението за локация.");
+    }, LOCATION_GUARD_MS);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (answered) return;
+        answered = true;
+        clearTimeout(guard);
+        setLocating(false);
+        const fix = validLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        });
+        if (!fix) {
+          setNotice("Не успях да определя локацията.");
+          return;
+        }
+        void enqueue(async () => {
+          try {
+            link.send(await session.seal(encodeControl({ t: "loc", fix })));
+            const msg: ChatMessage = { text: "", location: fix, direction: "out", timestamp: Date.now() };
+            await appendMessage(historyKey, contact.did, msg);
+            setMessages((prev) => [...prev, msg]);
+          } catch (err) {
+            setNotice(err instanceof Error ? err.message : "Локацията не беше изпратена.");
+          }
+        });
+      },
+      (err) => {
+        if (answered) return;
+        answered = true;
+        clearTimeout(guard);
+        setLocating(false);
+        const code = (err as GeolocationPositionError).code;
+        setNotice(
+          code === 1
+            ? "Нямаш разрешение за локацията."
+            : code === 3
+              ? "Определянето на локацията отне твърде дълго."
+              : "Не успях да определя локацията.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
+    );
+  }
+
+  /** Deletes the chat here and asks the other side to delete it too. */
+  function onWipeChat() {
+    setConfirmWipe(false);
+    void enqueue(async () => {
+      let delivered = true;
+      try {
+        link.send(await session.seal(encodeControl({ t: "wipe" })));
+      } catch {
+        delivered = false;
+      }
+      await deleteHistory(contact.did);
+      setMessages([]);
+      setTransfer(null);
+      setNotice(
+        delivered
+          ? "Чатът е изтрит и за двамата."
+          : "Чатът е изтрит тук. Другият човек не беше на линия, затова няма да се изтрие при него.",
+      );
+    });
+  }
+
   async function onPickPhoto(file: File | undefined) {
     if (!file) return;
     setNotice(null);
@@ -166,6 +276,14 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         <div className="call-buttons">
           <button
             className="secondary"
+            disabled={!connected}
+            onClick={() => setConfirmWipe(true)}
+            aria-label="Изтрий чата за двамата"
+          >
+            Изтрий чата
+          </button>
+          <button
+            className="secondary"
             disabled={!connected || !call || (call.phase !== "idle" && call.phase !== "ended")}
             onClick={() => void callRef.current?.startCall("audio")}
             aria-label="Аудио разговор"
@@ -191,6 +309,18 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
       {notice && <p role="alert" className="chat-notice">{notice}</p>}
 
+      {confirmWipe && (
+        <section className="call-panel" aria-label="Потвърди изтриването">
+          <p>Чатът ще се изтрие и при двама ви. Това не може да се отмени.</p>
+          <div className="call-actions">
+            <button onClick={onWipeChat}>Да, изтрий за двамата</button>
+            <button className="secondary" onClick={() => setConfirmWipe(false)}>
+              Не
+            </button>
+          </div>
+        </section>
+      )}
+
       {call && (
         <CallPanel
           call={call}
@@ -206,7 +336,9 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       <ol className="messages">
         {messages.map((m, i) => (
           <li key={`${m.timestamp}-${i}`} className={m.direction === "out" ? "msg out" : "msg in"}>
-            {m.image ? (
+            {m.location ? (
+              <LocationBubble fix={m.location} />
+            ) : m.image ? (
               <img className="msg-image" src={m.image} alt="Снимка" />
             ) : (
               <span className="msg-text">{m.text}</span>
@@ -258,6 +390,15 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         <button
           type="button"
           className="secondary"
+          disabled={!connected || !!transfer || locating}
+          onClick={onShareLocation}
+          aria-label="Сподели точната си локация"
+        >
+          {locating ? "Локация…" : "Локация"}
+        </button>
+        <button
+          type="button"
+          className="secondary"
           disabled={!connected || !!transfer}
           onClick={() => galleryInput.current?.click()}
           aria-label="Избери снимка от галерията"
@@ -277,5 +418,22 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         </button>
       </form>
     </div>
+  );
+}
+
+/** A shared location. The map link is opened only if the person taps it. */
+function LocationBubble({ fix }: { fix: { lat: number; lng: number; accuracy: number } }) {
+  const coords = `${fix.lat.toFixed(5)}, ${fix.lng.toFixed(5)}`;
+  const url = `https://www.openstreetmap.org/?mlat=${fix.lat}&mlon=${fix.lng}#map=17/${fix.lat}/${fix.lng}`;
+  return (
+    <span className="msg-location">
+      <strong>Локация</strong> {coords}
+      <br />
+      <small>точност ±{fix.accuracy} м</small>
+      <br />
+      <a href={url} target="_blank" rel="noopener noreferrer">
+        Покажи на картата
+      </a>
+    </span>
   );
 }
