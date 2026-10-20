@@ -5,6 +5,10 @@ import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
 import { buildPhotoFrames, PhotoReceiver, sanitizeText, sniffMime } from "../../p2p/photo";
 import { prepareImage } from "../image";
+import { CallController, type CallSnapshot } from "../../call/callController";
+import { encodeSignal, isCallSignal, SignalAssembler } from "../../call/signal";
+import { acquireMedia } from "../../call/media";
+import { CallPanel } from "../components/CallPanel";
 
 interface ChatScreenProps {
   contact: Contact;
@@ -21,6 +25,9 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const [connected, setConnected] = useState(link.isOpen());
   const [transfer, setTransfer] = useState<{ label: string; done: number; total: number } | null>(null);
   const receiverRef = useRef(new PhotoReceiver());
+  const [call, setCall] = useState<CallSnapshot | null>(null);
+  const callRef = useRef<CallController | null>(null);
+  const assemblerRef = useRef(new SignalAssembler());
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
 
@@ -40,11 +47,29 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       })
       .catch(() => alive && setNotice("Историята не можа да се прочете."));
 
+    const controller = new CallController({
+      pc: link.pc,
+      acquire: acquireMedia,
+      send: (signal) =>
+        enqueue(async () => {
+          for (const part of encodeSignal(signal)) link.send(await session.seal(part));
+        }),
+      onChange: (snap) => alive && setCall(snap),
+    });
+    callRef.current = controller;
+    setCall(controller.state);
+
     const off = link.onMessage((text) => {
       if (!isEncryptedMessage(text)) return;
       void enqueue(async () => {
         try {
           const plaintext = await session.open(text);
+          if (isCallSignal(plaintext)) {
+            const signal = assemblerRef.current.feed(plaintext);
+            // Not awaited: the controller may send a reply, which needs this queue to be free.
+            if (signal) void callRef.current?.handle(signal);
+            return;
+          }
           const result = receiverRef.current.feed(plaintext);
           if (result.kind === "progress") {
             if (alive) setTransfer({ label: "Получавам снимка", done: result.received, total: result.total });
@@ -77,6 +102,9 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       alive = false;
       off();
       clearInterval(timer);
+      const c = callRef.current;
+      callRef.current = null;
+      if (c) void c.hangup().finally(() => c.dispose());
     };
     // Mount-only: the link and session are owned by the parent for this chat.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,6 +163,24 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         <button className="secondary" onClick={onClose}>
           Назад
         </button>
+        <div className="call-buttons">
+          <button
+            className="secondary"
+            disabled={!connected || !call || (call.phase !== "idle" && call.phase !== "ended")}
+            onClick={() => void callRef.current?.startCall("audio")}
+            aria-label="Аудио разговор"
+          >
+            Аудио
+          </button>
+          <button
+            className="secondary"
+            disabled={!connected || !call || (call.phase !== "idle" && call.phase !== "ended")}
+            onClick={() => void callRef.current?.startCall("video")}
+            aria-label="Видео разговор"
+          >
+            Видео
+          </button>
+        </div>
         <div>
           <strong>{contact.name}</strong>
           <span className={connected ? "status on" : "status off"}>
@@ -144,6 +190,18 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       </header>
 
       {notice && <p role="alert" className="chat-notice">{notice}</p>}
+
+      {call && (
+        <CallPanel
+          call={call}
+          contactName={contact.name}
+          onAccept={() => void callRef.current?.accept()}
+          onDecline={() => void callRef.current?.decline()}
+          onHangup={() => void callRef.current?.hangup()}
+          onToggleMute={() => callRef.current?.setMuted(!call.muted)}
+          onToggleCamera={() => callRef.current?.setCameraOff(!call.cameraOff)}
+        />
+      )}
 
       <ol className="messages">
         {messages.map((m, i) => (

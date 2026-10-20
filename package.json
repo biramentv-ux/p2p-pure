@@ -19,7 +19,13 @@
     "cap:open:ios": "npx cap open ios",
     "mock:server": "node tests/mock/serve.mjs",
     "test:mock": "node tests/mock/run.mjs",
-    "test:mock-ui": "node tests/e2e/ui-shortcode.mjs"
+    "test:mock-ui": "node tests/e2e/ui-shortcode.mjs",
+    "mobile:sync": "node scripts/mobile/sync-overlays.mjs",
+    "mobile:check": "node scripts/mobile/check.mjs",
+    "test:mobile": "vitest run tests/mobile tests/platform.test.ts tests/platform",
+    "test:mobile-emu": "node tests/mobile/emulation.mjs",
+    "test:call": "node tests/e2e/call.mjs",
+    "test:call-unit": "vitest run tests/call"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
