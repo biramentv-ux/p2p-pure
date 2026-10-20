@@ -129,4 +129,17 @@ describe("helpers", () => {
     expect(sniffMime(webp)).toBe("image/webp");
     expect(sniffMime(new Uint8Array([60, 115, 118, 103]))).toBeNull(); // "<svg"
   });
+
+  it("a photo discarded mid-transfer is consumed and never shown, and the next photo works", () => {
+    const first = buildPhotoFrames(fakeJpeg(CHUNK_BYTES * 3 + 5), "image/jpeg");
+    const second = buildPhotoFrames(fakeJpeg(CHUNK_BYTES + 9), "image/jpeg");
+    const r = new PhotoReceiver();
+    expect(r.feed(first[0]).kind).toBe("progress");
+    expect(r.feed(first[1]).kind).toBe("progress");
+    r.discardInProgress(); // the chat was deleted here
+    const rest = first.slice(2).map((f) => r.feed(f));
+    expect(rest.every((x) => x.kind === "discarded")).toBe(true);
+    const next = second.map((f) => r.feed(f));
+    expect(next[next.length - 1].kind).toBe("photo");
+  });
 });
