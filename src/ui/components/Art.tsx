@@ -21,7 +21,7 @@ function hash(text: string): number {
 /** Deterministic gradient avatar from a contact's DID, with the name's initial. */
 export function Avatar({ seed, name }: { seed: string; name: string }) {
   const [from, to] = PALETTES[hash(seed) % PALETTES.length];
-  const initial = name.trim().charAt(0).toLocaleUpperCase("bg-BG") || "?";
+  const initial = (Array.from(name.trim())[0] ?? "?").toLocaleUpperCase("bg-BG");
   return (
     <span
       className="avatar"
