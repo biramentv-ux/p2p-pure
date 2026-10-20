@@ -36,7 +36,13 @@ export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
     <div className="screen">
       <h1>Контакти</h1>
       {error && <p role="alert">{error}</p>}
-      {contacts === null && <p>Зареждане…</p>}
+      {contacts === null && (
+        <ul className="skeleton-list" aria-busy="true" aria-label="Зареждане на контактите">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="skeleton-row" />
+          ))}
+        </ul>
+      )}
       {contacts?.length === 0 && (
         <div className="empty-block">
           <ConstellationArt />

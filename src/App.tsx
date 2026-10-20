@@ -26,6 +26,7 @@ type Screen =
   | { k: "chat"; contact: Contact; link: PeerLink; session: SecureSession };
 
 type TabScreen = "identity" | "contacts" | "connect";
+const TAB_ORDER: TabScreen[] = ["identity", "contacts", "connect"];
 
 function App() {
   const [state, setState] = useState<AppState>({ kind: "loading" });
@@ -108,6 +109,11 @@ function App() {
   return (
     <main className="app">
       <nav className="tabs" aria-label="Навигация">
+        <span
+          className="tab-glider"
+          aria-hidden="true"
+          style={{ transform: `translateX(${TAB_ORDER.indexOf(activeTab) * 100}%)` }}
+        />
         <button
           className={activeTab === "identity" ? "tab active" : "tab"}
           onClick={() => goTab("identity")}
