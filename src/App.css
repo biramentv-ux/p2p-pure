@@ -20,6 +20,7 @@
 }
 
 .screen button {
+  min-height: 44px; /* touch target size */
   padding: 0.75rem 1.25rem;
   font-size: 1rem;
   border-radius: 8px;
