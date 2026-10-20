@@ -53,11 +53,16 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
   useEffect(() => {
     let alive = true;
-    loadHistory(historyKey, contact.did)
-      .then((history) => {
+    // Queued like every other operation: a wipe that arrives while the history is still
+    // decrypting must run after the load, or the old list would come back on screen.
+    void enqueue(async () => {
+      try {
+        const history = await loadHistory(historyKey, contact.did);
         if (alive) setMessages(history);
-      })
-      .catch(() => alive && setNotice("Историята не можа да се прочете."));
+      } catch {
+        if (alive) setNotice("Историята не можа да се прочете.");
+      }
+    });
 
     const controller = new CallController({
       pc: link.pc,
@@ -86,6 +91,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             const control = decodeControl(plaintext);
             if (!control) return;
             if (control.t === "wipe") {
+              receiverRef.current.discardInProgress();
               await deleteHistory(contact.did);
               if (alive) {
                 setTransfer(null);
@@ -100,6 +106,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             return;
           }
           const result = receiverRef.current.feed(plaintext);
+          if (result.kind === "discarded") return;
           if (result.kind === "progress") {
             if (alive) setTransfer({ label: "Получавам снимка", done: result.received, total: result.total });
             return;
@@ -227,6 +234,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       } catch {
         delivered = false;
       }
+      receiverRef.current.discardInProgress();
       await deleteHistory(contact.did);
       setMessages([]);
       setTransfer(null);

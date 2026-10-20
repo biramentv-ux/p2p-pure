@@ -91,6 +91,8 @@ export type ReceiveResult =
   | { kind: "text"; text: string }
   | { kind: "progress"; received: number; total: number }
   | { kind: "photo"; dataUrl: string; mime: PhotoMime; size: number }
+  /** A photo that was being received when the chat was deleted. Its frames are consumed, not shown. */
+  | { kind: "discarded" }
   | { kind: "rejected"; reason: string };
 
 interface Transfer {
@@ -99,10 +101,19 @@ interface Transfer {
   size: number;
   total: number;
   parts: Uint8Array[];
+  discard: boolean;
 }
 
 export class PhotoReceiver {
   private transfer: Transfer | null = null;
+
+  /**
+   * Marks the photo in progress (if any) as discarded. Its remaining frames still arrive
+   * in order and are consumed, but the photo is never shown or stored.
+   */
+  discardInProgress(): void {
+    if (this.transfer) this.transfer.discard = true;
+  }
 
   /** Feeds one decrypted plaintext. Text passes through; photo frames are assembled. */
   feed(plaintext: string): ReceiveResult {
@@ -129,7 +140,7 @@ export class PhotoReceiver {
       return this.reject("Снимката е прекалено голяма.");
     }
     if (!Number.isInteger(total) || total !== chunkCount(size)) return this.reject("Повредена снимка.");
-    this.transfer = { id, mime: mime as PhotoMime, size, total, parts: [] };
+    this.transfer = { id, mime: mime as PhotoMime, size, total, parts: [], discard: false };
     return { kind: "progress", received: 0, total };
   }
 
@@ -149,6 +160,10 @@ export class PhotoReceiver {
     const expected = last ? t.size - CHUNK_BYTES * (t.total - 1) : CHUNK_BYTES;
     if (bytes.length !== expected) return this.reject("Повредена снимка.");
     t.parts.push(bytes);
+    if (t.discard) {
+      if (last) this.transfer = null;
+      return { kind: "discarded" };
+    }
     if (!last) return { kind: "progress", received: t.parts.length, total: t.total };
 
     const whole = new Uint8Array(t.size);
