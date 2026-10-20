@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Микрофонът се използва за аудио и видео разговори.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Камерата се използва, за да сканираш QR код за свързване с контакт.</string>
   <key>CAPACITOR_DEBUG</key>
