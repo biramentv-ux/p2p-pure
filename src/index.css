@@ -35,6 +35,8 @@
   --sage-soft: rgba(143, 195, 154, 0.14);
   --danger: #f0786a;
   --danger-soft: rgba(240, 120, 106, 0.12);
+  --aqua: #6fd3c4;
+  --rose: #f29bb0;
 
   --msg-out: #2f2614;
   --msg-out-text: #f6e7c4;
@@ -71,19 +73,21 @@
     --line-soft: rgba(0, 0, 0, 0.06);
     --text: #4f4a3f;
     --text-h: #1b1a16;
-    --muted: #7a7466;
-    --ember: #b5690c;
-    --ember-hi: #c9790f;
+    --muted: #6b6558;
+    --aqua: #0f766e;
+    --rose: #be185d;
+    --ember: #9a5508;
+    --ember-hi: #b5690c;
     --ember-ink: #ffffff;
-    --ember-soft: rgba(181, 105, 12, 0.1);
-    --ember-line: rgba(181, 105, 12, 0.4);
+    --ember-soft: rgba(154, 85, 8, 0.1);
+    --ember-line: rgba(154, 85, 8, 0.4);
     --sage: #2f7d4a;
     --sage-soft: rgba(47, 125, 74, 0.1);
     --danger: #b4402f;
     --danger-soft: rgba(180, 64, 47, 0.08);
     --msg-out: #f3e4c2;
     --msg-out-text: #2a1d05;
-    --focus: 0 0 0 3px rgba(181, 105, 12, 0.3);
+    --focus: 0 0 0 3px rgba(154, 85, 8, 0.3);
     --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 14px 30px -18px rgba(60, 45, 15, 0.35);
   }
 }
@@ -157,4 +161,56 @@ code {
   outline: none;
   box-shadow: var(--focus);
   border-radius: 6px;
+}
+
+/* ---- ambient layer: slow drifting light behind everything ---- */
+body {
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 60vmax;
+  height: 60vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  pointer-events: none;
+  animation: drift 26s ease-in-out infinite alternate;
+}
+
+body::before {
+  top: -28vmax;
+  right: -18vmax;
+  background: radial-gradient(circle, var(--ember-soft) 0%, transparent 65%);
+}
+
+body::after {
+  bottom: -30vmax;
+  left: -22vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--aqua) 22%, transparent) 0%, transparent 65%);
+  animation-duration: 34s;
+  animation-direction: alternate-reverse;
+}
+
+@keyframes drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-6vw, 5vh, 0) scale(1.12); }
+}
+
+/* gradient accent for one word in a heading */
+.grad-text {
+  background: linear-gradient(100deg, var(--ember-hi), var(--rose) 55%, var(--aqua));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after { animation: none; }
 }

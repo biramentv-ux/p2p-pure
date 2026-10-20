@@ -666,3 +666,267 @@
     font-size: 1.1rem;
   }
 }
+
+/* ================= v2: richer, livelier UI ================= */
+
+/* centered, slightly larger hero screens (identity, unlock) */
+.screen-center {
+  align-items: center;
+  text-align: center;
+}
+.screen-center > p {
+  max-width: 34ch;
+  margin: 0 auto;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.chips li {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--text-h);
+  background: var(--ink-1);
+  border: 1px solid var(--line);
+}
+.chips li:nth-child(1) { border-color: color-mix(in srgb, var(--ember) 50%, transparent); }
+.chips li:nth-child(2) { border-color: color-mix(in srgb, var(--aqua) 50%, transparent); }
+.chips li:nth-child(3) { border-color: color-mix(in srgb, var(--rose) 50%, transparent); }
+
+/* ---- illustrations ---- */
+.art {
+  display: grid;
+  place-items: center;
+  margin: 0.5rem auto 0.25rem;
+  animation: floaty 7s ease-in-out infinite;
+}
+.art svg {
+  width: min(200px, 60vw);
+  height: auto;
+  overflow: visible;
+}
+.art-orb .ring-1 {
+  transform-origin: 100px 100px;
+  animation: spin 22s linear infinite;
+}
+.art-orb .ring-2 {
+  transform-origin: 100px 100px;
+  animation: spin-rev 14s linear infinite;
+}
+.art-orb .dot {
+  animation: pulse 2.4s ease-in-out infinite;
+  transform-origin: 100px 104px;
+}
+.art-constellation .link {
+  stroke-dasharray: 220;
+  stroke-dashoffset: 220;
+  animation: draw 2.4s ease forwards;
+}
+.art-constellation .link:nth-child(2) { animation-delay: 0.3s; }
+.art-constellation .link:nth-child(3) { animation-delay: 0.6s; }
+.art-constellation .link:nth-child(4) { animation-delay: 0.9s; }
+.art-constellation .node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop 600ms cubic-bezier(0.2, 1.4, 0.4, 1) both, bob 4.5s ease-in-out infinite;
+}
+.art-constellation .node-0 { animation-delay: 0.1s, 0.7s; }
+.art-constellation .node-1 { animation-delay: 0.2s, 1s; }
+.art-constellation .node-2 { animation-delay: 0.3s, 1.3s; }
+.art-constellation .node-3 { animation-delay: 0.4s, 1.6s; }
+.art-constellation .node-4 { animation-delay: 0.5s, 1.9s; }
+
+.empty-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  text-align: center;
+  padding: 0.5rem 0 1rem;
+}
+.empty-block p {
+  color: var(--muted);
+  max-width: 30ch;
+}
+
+/* ---- avatars ---- */
+.avatar {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 0 0 3px var(--ink-1), 0 0 0 4px var(--line);
+}
+
+.contact {
+  position: relative;
+  justify-content: flex-start;
+}
+.contact:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -18px color-mix(in srgb, var(--ember) 45%, transparent);
+}
+.contact .contact-info {
+  flex: 1;
+}
+.contact .contact-actions {
+  margin-left: auto;
+}
+
+/* ---- buttons: sheen and lift ---- */
+.screen button {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 22px -10px color-mix(in srgb, var(--ember) 70%, transparent);
+}
+.screen button:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.35) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform 600ms ease;
+  pointer-events: none;
+}
+.screen button:not(:disabled):hover::after {
+  transform: translateX(120%);
+}
+.screen button.secondary {
+  box-shadow: none;
+}
+.screen button.secondary::after {
+  display: none;
+}
+
+/* ---- confirm row reads as a sentence, not a shout ---- */
+.screen label.confirm-row {
+  flex-direction: row;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.97rem;
+  color: var(--text-h);
+  align-items: center;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius-s);
+  background: var(--ink-1);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.screen label.confirm-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ember);
+  flex: 0 0 auto;
+}
+
+/* ---- mnemonic words appear one by one ---- */
+.mnemonic-grid li {
+  animation: rise 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.mnemonic-grid li:hover {
+  transform: translateY(-1px);
+  background: var(--ember-soft);
+}
+
+/* ---- safety code: a slow shimmer that says "verify me" ---- */
+.safety-code {
+  background-image: linear-gradient(100deg, var(--ember-soft) 0%, color-mix(in srgb, var(--rose) 14%, transparent) 50%, var(--ember-soft) 100%);
+  background-size: 220% 100%;
+  animation: shimmer 9s ease-in-out infinite;
+}
+
+/* ---- chat: lively bubbles and a glowing composer ---- */
+.msg.out {
+  background-image: linear-gradient(160deg, color-mix(in srgb, var(--ember) 16%, var(--msg-out)), var(--msg-out));
+}
+.composer {
+  transition: box-shadow 200ms ease, border-color 200ms ease;
+}
+.composer:focus-within {
+  border-color: var(--ember-line);
+  box-shadow: 0 0 0 4px var(--ember-soft), 0 14px 30px -18px color-mix(in srgb, var(--ember) 50%, transparent);
+}
+.composer button:not(:disabled):hover {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 18px -8px var(--ember);
+}
+.messages::-webkit-scrollbar {
+  width: 8px;
+}
+.messages::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+/* ---- call: a soft ring while it rings ---- */
+.call-panel {
+  position: relative;
+  overflow: hidden;
+}
+.call-panel::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(circle, var(--ember-soft), transparent 60%);
+  animation: breathe 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.call-panel > * {
+  position: relative;
+}
+
+/* ---- keyframes ---- */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes spin-rev {
+  to { transform: rotate(-360deg); }
+}
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.6; }
+}
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes pop {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@media (max-width: 600px) {
+  .art svg { width: 160px; }
+}

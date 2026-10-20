@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createIdentity, isWebAuthnSupported, IdentityError } from "../../identity";
 import type { UnlockedIdentity } from "../../identity";
+import { IdentityArt } from "../components/Art";
 
 interface CreateIdentityScreenProps {
   onIdentityCreated: (identity: UnlockedIdentity) => void;
@@ -114,9 +115,15 @@ export function CreateIdentityScreen({ onIdentityCreated }: CreateIdentityScreen
   }
 
   return (
-    <div className="screen">
+    <div className="screen screen-center">
+      <IdentityArt />
       <h1>Създай идентичност</h1>
       <p>Идентичността се генерира локално на това устройство. Нищо не се изпраща към сървър.</p>
+      <ul className="chips" aria-hidden="true">
+        <li>Локално</li>
+        <li>Без сървър</li>
+        <li>Без телефон</li>
+      </ul>
       {!webAuthnOk && (
         <p>
           Този браузър няма WebAuthn. Ще използваме парола за защита на идентичността.

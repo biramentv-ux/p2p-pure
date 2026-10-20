@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { deleteContact, listContacts, type Contact } from "../../contacts/contacts";
+import { Avatar, ConstellationArt } from "../components/Art";
 
 interface ContactsScreenProps {
   onChat: (contact: Contact) => void;
@@ -37,11 +38,15 @@ export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
       {error && <p role="alert">{error}</p>}
       {contacts === null && <p>Зареждане…</p>}
       {contacts?.length === 0 && (
-        <p>Още няма потвърдени контакти. Добави първия с QR код, лично.</p>
+        <div className="empty-block">
+          <ConstellationArt />
+          <p>Още няма потвърдени контакти. Добави първия с QR код, лично.</p>
+        </div>
       )}
       <ul className="contact-list">
         {contacts?.map((c) => (
           <li key={c.did} className="contact">
+            <Avatar seed={c.did} name={c.name} />
             <div className="contact-info">
               <strong>{c.name}</strong>
               {c.verified && <span className="badge">потвърден</span>}
