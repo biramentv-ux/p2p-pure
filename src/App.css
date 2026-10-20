@@ -305,3 +305,48 @@
 .composer button {
   flex: 0 0 auto;
 }
+
+/* ---- calls ---- */
+.call-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+.call-buttons button {
+  min-height: 44px;
+}
+.call-panel {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  background: #eef2ff;
+}
+.call-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.call-video {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #111;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.call-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.call-video .call-self {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 28%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border: 2px solid #fff;
+  border-radius: 6px;
+}

@@ -90,8 +90,16 @@ describe("native projects match the overlays", () => {
     expect(read("android/app/src/main/AndroidManifest.xml")).toContain("android.permission.CAMERA");
   });
 
-  it.skipIf(!exists("ios/App/App/Info.plist"))("iOS Info.plist has a camera usage description", () => {
-    expect(read("ios/App/App/Info.plist")).toContain("NSCameraUsageDescription");
+  it.skipIf(!exists("android/app/build.gradle"))("Android manifest asks for the microphone (calls)", () => {
+    const manifest = read("android/app/src/main/AndroidManifest.xml");
+    expect(manifest).toContain("android.permission.RECORD_AUDIO");
+    expect(manifest).toContain("android.permission.MODIFY_AUDIO_SETTINGS");
+  });
+
+  it.skipIf(!exists("ios/App/App/Info.plist"))("iOS Info.plist has camera and microphone usage descriptions", () => {
+    const plist = read("ios/App/App/Info.plist");
+    expect(plist).toContain("NSCameraUsageDescription");
+    expect(plist).toContain("NSMicrophoneUsageDescription");
   });
 });
 

@@ -18,13 +18,19 @@ const changed = [];
 
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-const CAMERA_PERMISSION = '    <uses-permission android:name="android.permission.CAMERA" />';
+const MEDIA_PERMISSIONS = [
+  '    <uses-permission android:name="android.permission.CAMERA" />',
+  '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
+  '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
+];
 const GRADLE_DEPS = [
   'implementation "androidx.credentials:credentials:1.6.0"',
   'implementation "androidx.credentials:credentials-play-services-auth:1.6.0"',
 ];
-const CAMERA_KEY = "NSCameraUsageDescription";
-const CAMERA_TEXT = "Камерата се използва, за да сканираш QR код за свързване с контакт.";
+const IOS_USAGE = [
+  ["NSCameraUsageDescription", "Камерата се използва, за да сканираш QR код и за видео разговори."],
+  ["NSMicrophoneUsageDescription", "Микрофонът се използва за аудио и видео разговори."],
+];
 
 /** Copies native-overlays/android/java/** to android/app/src/main/java/**. */
 function syncJava() {
@@ -80,13 +86,16 @@ function syncAndroid() {
     GRADLE_DEPS.map((d) => "    " + d),
     "gradle deps",
   );
-  ensureLine(
-    "android/app/src/main/AndroidManifest.xml",
-    "android.permission.CAMERA",
-    "<uses-permission android:name=\"android.permission.INTERNET\" />",
-    [CAMERA_PERMISSION],
-    "manifest camera",
-  );
+  for (const perm of MEDIA_PERMISSIONS) {
+    const name = /android:name="([^"]+)"/.exec(perm)[1];
+    ensureLine(
+      "android/app/src/main/AndroidManifest.xml",
+      name,
+      '<uses-permission android:name="android.permission.INTERNET" />',
+      [perm],
+      `manifest ${name.split(".").pop()}`,
+    );
+  }
 }
 
 function syncIos() {
@@ -95,12 +104,13 @@ function syncIos() {
     problems.push("ios/ is missing: run `npx cap add ios` first");
     return;
   }
-  const text = read(plist);
-  if (text.includes(CAMERA_KEY)) return;
-  const insert = `\t<key>${CAMERA_KEY}</key>\n\t<string>${CAMERA_TEXT}</string>`;
-  const next = text.replace("<dict>", "<dict>\n" + insert);
-  changed.push(`ios camera usage: ${plist}`);
-  if (!CHECK) fs.writeFileSync(path.join(ROOT, plist), next);
+  let text = read(plist);
+  for (const [key, value] of IOS_USAGE) {
+    if (text.includes(`<key>${key}</key>`)) continue;
+    text = text.replace("<dict>", `<dict>\n\t<key>${key}</key>\n\t<string>${value}</string>`);
+    changed.push(`ios usage text ${key}: ${plist}`);
+  }
+  if (!CHECK) fs.writeFileSync(path.join(ROOT, plist), text);
 }
 
 syncAndroid();
