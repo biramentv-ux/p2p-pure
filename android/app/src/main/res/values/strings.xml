@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">P2P Messenger</string>
+    <string name="title_activity_main">P2P Messenger</string>
+    <string name="package_name">bg.p2pmessenger.app</string>
+    <string name="custom_url_scheme">bg.p2pmessenger.app</string>
+</resources>
