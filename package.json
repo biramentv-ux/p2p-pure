@@ -23,7 +23,9 @@
     "mobile:sync": "node scripts/mobile/sync-overlays.mjs",
     "mobile:check": "node scripts/mobile/check.mjs",
     "test:mobile": "vitest run tests/mobile tests/platform.test.ts tests/platform",
-    "test:mobile-emu": "node tests/mobile/emulation.mjs"
+    "test:mobile-emu": "node tests/mobile/emulation.mjs",
+    "test:call": "node tests/e2e/call.mjs",
+    "test:call-unit": "vitest run tests/call"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
