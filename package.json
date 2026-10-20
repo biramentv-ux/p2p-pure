@@ -16,7 +16,10 @@
     "test:ui": "node tests/e2e/ui.mjs",
     "cap:sync": "vite build && npx cap sync",
     "cap:open:android": "npx cap open android",
-    "cap:open:ios": "npx cap open ios"
+    "cap:open:ios": "npx cap open ios",
+    "mock:server": "node tests/mock/serve.mjs",
+    "test:mock": "node tests/mock/run.mjs",
+    "test:mock-ui": "node tests/e2e/ui-shortcode.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
