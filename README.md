@@ -100,7 +100,14 @@ npx cap open android   # или ios
 
 ## CI
 
-Workflow-ът `Java CI with Gradle` (`.github/workflows/gradle.yml`) вече ползва `android/` като корен на Gradle проекта (PR #9). Резултатът от билда още не е потвърден в CI.
+Workflow-ът `Java CI with Gradle` (`.github/workflows/gradle.yml`) се изпълнява при всеки push и PR към `main`. Той:
+
+1. Инсталира npm зависимостите и билдва уеб приложението.
+2. Пуска `npx cap sync android`, за да се генерират файловете на Capacitor, които Gradle изисква.
+3. Билдва Android проекта с JDK 21 (`./gradlew build`, включително lint).
+4. Изпраща dependency graph.
+
+Към 21 октомври 2026 и двата job-а минават на `main`. Ако билдът падне, в резултата от run-а се виждат последните редове от Gradle изхода и грешките от lint (`::error::` анотации).
 
 ## Сигурност
 
