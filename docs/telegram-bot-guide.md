@@ -26,7 +26,7 @@
 ```powershell
 cd $env:USERPROFILE\Desktop\p2p-pure
 git fetch origin
-git checkout feat/telegram-signaling-worker
+git checkout main
 git pull
 npm ci
 ```
@@ -47,7 +47,7 @@ Worker-ът пази само временни записи за изтрива�
 npx wrangler kv namespace create DELIVERIES
 ```
 
-Командата показва `id`. Копирай го в `worker/wrangler.jsonc` на мястото на `REPLACE_WITH_KV_NAMESPACE_ID` и запази файла.
+Тази стъпка е направена вече: `worker/wrangler.jsonc` съдържа ID-то на съществуващото KV пространство. Пропусни я, освен ако създаваш ново пространство от нулата. В такъв случай копирай `id` от командата в `worker/wrangler.jsonc`.
 
 ---
 
