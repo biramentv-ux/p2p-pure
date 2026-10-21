@@ -52,7 +52,25 @@ jobs:
 
     - name: Build with Gradle Wrapper
       working-directory: android
-      run: ./gradlew build
+      run: |
+        set -o pipefail
+        ./gradlew build --stacktrace 2>&1 | tee gradle-build.log
+
+    # When the build fails, put the tail of the Gradle output in the run summary
+    # and the key error lines in annotations, so the cause is visible without the raw log.
+    - name: Report Gradle failure
+      if: failure()
+      working-directory: android
+      run: |
+        {
+          echo "### Gradle build failed"
+          echo '```'
+          tail -n 150 gradle-build.log 2>/dev/null || echo "(no Gradle output was captured)"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        grep -E "What went wrong|error:|Execution failed|Could not " -A2 gradle-build.log 2>/dev/null \
+          | head -20 \
+          | while IFS= read -r line; do printf '::error::%s\n' "$line"; done
 
   dependency-submission:
     runs-on: ubuntu-latest
