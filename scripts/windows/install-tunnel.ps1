@@ -30,6 +30,9 @@ if (Get-Service Cloudflared -ErrorAction SilentlyContinue) {
     & $cf service uninstall | Out-Null
 }
 & $cf service install $token | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw "cloudflared не прие токена. Копирай само токена от таблото (без команда и интервали) и пусни скрипта отново."
+}
 $token = $null
 
 Start-Sleep -Seconds 6
