@@ -39,12 +39,7 @@ Start-Sleep -Seconds 6
 Get-Service Cloudflared | Format-Table Name, Status -AutoSize
 
 # The static server must also be running; it is started by the p2p-preview task.
-$serve = "npx.cmd"
-$task = Get-ScheduledTask -TaskName "p2p-preview" -ErrorAction SilentlyContinue
-if (-not $task) {
-    $action = New-ScheduledTaskAction -Execute $serve -Argument "vite preview --host 127.0.0.1 --port 4173 --strictPort" -WorkingDirectory (Get-Location).Path
-    Register-ScheduledTask -TaskName "p2p-preview" -Action $action -Trigger (New-ScheduledTaskTrigger -AtLogOn) -RunLevel Highest -Force | Out-Null
-}
+& "$PSScriptRoot\register-preview-task.ps1"
 Start-ScheduledTask -TaskName "p2p-preview"
 Start-Sleep -Seconds 8
 
