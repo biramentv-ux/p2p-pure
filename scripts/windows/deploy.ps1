@@ -62,6 +62,7 @@ if ($LASTEXITCODE -ne 0) { Fail "build failed. The public site was not changed."
 if (-not (Test-Path "dist\index.html")) { Fail "dist\index.html is missing after the build." }
 
 Step "Restarting the preview server on 127.0.0.1:$Port"
+& "$PSScriptRoot\register-preview-task.ps1" -Port $Port -TaskName $TaskName -ProjectDir (Get-Location).Path
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($task) {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -91,7 +92,7 @@ for ($i = 0; $i -lt 20 -and -not $ok; $i++) {
         $ok = $false
     }
 }
-if (-not $ok) { Fail "the local server does not answer on $local with the app. Check the 'p2p-preview' task." }
+if (-not $ok) { Fail "the local server does not answer on $local with the app. Look at preview.log in the project folder." }
 Write-Host "Local server OK: $local"
 
 Step "Public address"
