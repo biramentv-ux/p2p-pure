@@ -48,7 +48,17 @@ if (-not $task) {
 Start-ScheduledTask -TaskName "p2p-preview"
 Start-Sleep -Seconds 8
 
-"Локално:  " + (Invoke-WebRequest "http://127.0.0.1:4173" -UseBasicParsing).StatusCode
+$localOk = $false
+for ($i = 0; $i -lt 30 -and -not $localOk; $i++) {
+    Start-Sleep -Seconds 1
+    try {
+        "Локално:  " + (Invoke-WebRequest "http://127.0.0.1:4173" -UseBasicParsing -TimeoutSec 5).StatusCode
+        $localOk = $true
+    } catch { }
+}
+if (-not $localOk) {
+    "Локално: сървърът не отговаря на 127.0.0.1:4173. Пусни scripts\windows\deploy.ps1 или виж задачата p2p-preview."
+}
 try {
     "Публично: " + (Invoke-WebRequest "https://dyrakarmy.online" -UseBasicParsing -TimeoutSec 15).StatusCode
 } catch {
