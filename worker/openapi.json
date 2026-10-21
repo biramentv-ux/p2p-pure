@@ -1,0 +1,421 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "P2P Telegram Signaling Worker",
+    "description": "Cloudflare Worker `p2p-telegram-signal`. It only carries signed invitations, never messages. Two features: (1) short invitation codes: POST /invite stores an invitation for 10 minutes and returns a 10-character code, GET /invite/{code} returns it once; (2) Telegram bot: /webhook receives updates and forwards invitations between private chats. The client verifies the invitation signature; the Worker does not.",
+    "version": "0.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://tg.dyrakarmy.online",
+      "description": "Production (Cloudflare custom domain)"
+    },
+    {
+      "url": "http://localhost:8787",
+      "description": "Local development with wrangler dev (default port)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Liveness check"
+    },
+    {
+      "name": "Invitations",
+      "description": "Short invitation codes (public, 10-minute TTL, single use)"
+    },
+    {
+      "name": "Telegram",
+      "description": "Bot webhook (called by Telegram only)"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Liveness check",
+        "tags": [
+          "Health"
+        ],
+        "responses": {
+          "200": {
+            "description": "Worker is up",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "ok"
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/invite": {
+      "post": {
+        "operationId": "createInvite",
+        "summary": "Store an invitation under a short code",
+        "description": "Stores one signed invitation for 600 seconds and returns a 10-character code. Codes use the alphabet 23456789ABCDEFGHJKMNPQRSTVWXYZ. Invitations are not logged. Browsers send an OPTIONS preflight to this path; the Worker answers 204 with CORS headers (not listed as an operation).",
+        "tags": [
+          "Invitations"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInviteRequest"
+              },
+              "example": {
+                "invitation": "p2p1:AbC123_-example"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCreated"
+                },
+                "example": {
+                  "code": "K7M2QXW9HP",
+                  "expiresInSec": 600
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON, or invitation is missing, not a string, or not a p2p1 invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "invalid_invitation"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body is larger than 4096 characters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "too_large"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No free code after 5 attempts (practically never)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "busy"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/invite/{code}": {
+      "get": {
+        "operationId": "takeInvite",
+        "summary": "Fetch and consume an invitation by short code",
+        "description": "Returns the invitation and deletes it, so each code works once. Input is case-insensitive; spaces and dashes are ignored.",
+        "tags": [
+          "Invitations"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "The 10-character code (after removing spaces and dashes).",
+            "schema": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 20,
+              "pattern": "^[0-9A-Za-z -]+$",
+              "example": "K7M2-QXW9-HP"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation returned and deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteResponse"
+                },
+                "example": {
+                  "invitation": "p2p1:AbC123_-example"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Code is not 10 valid characters after normalisation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "invalid_code"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Code unknown, expired, or already used",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "not_found"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/webhook": {
+      "post": {
+        "operationId": "receiveTelegramUpdate",
+        "summary": "Telegram bot webhook",
+        "description": "Receives updates from Telegram. Only requests carrying the webhook secret are processed; others get 403. Handles /start, /help, /send <code> + invitation, and the delete-button callback. Other updates get 200 and are ignored. Telegram sends more fields than listed; they are not used.",
+        "tags": [
+          "Telegram"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Update accepted (also for updates the Worker does not handle)",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "ok"
+              }
+            }
+          },
+          "400": {
+            "description": "Body is not JSON",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Bad request"
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or wrong X-Telegram-Bot-Api-Secret-Token header",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Forbidden"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "TelegramWebhookSecret": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "TelegramWebhookSecret": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Telegram-Bot-Api-Secret-Token",
+        "description": "Secret set with setWebhook (TELEGRAM_WEBHOOK_SECRET). Compared in constant time."
+      }
+    },
+    "schemas": {
+      "CreateInviteRequest": {
+        "type": "object",
+        "required": [
+          "invitation"
+        ],
+        "properties": {
+          "invitation": {
+            "type": "string",
+            "maxLength": 3000,
+            "pattern": "^p2p1:[A-Za-z0-9_-]+$",
+            "description": "Signed invitation from the app, starting with p2p1:"
+          }
+        }
+      },
+      "InviteCreated": {
+        "type": "object",
+        "required": [
+          "code",
+          "expiresInSec"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 10,
+            "example": "K7M2QXW9HP"
+          },
+          "expiresInSec": {
+            "type": "integer",
+            "format": "int32",
+            "example": 600
+          }
+        }
+      },
+      "InviteResponse": {
+        "type": "object",
+        "required": [
+          "invitation"
+        ],
+        "properties": {
+          "invitation": {
+            "type": "string",
+            "maxLength": 3000,
+            "pattern": "^p2p1:[A-Za-z0-9_-]+$"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "bad_request",
+              "invalid_invitation",
+              "too_large",
+              "busy",
+              "invalid_code",
+              "not_found"
+            ]
+          }
+        }
+      },
+      "TelegramUpdate": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/TelegramMessage"
+          },
+          "callback_query": {
+            "$ref": "#/components/schemas/TelegramCallbackQuery"
+          }
+        }
+      },
+      "TelegramMessage": {
+        "type": "object",
+        "required": [
+          "chat"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "chat": {
+            "$ref": "#/components/schemas/TelegramChat"
+          }
+        }
+      },
+      "TelegramChat": {
+        "type": "object",
+        "required": [
+          "id",
+          "type"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "private",
+              "group",
+              "supergroup",
+              "channel"
+            ]
+          }
+        }
+      },
+      "TelegramCallbackQuery": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string",
+            "description": "d: prefix plus a delivery token"
+          },
+          "message": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "message_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "chat": {
+                "$ref": "#/components/schemas/TelegramChat"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
