@@ -50,7 +50,7 @@ async function waitUntil(fn, pred, timeoutMs = 10_000) {
 }
 
 try {
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ locale: "bg-BG" });
   const alice = await ctx.newPage(); // initiator
   const bob = await ctx.newPage(); // responder
   const pageErrors = [];

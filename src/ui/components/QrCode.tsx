@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { useI18n } from "../../i18n";
 
 interface QrCodeProps {
   data: string;
@@ -11,6 +12,7 @@ interface QrCodeProps {
 const QUIET_ZONE_MODULES = 2;
 
 export function QrCode({ data, size = 260, label = "QR код" }: QrCodeProps) {
+  const { t } = useI18n();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +34,8 @@ export function QrCode({ data, size = 260, label = "QR код" }: QrCodeProps) {
   }, [data, size]);
 
   if (error) {
-    return <div className="qr-error" role="alert">QR грешка: {error}</div>;
+    return <div className="qr-error" role="alert">{t("QR грешка: {error}", { error: error })}</div>;
   }
 
-  return <canvas ref={canvasRef} aria-label={label} className="qr-canvas" />;
+  return <canvas ref={canvasRef} aria-label={t(label)} className="qr-canvas" />;
 }

@@ -1,0 +1,15 @@
+{
+  "extName": { "message": "P2P Messenger — бърз достъп" },
+  "extDescription": { "message": "Отваряй личния P2P месинджър с един клик или с клавишна комбинация. Разширението не запазва и не изпраща нищо." },
+  "actionTitle": { "message": "Отвори P2P Messenger" },
+  "commandDescription": { "message": "Отвори или покажи P2P Messenger" },
+  "popupTitle": { "message": "P2P Messenger" },
+  "popupSubtitle": { "message": "Личен, директен, без сървъри." },
+  "openMessenger": { "message": "Отвори месинджъра" },
+  "openWindow": { "message": "Отвори в малък прозорец" },
+  "statusOpen": { "message": "Вече е отворен в раздел. Натискането го извежда напред." },
+  "statusClosed": { "message": "Още не е отворен." },
+  "shortcutHint": { "message": "Клавиши: Ctrl+Shift+M (Command+Shift+M на Mac)" },
+  "privacyNote": { "message": "Разширението само отваря приложението. Не събира данни и няма собствени сървъри." },
+  "errorGeneric": { "message": "Нещо се обърка. Опитай пак." }
+}

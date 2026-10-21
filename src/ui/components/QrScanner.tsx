@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { decodeQrFromPixels } from "../../p2p/qrDecode";
+import { useI18n } from "../../i18n";
 
 interface QrScannerProps {
   /** Called exactly once with the first decoded QR text. */
@@ -9,6 +10,7 @@ interface QrScannerProps {
 const MAX_SCAN_WIDTH = 640;
 
 export function QrScanner({ onDetected }: QrScannerProps) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const onDetectedRef = useRef(onDetected);
@@ -85,22 +87,22 @@ export function QrScanner({ onDetected }: QrScannerProps) {
     <div className="scanner">
       <video ref={videoRef} playsInline muted className="scanner-video" />
       <canvas ref={canvasRef} hidden />
-      {cameraError && <p role="alert">Камера: {cameraError}</p>}
+      {cameraError && <p role="alert">{t("Камера: {error}", { error: t(cameraError) })}</p>}
       <details>
-        <summary>Няма камера? Постави кода ръчно</summary>
+        <summary>{t("Няма камера? Постави кода ръчно")}</summary>
         <textarea
           value={pasted}
           onChange={(e) => setPasted(e.target.value)}
           rows={4}
-          placeholder="p2p1: или p2p1h: (hex)…"
-          aria-label="Поканен код"
+          placeholder={t("p2p1: или p2p1h: (hex)…")}
+          aria-label={t("Поканен код")}
         />
         <button
           type="button"
           disabled={!pasted.trim()}
           onClick={() => onDetectedRef.current(pasted.trim())}
         >
-          Използвай кода
+          {t("Използвай кода")}
         </button>
       </details>
     </div>

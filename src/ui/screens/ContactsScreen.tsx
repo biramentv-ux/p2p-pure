@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { deleteContact, listContacts, type Contact } from "../../contacts/contacts";
+import { useI18n } from "../../i18n";
 import { Avatar, ConstellationArt } from "../components/Art";
 
 interface ContactsScreenProps {
@@ -8,6 +9,7 @@ interface ContactsScreenProps {
 }
 
 export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
+  const { t } = useI18n();
   const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -27,17 +29,17 @@ export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
   }, [version]);
 
   async function onDelete(c: Contact) {
-    if (!window.confirm(`Да се изтрие ли „${c.name}“ от това устройство?`)) return;
+    if (!window.confirm(t("Да се изтрие ли „{name}“ от това устройство?", { name: c.name }))) return;
     await deleteContact(c.did);
     setVersion((v) => v + 1);
   }
 
   return (
     <div className="screen">
-      <h1>Контакти</h1>
-      {error && <p role="alert">{error}</p>}
+      <h1>{t("Контакти")}</h1>
+      {error && <p role="alert">{t(error)}</p>}
       {contacts === null && (
-        <ul className="skeleton-list" aria-busy="true" aria-label="Зареждане на контактите">
+        <ul className="skeleton-list" aria-busy="true" aria-label={t("Зареждане на контактите")}>
           {[0, 1, 2].map((i) => (
             <li key={i} className="skeleton-row" />
           ))}
@@ -46,7 +48,7 @@ export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
       {contacts?.length === 0 && (
         <div className="empty-block">
           <ConstellationArt />
-          <p>Още няма потвърдени контакти. Добави първия с QR код, лично.</p>
+          <p>{t("Още няма потвърдени контакти. Добави първия с QR код, лично.")}</p>
         </div>
       )}
       <ul className="contact-list">
@@ -55,21 +57,21 @@ export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
             <Avatar seed={c.did} name={c.name} />
             <div className="contact-info">
               <strong>{c.name}</strong>
-              {c.verified && <span className="badge">потвърден</span>}
+              {c.verified && <span className="badge">{t("потвърден")}</span>}
               <span className="did-text" title={c.did}>
                 {c.did.slice(0, 22)}…
               </span>
             </div>
             <div className="contact-actions">
-              <button onClick={() => onChat(c)}>Чат</button>
+              <button onClick={() => onChat(c)}>{t("Чат")}</button>
               <button className="secondary" onClick={() => void onDelete(c)}>
-                Изтрий
+                {t("Изтрий")}
               </button>
             </div>
           </li>
         ))}
       </ul>
-      <button onClick={onNewContact}>Добави контакт</button>
+      <button onClick={onNewContact}>{t("Добави контакт")}</button>
     </div>
   );
 }

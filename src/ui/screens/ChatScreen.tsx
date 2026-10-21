@@ -16,6 +16,8 @@ import { CallController, type CallSnapshot } from "../../call/callController";
 import { encodeSignal, isCallSignal, SignalAssembler } from "../../call/signal";
 import { acquireMedia } from "../../call/media";
 import { CallPanel } from "../components/CallPanel";
+import { LanguageSwitch } from "../components/LanguageSwitch";
+import { useI18n } from "../../i18n";
 
 /** Longer than the browser's own 20 s timeout, so it only fires when the browser says nothing. */
 const LOCATION_GUARD_MS = 25_000;
@@ -29,6 +31,12 @@ interface ChatScreenProps {
 }
 
 export function ChatScreen({ contact, link, session, historyKey, onClose }: ChatScreenProps) {
+  const { t, locale } = useI18n();
+  // The mounted effect below runs once, so it reads the latest translator through a ref.
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -60,7 +68,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         const history = await loadHistory(historyKey, contact.did);
         if (alive) setMessages(history);
       } catch {
-        if (alive) setNotice("Историята не можа да се прочете.");
+        if (alive) setNotice(tRef.current("Историята не можа да се прочете."));
       }
     });
 
@@ -96,7 +104,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
               if (alive) {
                 setTransfer(null);
                 setMessages([]);
-                setNotice("Другият човек изтри чата. Историята е изтрита и тук.");
+                setNotice(tRef.current("Другият човек изтри чата. Историята е изтрита и тук."));
               }
               return;
             }
@@ -114,7 +122,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           if (result.kind === "rejected") {
             if (alive) {
               setTransfer(null);
-              setNotice(result.reason);
+              setNotice(tRef.current(result.reason));
             }
             return;
           }
@@ -128,7 +136,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             setMessages((prev) => [...prev, msg]);
           }
         } catch (err) {
-          if (alive) setNotice(err instanceof Error ? err.message : "Съобщението не можа да се разшифрова.");
+          if (alive) setNotice(tRef.current(err instanceof Error ? err.message : "Съобщението не можа да се разшифрова."));
         }
       });
     });
@@ -159,7 +167,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         await appendMessage(historyKey, contact.did, msg);
         setMessages((prev) => [...prev, msg]);
       } catch (err) {
-        setNotice(err instanceof Error ? err.message : "Съобщението не беше изпратено.");
+        setNotice(t(err instanceof Error ? err.message : "Съобщението не беше изпратено."));
       }
     });
   }
@@ -168,7 +176,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   function onShareLocation() {
     setNotice(null);
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setNotice("Устройството не поддържа локация.");
+      setNotice(t("Устройството не поддържа локация."));
       return;
     }
     setLocating(true);
@@ -178,7 +186,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       if (answered) return;
       answered = true;
       setLocating(false);
-      setNotice("Не успях да определя локацията навреме. Провери разрешението за локация.");
+      setNotice(t("Не успях да определя локацията навреме. Провери разрешението за локация."));
     }, LOCATION_GUARD_MS);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -192,7 +200,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           accuracy: pos.coords.accuracy,
         });
         if (!fix) {
-          setNotice("Не успях да определя локацията.");
+          setNotice(t("Не успях да определя локацията."));
           return;
         }
         void enqueue(async () => {
@@ -202,7 +210,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             await appendMessage(historyKey, contact.did, msg);
             setMessages((prev) => [...prev, msg]);
           } catch (err) {
-            setNotice(err instanceof Error ? err.message : "Локацията не беше изпратена.");
+            setNotice(t(err instanceof Error ? err.message : "Локацията не беше изпратена."));
           }
         });
       },
@@ -214,10 +222,10 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         const code = (err as GeolocationPositionError).code;
         setNotice(
           code === 1
-            ? "Нямаш разрешение за локацията."
+            ? t("Нямаш разрешение за локацията.")
             : code === 3
-              ? "Определянето на локацията отне твърде дълго."
-              : "Не успях да определя локацията.",
+              ? t("Определянето на локацията отне твърде дълго.")
+              : t("Не успях да определя локацията."),
         );
       },
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
@@ -240,8 +248,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       setTransfer(null);
       setNotice(
         delivered
-          ? "Чатът е изтрит и за двамата."
-          : "Чатът е изтрит тук. Другият човек не беше на линия, затова няма да се изтрие при него.",
+          ? t("Чатът е изтрит и за двамата.")
+          : t("Чатът е изтрит тук. Другият човек не беше на линия, затова няма да се изтрие при него."),
       );
     });
   }
@@ -271,7 +279,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       });
     } catch (err) {
       setTransfer(null);
-      setNotice(err instanceof Error ? err.message : "Снимката не беше изпратена.");
+      setNotice(t(err instanceof Error ? err.message : "Снимката не беше изпратена."));
     }
   }
 
@@ -279,51 +287,52 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     <div className="chat">
       <header className="chat-header">
         <button className="secondary" onClick={onClose}>
-          Назад
+          {t("Назад")}
         </button>
         <div className="call-buttons">
           <button
             className="secondary"
             disabled={!connected}
             onClick={() => setConfirmWipe(true)}
-            aria-label="Изтрий чата за двамата"
+            aria-label={t("Изтрий чата за двамата")}
           >
-            Изтрий чата
+            {t("Изтрий чата")}
           </button>
           <button
             className="secondary"
             disabled={!connected || !call || (call.phase !== "idle" && call.phase !== "ended")}
             onClick={() => void callRef.current?.startCall("audio")}
-            aria-label="Аудио разговор"
+            aria-label={t("Аудио разговор")}
           >
-            Аудио
+            {t("Аудио")}
           </button>
           <button
             className="secondary"
             disabled={!connected || !call || (call.phase !== "idle" && call.phase !== "ended")}
             onClick={() => void callRef.current?.startCall("video")}
-            aria-label="Видео разговор"
+            aria-label={t("Видео разговор")}
           >
-            Видео
+            {t("Видео")}
           </button>
         </div>
         <div>
           <strong>{contact.name}</strong>
           <span className={connected ? "status on" : "status off"}>
-            {connected ? " · свързан" : " · връзката е прекъсната"}
+            {connected ? t(" · свързан") : t(" · връзката е прекъсната")}
           </span>
         </div>
+        <LanguageSwitch />
       </header>
 
       {notice && <p role="alert" className="chat-notice">{notice}</p>}
 
       {confirmWipe && (
-        <section className="call-panel" aria-label="Потвърди изтриването">
-          <p>Чатът ще се изтрие и при двама ви. Това не може да се отмени.</p>
+        <section className="call-panel" aria-label={t("Потвърди изтриването")}>
+          <p>{t("Чатът ще се изтрие и при двама ви. Това не може да се отмени.")}</p>
           <div className="call-actions">
-            <button onClick={onWipeChat}>Да, изтрий за двамата</button>
+            <button onClick={onWipeChat}>{t("Да, изтрий за двамата")}</button>
             <button className="secondary" onClick={() => setConfirmWipe(false)}>
-              Не
+              {t("Не")}
             </button>
           </div>
         </section>
@@ -347,19 +356,22 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             {m.location ? (
               <LocationBubble fix={m.location} />
             ) : m.image ? (
-              <img className="msg-image" src={m.image} alt="Снимка" />
+              <img className="msg-image" src={m.image} alt={t("Снимка")} />
             ) : (
               <span className="msg-text">{m.text}</span>
             )}
-            <time>{new Date(m.timestamp).toLocaleTimeString("bg-BG", { hour: "2-digit", minute: "2-digit" })}</time>
+            <time>{new Date(m.timestamp).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</time>
           </li>
         ))}
-        {messages.length === 0 && <li className="empty">Няма съобщения още. Кажи здравей.</li>}
+        {messages.length === 0 && <li className="empty">{t("Няма съобщения още. Кажи здравей.")}</li>}
       </ol>
 
       {transfer && (
         <p className="chat-notice" role="status">
-          {transfer.label}: {Math.min(100, Math.round((transfer.done / transfer.total) * 100))}%
+          {t("{label}: {percent}%", {
+            label: t(transfer.label),
+            percent: Math.min(100, Math.round((transfer.done / transfer.total) * 100)),
+          })}
         </p>
       )}
 
@@ -391,38 +403,38 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           className="secondary"
           disabled={!connected || !!transfer}
           onClick={() => cameraInput.current?.click()}
-          aria-label="Снимай с камерата"
+          aria-label={t("Снимай с камерата")}
         >
-          Камера
+          {t("Камера")}
         </button>
         <button
           type="button"
           className="secondary"
           disabled={!connected || !!transfer || locating}
           onClick={onShareLocation}
-          aria-label="Сподели точната си локация"
+          aria-label={t("Сподели точната си локация")}
         >
-          {locating ? "Локация…" : "Локация"}
+          {locating ? t("Локация…") : t("Локация")}
         </button>
         <button
           type="button"
           className="secondary"
           disabled={!connected || !!transfer}
           onClick={() => galleryInput.current?.click()}
-          aria-label="Избери снимка от галерията"
+          aria-label={t("Избери снимка от галерията")}
         >
-          Галерия
+          {t("Галерия")}
         </button>
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Съобщение"
+          placeholder={t("Съобщение")}
           maxLength={4000}
-          aria-label="Съобщение"
+          aria-label={t("Съобщение")}
           disabled={!connected}
         />
         <button type="submit" disabled={!connected || !draft.trim()}>
-          Изпрати
+          {t("Изпрати")}
         </button>
       </form>
     </div>
@@ -431,16 +443,17 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
 /** A shared location. The map link is opened only if the person taps it. */
 function LocationBubble({ fix }: { fix: { lat: number; lng: number; accuracy: number } }) {
+  const { t } = useI18n();
   const coords = `${fix.lat.toFixed(5)}, ${fix.lng.toFixed(5)}`;
   const url = `https://www.openstreetmap.org/?mlat=${fix.lat}&mlon=${fix.lng}#map=17/${fix.lat}/${fix.lng}`;
   return (
     <span className="msg-location">
-      <strong>Локация</strong> {coords}
+      <strong>{t("Локация")}</strong> {coords}
       <br />
-      <small>точност ±{fix.accuracy} м</small>
+      <small>{t("точност ±{accuracy} м", { accuracy: fix.accuracy })}</small>
       <br />
       <a href={url} target="_blank" rel="noopener noreferrer">
-        Покажи на картата
+        {t("Покажи на картата")}
       </a>
     </span>
   );

@@ -73,7 +73,7 @@ try {
     icons.some((i) => typeof i.purpose === "string" && i.purpose.includes("maskable")),
   );
 
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ locale: "bg-BG" });
   const page = await ctx.newPage();
   const pageErrors = [];
   page.on("pageerror", (e) => pageErrors.push(e.message));
