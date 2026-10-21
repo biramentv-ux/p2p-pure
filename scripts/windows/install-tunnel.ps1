@@ -1,4 +1,4 @@
-<#
+﻿<#
   Installs the Cloudflare Tunnel as a Windows service that serves the built app
   on 127.0.0.1:4173. The token is requested with a hidden prompt, so it never
   appears in the console, the command history or the repository.
@@ -46,4 +46,8 @@ Start-ScheduledTask -TaskName "p2p-preview"
 Start-Sleep -Seconds 8
 
 "Локално:  " + (Invoke-WebRequest "http://127.0.0.1:4173" -UseBasicParsing).StatusCode
-"Публично: " + (Invoke-WebRequest "https://dyrakarmy.online" -UseBasicParsing).StatusCode
+try {
+    "Публично: " + (Invoke-WebRequest "https://dyrakarmy.online" -UseBasicParsing -TimeoutSec 15).StatusCode
+} catch {
+    "Публично: още не отговаря. Провери услугата Cloudflared и обновете след минута."
+}
