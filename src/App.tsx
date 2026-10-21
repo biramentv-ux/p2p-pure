@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getUnlockMethod } from "./identity";
 import type { UnlockedIdentity, UnlockMethod } from "./identity";
 import type { Contact } from "./contacts/contacts";
@@ -13,6 +13,7 @@ import { ContactsScreen } from "./ui/screens/ContactsScreen";
 import { ShowQrScreen } from "./ui/screens/ShowQrScreen";
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
 import { LanguageSwitch } from "./ui/components/LanguageSwitch";
+import { useAutoLock } from "./ui/useAutoLock";
 import "./App.css";
 
 type AppState =
@@ -61,6 +62,21 @@ function App() {
       })
       .catch(() => setState({ kind: "no-identity" }));
   }, []);
+
+  // Idle lock: after a quiet period the identity leaves memory and the unlock screen returns.
+  // The open chat's link is closed first, so nothing keeps running behind the lock.
+  const screenRef = useRef(screen);
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
+  useAutoLock(state.kind === "unlocked", () => {
+    const current = screenRef.current;
+    if (current.k === "chat") current.link.close();
+    setScreen({ k: "identity" });
+    getUnlockMethod()
+      .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
+      .catch(() => setState({ kind: "no-identity" }));
+  });
 
   const historyKey = useMemo(
     () => (state.kind === "unlocked" ? deriveHistoryKey(state.identity) : null),

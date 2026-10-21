@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { copyWithAutoClear } from "../clipboard";
 import { publicKeyToDidKey } from "../../identity/didKey";
 import type { UnlockedIdentity } from "../../identity";
 import { saveContact, type Contact } from "../../contacts/contacts";
@@ -60,7 +61,7 @@ function HexFallback({ hex }: { hex: string }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
-      await navigator.clipboard.writeText(hex);
+      await copyWithAutoClear(hex);
       setCopied(true);
     } catch {
       setCopied(false);
