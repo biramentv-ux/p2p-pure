@@ -25,6 +25,13 @@ const MEDIA_PERMISSIONS = [
   '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
   '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
 ];
+// Lint (PermissionImpliesUnsupportedChromeOsHardware): a permission that implies
+// hardware needs a uses-feature tag. required="false" keeps the app installable
+// on devices without the hardware (Chrome OS, tablets without a camera).
+const MEDIA_FEATURES = [
+  '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
+  '    <uses-feature android:name="android.hardware.microphone" android:required="false" />',
+];
 const GRADLE_DEPS = [
   'implementation "androidx.credentials:credentials:1.6.0"',
   'implementation "androidx.credentials:credentials-play-services-auth:1.6.0"',
@@ -89,6 +96,16 @@ function syncAndroid() {
     GRADLE_DEPS.map((d) => "    " + d),
     "gradle deps",
   );
+  for (const feature of MEDIA_FEATURES) {
+    const name = /android:name="([^"]+)"/.exec(feature)[1];
+    ensureLine(
+      "android/app/src/main/AndroidManifest.xml",
+      name,
+      '<uses-permission android:name="android.permission.INTERNET" />',
+      [feature],
+      `manifest feature ${name.split(".").pop()}`,
+    );
+  }
   for (const perm of MEDIA_PERMISSIONS) {
     const name = /android:name="([^"]+)"/.exec(perm)[1];
     ensureLine(
