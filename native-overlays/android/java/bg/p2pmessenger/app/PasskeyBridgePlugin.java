@@ -70,7 +70,7 @@ public class PasskeyBridgePlugin extends Plugin {
 
                     @Override
                     public void onError(CreateCredentialException e) {
-                        call.reject(e.getMessage() != null ? e.getMessage() : "Passkey creation failed", e.getType());
+                        call.reject(e.getMessage() != null ? e.getMessage() : "Passkey creation failed", e.getClass().getSimpleName());
                     }
                 });
         } catch (Exception e) {
@@ -111,7 +111,7 @@ public class PasskeyBridgePlugin extends Plugin {
 
                     @Override
                     public void onError(GetCredentialException e) {
-                        call.reject(e.getMessage() != null ? e.getMessage() : "Passkey sign-in failed", e.getType());
+                        call.reject(e.getMessage() != null ? e.getMessage() : "Passkey sign-in failed", e.getClass().getSimpleName());
                     }
                 });
         } catch (Exception e) {
