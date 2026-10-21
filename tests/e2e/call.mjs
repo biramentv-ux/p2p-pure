@@ -36,7 +36,7 @@ function check(name, ok, detail = "") {
 }
 
 async function openApp() {
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ locale: "bg-BG" });
   const page = await ctx.newPage();
   // Diagnostics only: remember the peer connections so a failing run can show their state.
   await page.addInitScript(() => {

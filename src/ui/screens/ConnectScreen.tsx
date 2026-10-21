@@ -17,6 +17,7 @@ import { describeReachability, summarizeCandidates } from "../../p2p/network";
 import { completeHandshake } from "../../p2p/session";
 import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "../../p2p/secureSession";
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
+import { useI18n } from "../../i18n";
 import { QrCode } from "../components/QrCode";
 import { QrScanner } from "../components/QrScanner";
 import { ShortCodeEnter, ShortCodeShare } from "../components/ShortCode";
@@ -55,6 +56,7 @@ type View =
 
 /** Text version of the QR payload, for a device without a camera. Selectable and copyable. */
 function HexFallback({ hex }: { hex: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
@@ -66,17 +68,28 @@ function HexFallback({ hex }: { hex: string }) {
   }
   return (
     <details>
-      <summary>Няма камера на другото устройство?</summary>
-      <p>Копирай този код и го изпрати по сигурен начин. Другият човек го поставя с „Няма камера?“.</p>
-      <textarea readOnly rows={4} value={hex} aria-label="Покана като hex" onFocus={(e) => e.target.select()} />
+      <summary>{t("Няма камера на другото устройство?")}</summary>
+      <p>
+        {t(
+          "Копирай този код и го изпрати по сигурен начин. Другият човек го поставя с „Няма камера?“.",
+        )}
+      </p>
+      <textarea
+        readOnly
+        rows={4}
+        value={hex}
+        aria-label={t("Покана като hex")}
+        onFocus={(e) => e.target.select()}
+      />
       <button type="button" className="secondary" onClick={() => void copy()}>
-        {copied ? "Копирано" : "Копирай кода"}
+        {copied ? t("Копирано") : t("Копирай кода")}
       </button>
     </details>
   );
 }
 
 export function ConnectScreen({ identity, expected, onConnected, onCancel }: ConnectScreenProps) {
+  const { t } = useI18n();
   const [view, setView] = useState<View>({ k: "choose" });
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -103,7 +116,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
 
   function fail(err: unknown) {
     clearAll();
-    setError(err instanceof Error ? err.message : "Неизвестна грешка при свързване.");
+    setError(err instanceof Error ? t(err.message) : t("Неизвестна грешка при свързване."));
     setView({ k: "choose" });
   }
 
@@ -135,7 +148,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
 
   async function startAsInitiator() {
     setError(null);
-    setView({ k: "busy", label: "Подготвям покана…" });
+    setView({ k: "busy", label: t("Подготвям покана…") });
     try {
       const { link, sdp } = await PeerLink.createOffer();
       linkRef.current = link;
@@ -145,7 +158,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
       const hex = await encodeInvitationHex(offer);
-      setView({ k: "offer-qr", payload, hex, net: describeReachability(summarizeCandidates(sdp)) });
+      setView({ k: "offer-qr", payload, hex, net: t(describeReachability(summarizeCandidates(sdp))) });
     } catch (err) {
       fail(err);
     }
@@ -164,7 +177,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       if (!answer.answersNonce || !bytesEqual(answer.answersNonce, offer.nonce)) {
         throw new InvitationError("Този отговор не е за тази покана.", "INVALID_FIELD");
       }
-      setView({ k: "busy", label: "Свързвам…" });
+      setView({ k: "busy", label: t("Свързвам…") });
       await link.acceptAnswer(answer.sdp);
       await completeHandshake(link, identity.did, answer.publicKey, CONNECT_TIMEOUT_MS);
       const session = SecureSession.derive({
@@ -195,7 +208,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     try {
       const offer = await decodeInvitation(text);
       assertKind(offer, "offer");
-      setView({ k: "busy", label: "Подготвям отговор…" });
+      setView({ k: "busy", label: t("Подготвям отговор…") });
       const { link, sdp } = await PeerLink.createAnswer(offer.sdp);
       linkRef.current = link;
       const eph = createEphemeralKeyPair();
@@ -207,7 +220,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       const hex = await encodeInvitationHex(answer);
       // Start waiting before showing the QR, so the handshake can't be missed.
       const handshake = completeHandshake(link, identity.did, offer.publicKey, RESPONDER_TIMEOUT_MS);
-      setView({ k: "answer-qr", payload, hex, net: describeReachability(summarizeCandidates(sdp)) });
+      setView({ k: "answer-qr", payload, hex, net: t(describeReachability(summarizeCandidates(sdp))) });
       await handshake;
       const session = SecureSession.derive({
         role: "responder",
@@ -230,7 +243,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     const contact: Contact = {
       did: publicKeyToDidKey(peerPublicKey),
       publicKey: peerPublicKey,
-      name: name.trim() || "Контакт",
+      name: name.trim() || t("Контакт"),
       verified: true,
       verifiedAt: Date.now(),
       addedAt: Date.now(),
@@ -243,7 +256,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   function rejectMatch(link: PeerLink) {
     link.close();
     linkRef.current = null;
-    setError("Кодовете не съвпаднаха. Връзката е прекратена и контактът не е запазен.");
+    setError(t("Кодовете не съвпаднаха. Връзката е прекратена и контактът не е запазен."));
     setView({ k: "choose" });
   }
 
@@ -252,18 +265,19 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   if (view.k === "choose") {
     return (
       <div className="screen">
-        <h1>{expected ? `Свързване с ${expected.name}` : "Нов контакт"}</h1>
+        <h1>{expected ? t("Свързване с {name}", { name: expected.name }) : t("Нов контакт")}</h1>
         <p>
-          Връзката е директна между двете устройства. Нищо не минава през сървър. Двамата трябва да
-          са на едно място или да могат да си показват екраните.
+          {t(
+            "Връзката е директна между двете устройства. Нищо не минава през сървър. Двамата трябва да са на едно място или да могат да си показват екраните.",
+          )}
         </p>
         {error && <p role="alert">{error}</p>}
-        <button onClick={startAsInitiator}>Покажи моята покана</button>
+        <button onClick={startAsInitiator}>{t("Покажи моята покана")}</button>
         <button className="secondary" onClick={startAsResponder}>
-          Сканирай чужда покана
+          {t("Сканирай чужда покана")}
         </button>
         <button className="secondary" onClick={onCancel}>
-          Назад
+          {t("Назад")}
         </button>
       </div>
     );
@@ -280,16 +294,16 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   if (view.k === "offer-qr") {
     return (
       <div className="screen">
-        <h1>Покана</h1>
-        <p>Другият човек сканира този код. След това натисни „Сканирай отговора“.</p>
+        <h1>{t("Покана")}</h1>
+        <p>{t("Другият човек сканира този код. След това натисни „Сканирай отговора“.")}</p>
         <QrCode data={view.payload} size={360} />
         <p className="net-hint">{view.net}</p>
         <HexFallback hex={view.hex} />
-        <p>Не може да сканира? Използвай кратък код:</p>
+        <p>{t("Не може да сканира? Използвай кратък код:")}</p>
         <ShortCodeShare payload={view.payload} />
-        <button onClick={() => setView({ k: "scan-answer" })}>Сканирай отговора</button>
+        <button onClick={() => setView({ k: "scan-answer" })}>{t("Сканирай отговора")}</button>
         <button className="secondary" onClick={reset}>
-          Отказ
+          {t("Отказ")}
         </button>
       </div>
     );
@@ -298,13 +312,13 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   if (view.k === "scan-answer") {
     return (
       <div className="screen">
-        <h1>Сканирай отговора</h1>
-        <p>Сканирай QR кода, който се показва на другото устройство.</p>
+        <h1>{t("Сканирай отговора")}</h1>
+        <p>{t("Сканирай QR кода, който се показва на другото устройство.")}</p>
         <QrScanner onDetected={onAnswerScanned} />
-        <p>Или въведи кратък код:</p>
+        <p>{t("Или въведи кратък код:")}</p>
         <ShortCodeEnter onPayload={onAnswerScanned} />
         <button className="secondary" onClick={reset}>
-          Отказ
+          {t("Отказ")}
         </button>
       </div>
     );
@@ -313,13 +327,13 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   if (view.k === "scan-offer") {
     return (
       <div className="screen">
-        <h1>Сканирай поканата</h1>
-        <p>Сканирай QR кода, който показва другият човек.</p>
+        <h1>{t("Сканирай поканата")}</h1>
+        <p>{t("Сканирай QR кода, който показва другият човек.")}</p>
         <QrScanner onDetected={onOfferScanned} />
-        <p>Или въведи кратък код:</p>
+        <p>{t("Или въведи кратък код:")}</p>
         <ShortCodeEnter onPayload={onOfferScanned} />
         <button className="secondary" onClick={reset}>
-          Отказ
+          {t("Отказ")}
         </button>
       </div>
     );
@@ -328,15 +342,15 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   if (view.k === "answer-qr") {
     return (
       <div className="screen">
-        <h1>Отговор</h1>
-        <p>Нека другият човек сканира този код. Чакаме връзката…</p>
+        <h1>{t("Отговор")}</h1>
+        <p>{t("Нека другият човек сканира този код. Чакаме връзката…")}</p>
         <QrCode data={view.payload} size={360} />
         <p className="net-hint">{view.net}</p>
         <HexFallback hex={view.hex} />
-        <p>Не може да сканира? Използвай кратък код:</p>
+        <p>{t("Не може да сканира? Използвай кратък код:")}</p>
         <ShortCodeShare payload={view.payload} />
         <button className="secondary" onClick={reset}>
-          Отказ
+          {t("Отказ")}
         </button>
       </div>
     );
@@ -345,30 +359,30 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   // view.k === "confirm"
   return (
     <div className="screen">
-      <h1>Потвърди контакта</h1>
+      <h1>{t("Потвърди контакта")}</h1>
       <p>
-        Сравнете тези думи с човека до вас (или по видео). Трябва да са <strong>едни и същи</strong> на
-        двете устройства.
+        {t("Сравнете тези думи с човека до вас (или по видео). Трябва да са")}{" "}
+        <strong>{t("едни и същи")}</strong> {t("на двете устройства.")}
       </p>
-      <p className="safety-code" aria-label="Safety code">
+      <p className="safety-code" aria-label={t("Код за сигурност")}>
         {formatSafetyCode(view.words)}
       </p>
       {!expected && (
         <label>
-          Име на контакта
+          {t("Име на контакта")}
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Например: Иван"
+            placeholder={t("Например: Иван")}
             maxLength={40}
           />
         </label>
       )}
       <button onClick={() => void confirmMatch(view.peerPublicKey, view.link, view.session)}>
-        Думите съвпадат
+        {t("Думите съвпадат")}
       </button>
       <button className="secondary" onClick={() => rejectMatch(view.link)}>
-        Не съвпадат
+        {t("Не съвпадат")}
       </button>
     </div>
   );

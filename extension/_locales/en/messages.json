@@ -1,0 +1,15 @@
+{
+  "extName": { "message": "P2P Messenger Quick Launch" },
+  "extDescription": { "message": "Open your private P2P messenger in one click or with a shortcut. This extension stores and sends nothing." },
+  "actionTitle": { "message": "Open P2P Messenger" },
+  "commandDescription": { "message": "Open or bring forward P2P Messenger" },
+  "popupTitle": { "message": "P2P Messenger" },
+  "popupSubtitle": { "message": "Private, direct, no servers." },
+  "openMessenger": { "message": "Open messenger" },
+  "openWindow": { "message": "Open in a small window" },
+  "statusOpen": { "message": "Already open in a tab. Clicking brings it forward." },
+  "statusClosed": { "message": "Not open yet." },
+  "shortcutHint": { "message": "Shortcut: Ctrl+Shift+M (Command+Shift+M on Mac)" },
+  "privacyNote": { "message": "The extension only opens the app. It collects no data and runs no servers of its own." },
+  "errorGeneric": { "message": "Something went wrong. Try again." }
+}

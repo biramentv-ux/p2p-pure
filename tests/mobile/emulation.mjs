@@ -61,7 +61,7 @@ async function stubNativePlugin(page) {
 }
 
 async function openDevice(profile, extraInit) {
-  const ctx = await browser.newContext({ ...devices[profile] });
+  const ctx = await browser.newContext({ ...devices[profile], locale: "bg-BG" });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));

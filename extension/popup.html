@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>P2P Messenger</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header class="brand">
+        <img src="icons/icon-48.png" width="40" height="40" alt="" />
+        <div>
+          <h1 data-i18n="popupTitle">P2P Messenger</h1>
+          <p class="sub" data-i18n="popupSubtitle">Private, direct, no servers.</p>
+        </div>
+      </header>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <div class="actions">
+        <button id="open" type="button" class="primary" data-i18n="openMessenger">Open messenger</button>
+        <button id="open-window" type="button" class="secondary" data-i18n="openWindow">Open in a small window</button>
+      </div>
+
+      <p id="error" class="error" role="alert" hidden></p>
+
+      <footer class="foot">
+        <p data-i18n="shortcutHint">Shortcut: Ctrl+Shift+M (Command+Shift+M on Mac)</p>
+        <p data-i18n="privacyNote">The extension only opens the app. It collects no data and runs no servers of its own.</p>
+      </footer>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

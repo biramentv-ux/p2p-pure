@@ -26,7 +26,11 @@
     "test:mobile-emu": "node tests/mobile/emulation.mjs",
     "test:call": "node tests/e2e/call.mjs",
     "test:call-unit": "vitest run tests/call",
-    "test:chat": "node tests/e2e/chat-features.mjs"
+    "test:chat": "node tests/e2e/chat-features.mjs",
+    "test:i18n": "node tests/e2e/i18n-en.mjs",
+    "test:extension-browser": "node tests/extension/browser.mjs",
+    "extension:pack": "node scripts/extension/pack.mjs",
+    "test:a11y": "node tests/e2e/a11y.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -53,6 +57,7 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^5.0.4",
+    "axe-core": "4.14.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "oxlint": "^1.81.0",

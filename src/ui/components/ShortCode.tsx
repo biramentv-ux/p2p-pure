@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { fetchInvitation, formatShortCode, shareInvitation, ShortInviteError } from "../../p2p/shortInvite";
+import { useI18n } from "../../i18n";
 
 /** Uploads a signed invitation and shows the short code to read aloud or type on the other device. */
 export function ShortCodeShare({ payload }: { payload: string }) {
+  const { t } = useI18n();
   const [code, setCode] = useState<string | null>(null);
   const [minutes, setMinutes] = useState(10);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +18,7 @@ export function ShortCodeShare({ payload }: { payload: string }) {
       setCode(out.code);
       setMinutes(Math.round(out.expiresInSec / 60));
     } catch (err) {
-      setError(err instanceof ShortInviteError ? err.message : "Не успях да създам кратък код.");
+      setError(err instanceof ShortInviteError ? t(err.message) : t("Не успях да създам кратък код."));
     } finally {
       setBusy(false);
     }
@@ -27,7 +29,7 @@ export function ShortCodeShare({ payload }: { payload: string }) {
       <>
         {error && <p role="alert">{error}</p>}
         <button className="secondary" onClick={onCreate} disabled={busy}>
-          {busy ? "Създавам код…" : "Покажи кратък код"}
+          {busy ? t("Създавам код…") : t("Покажи кратък код")}
         </button>
       </>
     );
@@ -35,15 +37,16 @@ export function ShortCodeShare({ payload }: { payload: string }) {
   return (
     <div>
       <p>
-        Кратък код: <strong className="short-code">{formatShortCode(code)}</strong>
+        {t("Кратък код:")} <strong className="short-code">{formatShortCode(code)}</strong>
       </p>
-      <p>Важи {minutes} минути и работи само веднъж.</p>
+      <p>{t("Важи {minutes} минути и работи само веднъж.", { minutes })}</p>
     </div>
   );
 }
 
 /** Lets the person type a short code and receives the invitation it stands for. */
 export function ShortCodeEnter({ onPayload }: { onPayload: (payload: string) => void | Promise<void> }) {
+  const { t } = useI18n();
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,7 +58,7 @@ export function ShortCodeEnter({ onPayload }: { onPayload: (payload: string) => 
       const payload = await fetchInvitation(value);
       await onPayload(payload);
     } catch (err) {
-      setError(err instanceof ShortInviteError ? err.message : "Не успях да прочета кода.");
+      setError(err instanceof ShortInviteError ? t(err.message) : t("Не успях да прочета кода."));
     } finally {
       setBusy(false);
     }
@@ -65,7 +68,7 @@ export function ShortCodeEnter({ onPayload }: { onPayload: (payload: string) => 
     <div>
       {error && <p role="alert">{error}</p>}
       <label>
-        Кратък код
+        {t("Кратък код")}
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -77,7 +80,7 @@ export function ShortCodeEnter({ onPayload }: { onPayload: (payload: string) => 
         />
       </label>
       <button className="secondary" onClick={onUse} disabled={busy || value.trim() === ""}>
-        {busy ? "Проверявам…" : "Провери кода"}
+        {busy ? t("Проверявам…") : t("Провери кода")}
       </button>
     </div>
   );

@@ -1,0 +1,149 @@
+/* Same palette as the app ("Sealed Ledger"). Dark by default, light when the browser asks for it. */
+:root {
+  color-scheme: dark light;
+  --ink-0: #0c0d10;
+  --ink-1: #14161c;
+  --line: #2b303b;
+  --text: #b7b2a5;
+  --text-h: #efe9db;
+  --muted: #8b877c;
+  --ember: #e9a23b;
+  --ember-ink: #1a1206;
+  --ember-hi: #f4b65a;
+  --danger: #f0786a;
+  --focus: 0 0 0 3px rgba(233, 162, 59, 0.45);
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --ink-0: #f2eee3;
+    --ink-1: #fbf8f0;
+    --line: #d8d0bd;
+    --text: #4f4a3f;
+    --text-h: #1b1a16;
+    --muted: #6b6558;
+    --ember: #9a5508;
+    --ember-ink: #ffffff;
+    --ember-hi: #b5690c;
+    --danger: #b4402f;
+    --focus: 0 0 0 3px rgba(154, 85, 8, 0.4);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 340px;
+  background: var(--ink-0);
+  color: var(--text);
+  font: 14px/1.5 var(--sans);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand img {
+  border-radius: 10px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-h);
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.status {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--ink-1);
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+button {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 160ms ease;
+}
+
+button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.primary {
+  border: 0;
+  background: var(--ember);
+  color: var(--ember-ink);
+}
+
+.primary:hover {
+  background: var(--ember-hi);
+}
+
+.secondary {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-h);
+}
+
+.secondary:hover {
+  border-color: var(--ember);
+}
+
+.error {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+}

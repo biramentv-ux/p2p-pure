@@ -30,7 +30,7 @@ function check(name, ok, detail = "") {
 }
 
 async function openApp() {
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ locale: "bg-BG" });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
