@@ -147,3 +147,88 @@ button:focus-visible {
     transition: none;
   }
 }
+
+/* ---- hybrid theme, same as the app: printed frames, phosphor accent, block cursor ---- */
+:root {
+  --phosphor: #6cf0a0;
+  --frame: #efe9db;
+  --frame-shadow: #000000;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --phosphor: #1f7a3f;
+    --frame: #1b1a16;
+    --frame-shadow: #1b1a16;
+  }
+}
+
+.status {
+  font-family: var(--mono, ui-monospace, Consolas, monospace);
+  border: 2px solid var(--frame);
+  box-shadow: 3px 3px 0 var(--frame-shadow);
+}
+
+.status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  vertical-align: 1px;
+  background: var(--phosphor);
+}
+
+h1::after {
+  content: "";
+  display: inline-block;
+  width: 0.45em;
+  height: 0.9em;
+  margin-left: 0.2em;
+  vertical-align: -0.08em;
+  background: var(--phosphor);
+  animation: blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+button {
+  border: 2px solid var(--frame);
+  box-shadow: 4px 4px 0 var(--frame-shadow);
+}
+
+button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--frame-shadow);
+}
+
+button:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--frame-shadow);
+}
+
+.primary {
+  background: var(--ember);
+  color: var(--ember-ink);
+}
+
+.primary:hover {
+  background: var(--ember-hi);
+}
+
+.secondary {
+  background: var(--ink-1);
+  color: var(--text-h);
+}
+
+.secondary:hover {
+  background: var(--phosphor);
+  color: var(--ink-0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  h1::after { animation: none; }
+  button:hover, button:active { transform: none; }
+}
