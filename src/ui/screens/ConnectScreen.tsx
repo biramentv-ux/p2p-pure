@@ -13,7 +13,7 @@ import {
   InvitationError,
   type Invitation,
 } from "../../p2p/invitation";
-import { PeerLink, CONNECT_TIMEOUT_MS } from "../../p2p/peer";
+import { PeerLink, PeerLinkError, CONNECT_TIMEOUT_MS } from "../../p2p/peer";
 import { describeReachability, summarizeCandidates } from "../../p2p/network";
 import { completeHandshake } from "../../p2p/session";
 import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "../../p2p/secureSession";
@@ -98,6 +98,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   const linkRef = useRef<PeerLink | null>(null);
   const offerRef = useRef<Invitation | null>(null);
   const ephemeralRef = useRef<EphemeralKeyPair | null>(null);
+  /** Our own SDP, kept so a failed connection can explain this network's reachability. */
+  const mySdpRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   const doneRef = useRef(false);
 
@@ -110,14 +112,28 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   function clearAll() {
     linkRef.current?.close();
     linkRef.current = null;
+    mySdpRef.current = null;
     offerRef.current = null;
     ephemeralRef.current = null;
     busyRef.current = false;
   }
 
   function fail(err: unknown) {
+    const mySdp = mySdpRef.current;
     clearAll();
-    setError(err instanceof Error ? t(err.message) : t("Неизвестна грешка при свързване."));
+    mySdpRef.current = null;
+    let message: string;
+    if (err instanceof PeerLinkError && mySdp) {
+      // Timeouts and closed channels: say what it usually means and what to try next.
+      message = [
+        t("Връзката не се установи навреме. Мрежата може да блокира директната връзка."),
+        t(describeReachability(summarizeCandidates(mySdp))),
+        t("Опитайте с една Wi-Fi мрежа за първото сдвояване."),
+      ].join(" ");
+    } else {
+      message = err instanceof Error ? t(err.message) : t("Неизвестна грешка при свързване.");
+    }
+    setError(message);
     setView({ k: "choose" });
   }
 
@@ -153,6 +169,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     try {
       const { link, sdp } = await PeerLink.createOffer();
       linkRef.current = link;
+      mySdpRef.current = sdp;
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;
       const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
@@ -211,6 +228,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       assertKind(offer, "offer");
       setView({ k: "busy", label: t("Подготвям отговор…") });
       const { link, sdp } = await PeerLink.createAnswer(offer.sdp);
+      mySdpRef.current = sdp;
       linkRef.current = link;
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;

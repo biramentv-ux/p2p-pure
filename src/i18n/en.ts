@@ -79,6 +79,8 @@ export const EN_DICTIONARY: Record<string, string> = {
     "The other person is not the same contact. The connection was closed.",
   "Подготвям отговор…": "Preparing answer…",
   "Неизвестна грешка при свързване.": "Unknown connection error.",
+  "Връзката не се установи навреме. Мрежата може да блокира директната връзка.": "The connection did not open in time. The network may be blocking a direct connection.",
+  "Опитайте с една Wi-Fi мрежа за първото сдвояване.": "For the first pairing, try the same Wi-Fi network.",
   "Покана": "Invitation",
   "Другият човек сканира този код. След това натисни „Сканирай отговора“.":
     "The other person scans this code. Then press „Scan the answer“.",

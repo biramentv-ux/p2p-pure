@@ -21,6 +21,11 @@
   "triggers": {
     "crons": ["* * * * *"],
   },
+  // Per client IP: at most 30 invitation requests per minute (POST /invite and GET /invite/:code).
+  // Cloudflare Rate Limiting binding; namespace_id is any unique number within the account.
+  "ratelimits": [
+    { "name": "INVITE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+  ],
   "kv_namespaces": [
     { "binding": "DELIVERIES", "id": "735f0036ab7a449f8935c147f5a0a28a" },
   ],

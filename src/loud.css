@@ -1,0 +1,792 @@
+/*
+ * Loud look: "neo-brutalist pop-art". An opt-in override layer, active only when
+ * <html data-theme="loud"> is set (see main.tsx: ?look=loud, or localStorage "p2p-look").
+ *   - thick black outlines, hard offset shadows, bouncy buttons
+ *   - one palette for light and dark: acid yellow page, white cards, hot magenta,
+ *     electric blue, acid lime. Black text on the bright fills (6:1 and up), white on blue
+ *   - halftone dots and a wobbling sticker star, both pure CSS, no fonts or images
+ * Every selector starts with :root[data-theme="loud"] so the default look is untouched.
+ * Plain CSS only, so the same file can later go into the Chrome extension popup.
+ * Motion honours prefers-reduced-motion (decorative animation and hover travel are off).
+ */
+
+:root[data-theme="loud"] {
+  color-scheme: light;
+
+  --ink-0: #ffe14d;              /* page: acid yellow */
+  --ink-1: #ffffff;              /* cards */
+  --ink-2: #fff7c2;              /* raised, incoming bubbles */
+  --ink-3: #ffc2e4;              /* hover, pressed */
+  --line: #0a0a0a;
+  --line-soft: rgba(10, 10, 10, 0.35);
+
+  --text: #0a0a0a;
+  --text-h: #0a0a0a;
+  --muted: #2a2a2a;              /* AA on white and yellow */
+
+  --ember: #ff2e93;              /* primary: hot magenta, black text */
+  --ember-hi: #ff5aa8;
+  --ember-ink: #0a0a0a;
+  --ember-soft: rgba(255, 46, 147, 0.2);
+  --ember-line: #0a0a0a;
+  --sage: #1d3fd6;               /* verified and online: deep electric blue on white */
+  --sage-soft: rgba(29, 63, 214, 0.12);
+  --danger: #a3001b;
+  --danger-soft: #ffd6d0;
+  --aqua: #2d5bff;
+  --rose: #ff2e93;
+
+  --msg-out: #c6ff00;            /* acid lime bubbles for my messages */
+  --msg-out-text: #0a0a0a;
+  --focus: 0 0 0 4px #0a0a0a;
+
+  --radius-s: 10px;
+  --radius: 16px;
+  --radius-l: 20px;
+  --shadow-lift: 5px 5px 0 #0a0a0a;
+
+  --frame: #0a0a0a;              /* hybrid.css tokens, re-pointed at the loud palette */
+  --frame-shadow: #0a0a0a;
+  --phosphor: #c6ff00;
+  --hard-shadow: 5px 5px 0 #0a0a0a;
+
+  --display: 'Fraunces Variable', 'Fraunces', Georgia, 'Times New Roman', serif;
+}
+
+/* ---- page: halftone dots and a few confetti dots, all static ---- */
+:root[data-theme="loud"] body {
+  background-color: #ffe14d;
+  background-image:
+    radial-gradient(circle, rgba(10, 10, 10, 0.16) 1.4px, transparent 1.9px) 0 0 / 12px 12px,
+    radial-gradient(circle at 8% 14%, #2d5bff 0 7px, transparent 8px),
+    radial-gradient(circle at 93% 64%, #ff2e93 0 6px, transparent 7px),
+    radial-gradient(circle at 22% 90%, #c6ff00 0 9px, transparent 10px),
+    radial-gradient(circle at 76% 34%, #0a0a0a 0 3px, transparent 4px);
+  background-attachment: fixed;
+}
+
+/* the sticker star (top right) and the blue disc (bottom left) replace the blurred glows */
+:root[data-theme="loud"] body::before,
+:root[data-theme="loud"] body::after {
+  filter: none;
+  opacity: 1;
+  width: 150px;
+  height: 150px;
+  left: auto;
+  bottom: auto;
+  top: -36px;
+  right: -40px;
+  border-radius: 0;
+  background: #c6ff00;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  animation: loud-wobble 5s ease-in-out infinite alternate;
+}
+
+:root[data-theme="loud"] body::after {
+  top: auto;
+  right: auto;
+  bottom: 96px;
+  left: -46px;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: #2d5bff;
+  clip-path: none;
+  border: 4px solid #0a0a0a;
+  box-shadow: 5px 5px 0 #0a0a0a;
+  animation: loud-pulse 2.6s ease-in-out infinite;
+}
+
+:root[data-theme="loud"] #root::after {
+  display: none;               /* no scanlines in this look */
+}
+
+@keyframes loud-wobble {
+  from { transform: rotate(-9deg) scale(1); }
+  to { transform: rotate(8deg) scale(1.06); }
+}
+
+@keyframes loud-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.09); }
+}
+
+/* ---- type: chunky, wonky Fraunces for headings ---- */
+:root[data-theme="loud"] h1,
+:root[data-theme="loud"] h2 {
+  font-family: var(--display);
+  font-weight: 900;
+  font-variation-settings: 'opsz' 144, 'SOFT' 100, 'WONK' 1;
+  color: #0a0a0a;
+  letter-spacing: -0.02em;
+}
+
+:root[data-theme="loud"] .screen h1 {
+  font-size: clamp(2rem, 9vw, 2.6rem);
+  line-height: 1.02;
+  text-shadow: 3px 3px 0 #ff2e93;
+}
+
+:root[data-theme="loud"] .screen h1::after {
+  display: none;               /* the terminal cursor is off in this look */
+}
+
+:root[data-theme="loud"] h2 {
+  font-size: 1.3rem;
+}
+
+:root[data-theme="loud"] body {
+  font-weight: 500;
+}
+
+/* ---- intro text: a sticker card ---- */
+:root[data-theme="loud"] .screen > p:not(.did-text):not([role="alert"]) {
+  color: #0a0a0a;
+  font-size: 1rem;
+  font-weight: 600;
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: var(--radius);
+  box-shadow: 4px 4px 0 #0a0a0a;
+  padding: 0.7rem 0.9rem;
+  rotate: -0.6deg;
+}
+
+:root[data-theme="loud"] [role="alert"] {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 3px solid #0a0a0a;
+  border-radius: var(--radius-s);
+  box-shadow: 4px 4px 0 #0a0a0a;
+  font-weight: 700;
+  padding: 0.7rem 0.9rem;
+}
+
+/* ---- buttons: bouncy, with a hard shadow that moves on hover and press ---- */
+:root[data-theme="loud"] .screen button {
+  position: relative;
+  overflow: visible;
+  min-height: 52px;
+  padding: 0.7rem 1.3rem;
+  font-weight: 800;
+  font-size: 1.02rem;
+  letter-spacing: 0.02em;
+  border: 3px solid #0a0a0a;
+  border-radius: 14px;
+  background: var(--ember);
+  color: #0a0a0a;
+  box-shadow: 5px 5px 0 #0a0a0a;
+  transform: none;
+  transition:
+    transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 150ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 150ms ease;
+}
+
+:root[data-theme="loud"] .screen button::after {
+  display: none;               /* no sheen sweep in this look */
+}
+
+:root[data-theme="loud"] .screen button:not(:disabled):hover {
+  background: var(--ember-hi);
+  border-color: #0a0a0a;
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .screen button:not(:disabled):active {
+  transform: translate(4px, 4px);
+  box-shadow: 1px 1px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .screen button:disabled {
+  opacity: 0.5;
+  transform: none;
+  box-shadow: 2px 2px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .screen button:focus-visible {
+  outline: 4px solid #0a0a0a;
+  outline-offset: 4px;
+}
+
+:root[data-theme="loud"] .screen button.secondary {
+  background: #ffffff;
+  color: #0a0a0a;
+  border-color: #0a0a0a;
+  box-shadow: 4px 4px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .screen button.secondary:not(:disabled):hover {
+  background: #2d5bff;
+  color: #ffffff;
+  border-color: #0a0a0a;
+}
+
+/* ---- forms: white fields with a hard shadow, a thick outline on focus ---- */
+:root[data-theme="loud"] .screen label {
+  color: #0a0a0a;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="loud"] .screen input:not([type="checkbox"]),
+:root[data-theme="loud"] .screen textarea {
+  min-height: 50px;
+  background: #ffffff;
+  color: #0a0a0a;
+  border: 3px solid #0a0a0a;
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 #0a0a0a;
+  font-weight: 600;
+}
+
+:root[data-theme="loud"] .screen input:not([type="checkbox"]):focus,
+:root[data-theme="loud"] .screen textarea:focus {
+  outline: 4px solid #0a0a0a;
+  outline-offset: 4px;
+  background: #fff7c2;
+  border-color: #0a0a0a;
+}
+
+:root[data-theme="loud"] .screen label.confirm-row {
+  flex-direction: row;
+  text-transform: none;
+  letter-spacing: normal;
+  font-family: var(--sans);
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0a0a0a;
+  min-height: 52px;
+  padding: 0.7rem 0.9rem;
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 14px;
+  box-shadow: 4px 4px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .screen label.confirm-row input {
+  width: 24px;
+  height: 24px;
+  accent-color: #ff2e93;
+}
+
+/* ---- identity and recovery ---- */
+:root[data-theme="loud"] .mnemonic-grid {
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 18px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .mnemonic-grid li {
+  background: #fff7c2;
+  color: #0a0a0a;
+  border: 2px solid #0a0a0a;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+:root[data-theme="loud"] .mnemonic-grid li:nth-child(3n + 2) {
+  background: #c6ff00;
+}
+
+:root[data-theme="loud"] .mnemonic-grid li:nth-child(3n) {
+  background: #ffc2e4;
+}
+
+:root[data-theme="loud"] .mnemonic-grid li::before {
+  color: #0a0a0a;
+}
+
+:root[data-theme="loud"] .mnemonic-grid li:hover {
+  background: #ffe14d;
+  rotate: -3deg;
+}
+
+:root[data-theme="loud"] .did-text {
+  background: #ffffff;
+  color: #0a0a0a;
+  border: 2px dashed #0a0a0a;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+:root[data-theme="loud"] .safety-code {
+  background: #2d5bff;
+  background-image: none;
+  animation: none;
+  color: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 20px;
+  box-shadow: 6px 6px 0 #0a0a0a;
+  font-weight: 700;
+}
+
+:root[data-theme="loud"] .short-code {
+  background: #c6ff00;
+  color: #0a0a0a;
+  border: 3px solid #0a0a0a;
+  border-radius: 16px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+  font-weight: 800;
+}
+
+:root[data-theme="loud"] .qr-canvas {
+  background: #ffffff;
+  border: 4px solid #0a0a0a;
+  border-radius: 18px;
+  box-shadow: 6px 6px 0 #0a0a0a;
+  /* no rotation: a QR code has to scan straight */
+}
+
+:root[data-theme="loud"] .qr-error {
+  color: var(--danger);
+}
+
+:root[data-theme="loud"] .chips li {
+  background: #ffffff;
+  color: #0a0a0a;
+  border: 3px solid #0a0a0a;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.82rem;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  padding: 0.3rem 0.8rem;
+}
+
+:root[data-theme="loud"] .chips li:nth-child(1) {
+  background: #c6ff00;
+  border-color: #0a0a0a;
+  rotate: -3deg;
+}
+
+:root[data-theme="loud"] .chips li:nth-child(2) {
+  background: #2d5bff;
+  color: #ffffff;
+  border-color: #0a0a0a;
+  rotate: 2deg;
+}
+
+:root[data-theme="loud"] .chips li:nth-child(3) {
+  background: #ff2e93;
+  border-color: #0a0a0a;
+  rotate: -1.5deg;
+}
+
+:root[data-theme="loud"] .art svg {
+  filter: drop-shadow(4px 4px 0 #0a0a0a);
+}
+
+/* ---- tabs: a sticker bar with a magenta glider ---- */
+:root[data-theme="loud"] .topbar {
+  width: min(440px, calc(100vw - 2rem));
+}
+
+:root[data-theme="loud"] .tabs {
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 16px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 4px;
+}
+
+:root[data-theme="loud"] .tab-glider {
+  background: #ff2e93;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 2px #0a0a0a;
+}
+
+:root[data-theme="loud"] .tab {
+  color: #0a0a0a;
+  font-weight: 800;
+  border-radius: 10px;
+}
+
+:root[data-theme="loud"] .tab:not(.active):hover {
+  background: #ffe14d;
+  color: #0a0a0a;
+}
+
+:root[data-theme="loud"] .tab.active {
+  color: #0a0a0a;
+}
+
+:root[data-theme="loud"] .tab:focus-visible {
+  outline: 4px solid #0a0a0a;
+  outline-offset: 2px;
+}
+
+:root[data-theme="loud"] .lang-switch {
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 16px;
+  box-shadow: 4px 4px 0 #0a0a0a;
+  padding: 3px;
+}
+
+:root[data-theme="loud"] .lang-option {
+  color: #0a0a0a;
+  font-weight: 800;
+  border-radius: 10px;
+}
+
+:root[data-theme="loud"] .lang-option:hover {
+  background: #ffe14d;
+  color: #0a0a0a;
+}
+
+:root[data-theme="loud"] .lang-option.active {
+  background: #ff2e93;
+  color: #0a0a0a;
+  box-shadow: inset 0 0 0 2px #0a0a0a;
+}
+
+/* ---- chat ---- */
+:root[data-theme="loud"] .chat {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+:root[data-theme="loud"] .chat-header {
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 18px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+  padding: 0.5rem 0.6rem;
+  margin: 0 0.1rem 0.3rem;
+}
+
+:root[data-theme="loud"] .chat-header h2 {
+  font-size: 1.2rem;
+}
+
+:root[data-theme="loud"] .chat-header button {
+  min-height: 44px;
+  border: 3px solid #0a0a0a;
+  border-radius: 12px;
+  background: #ffe14d;
+  color: #0a0a0a;
+  font-weight: 800;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 150ms ease;
+}
+
+:root[data-theme="loud"] .chat-header button:hover {
+  background: #ff2e93;
+  border-color: #0a0a0a;
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .chat-header button:focus-visible {
+  outline: 4px solid #0a0a0a;
+  outline-offset: 3px;
+}
+
+:root[data-theme="loud"] .status {
+  color: #0a0a0a;
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+:root[data-theme="loud"] .status.on {
+  color: #1d3fd6;
+}
+
+:root[data-theme="loud"] .status.off {
+  color: #9c0068;
+}
+
+:root[data-theme="loud"] .status::before {
+  content: none;
+}
+
+:root[data-theme="loud"] .chat-notice {
+  background: #fff7c2;
+  color: #0a0a0a;
+  border: 3px solid #0a0a0a;
+  border-radius: var(--radius-s);
+  box-shadow: 3px 3px 0 #0a0a0a;
+  font-weight: 600;
+}
+
+:root[data-theme="loud"] .chat-notice[role="alert"] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+:root[data-theme="loud"] .messages {
+  background-color: #ffffff;
+  background-image: radial-gradient(circle, rgba(10, 10, 10, 0.12) 1.2px, transparent 1.7px);
+  background-size: 14px 14px;
+  border: 3px solid #0a0a0a;
+  border-radius: 18px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+  padding: 0.9rem 0.7rem;
+}
+
+:root[data-theme="loud"] .messages::-webkit-scrollbar-thumb {
+  background: #0a0a0a;
+  border: 2px solid #ffffff;
+}
+
+:root[data-theme="loud"] .msg {
+  max-width: 82%;
+  padding: 0.55rem 0.8rem 0.45rem;
+  border: 2px solid #0a0a0a;
+  border-radius: 14px;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  font-weight: 500;
+}
+
+:root[data-theme="loud"] .msg.in {
+  background: #ffe14d;
+  background-image: none;
+  color: #0a0a0a;
+  border-bottom-left-radius: 4px;
+  rotate: -0.8deg;
+}
+
+:root[data-theme="loud"] .msg.out {
+  background: var(--msg-out);
+  background-image: none;
+  color: #0a0a0a;
+  border-bottom-right-radius: 4px;
+  rotate: 0.8deg;
+}
+
+:root[data-theme="loud"] .msg time {
+  color: #2a2a2a;
+  font-weight: 600;
+}
+
+:root[data-theme="loud"] .messages .empty {
+  color: #0a0a0a;
+  font-family: var(--display);
+  font-weight: 800;
+  font-variation-settings: 'opsz' 36, 'SOFT' 100, 'WONK' 1;
+  font-size: 1.15rem;
+}
+
+:root[data-theme="loud"] .composer {
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 22px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+  padding: 0.4rem 0.5rem 0.5rem 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+:root[data-theme="loud"] .composer input {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+:root[data-theme="loud"] .composer button {
+  flex: 1 1 auto;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+:root[data-theme="loud"] .composer:focus-within {
+  outline: 4px solid #0a0a0a;
+  outline-offset: 4px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .composer input {
+  border: none;
+  box-shadow: none;
+  color: #0a0a0a;
+  font-weight: 600;
+  min-height: 44px;
+}
+
+:root[data-theme="loud"] .composer input:focus,
+:root[data-theme="loud"] .composer input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+:root[data-theme="loud"] .composer button {
+  min-height: 44px;
+  border: 3px solid #0a0a0a;
+  border-radius: 999px;
+  background: #ff2e93;
+  color: #0a0a0a;
+  font-weight: 800;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 150ms ease;
+}
+
+:root[data-theme="loud"] .composer button.secondary {
+  background: #ffffff;
+  color: #0a0a0a;
+}
+
+:root[data-theme="loud"] .composer button:not(:disabled):hover {
+  background: #ff5aa8;
+  filter: none;
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .composer button:not(:disabled):active {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .composer button:focus-visible {
+  outline: 4px solid #0a0a0a;
+  outline-offset: 3px;
+}
+
+/* ---- contacts: rotated sticker cards ---- */
+:root[data-theme="loud"] .contact-list {
+  gap: 0.85rem;
+  padding: 0.3rem 0.2rem 0.4rem;
+}
+
+:root[data-theme="loud"] .contact {
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: var(--radius);
+  box-shadow: 5px 5px 0 #0a0a0a;
+  padding: 0.85rem 0.9rem;
+}
+
+:root[data-theme="loud"] .contact:nth-child(odd) {
+  rotate: -0.8deg;
+}
+
+:root[data-theme="loud"] .contact:nth-child(even) {
+  rotate: 0.6deg;
+}
+
+:root[data-theme="loud"] .contact:hover {
+  background: #fff7c2;
+  border-color: #0a0a0a;
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .contact-info strong {
+  color: #0a0a0a;
+  font-family: var(--display);
+  font-weight: 900;
+  font-variation-settings: 'opsz' 36, 'SOFT' 100, 'WONK' 1;
+  font-size: 1.12rem;
+}
+
+:root[data-theme="loud"] .contact-actions button {
+  min-height: 44px;
+}
+
+:root[data-theme="loud"] .badge {
+  background: #c6ff00;
+  color: #0a0a0a;
+  border: 2px solid #0a0a0a;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.7rem;
+  padding: 0.12rem 0.55rem;
+}
+
+:root[data-theme="loud"] .avatar {
+  border: 3px solid #0a0a0a;
+  box-shadow: 3px 3px 0 #0a0a0a;
+  text-shadow: 0 2px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .skeleton-row {
+  background: linear-gradient(90deg, #ffffff 0%, #ffc2e4 50%, #ffffff 100%);
+  background-size: 200% 100%;
+  border: 3px solid #0a0a0a;
+  border-radius: var(--radius);
+  box-shadow: 5px 5px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .empty-block p {
+  color: #0a0a0a;
+}
+
+/* ---- calls ---- */
+:root[data-theme="loud"] .call-panel {
+  background: #ffffff;
+  border: 3px solid #0a0a0a;
+  border-radius: 18px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .call-panel::before {
+  background: radial-gradient(circle, rgba(198, 255, 0, 0.85), transparent 60%);
+}
+
+:root[data-theme="loud"] .call-buttons button,
+:root[data-theme="loud"] .call-actions button {
+  min-height: 44px;
+}
+
+:root[data-theme="loud"] .call-video,
+:root[data-theme="loud"] .scanner-video {
+  border: 3px solid #0a0a0a;
+  border-radius: 18px;
+  box-shadow: 5px 5px 0 #0a0a0a;
+}
+
+:root[data-theme="loud"] .net-hint {
+  color: #2a2a2a;
+  font-weight: 600;
+}
+
+/* ---- focus and reduced motion ---- */
+:root[data-theme="loud"] :focus-visible {
+  outline: 4px solid #0a0a0a;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="loud"] body::before,
+  :root[data-theme="loud"] body::after,
+  :root[data-theme="loud"] *,
+  :root[data-theme="loud"] *::before,
+  :root[data-theme="loud"] *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  :root[data-theme="loud"] .screen button:hover,
+  :root[data-theme="loud"] .screen button:active,
+  :root[data-theme="loud"] .composer button:not(:disabled):hover,
+  :root[data-theme="loud"] .composer button:not(:disabled):active,
+  :root[data-theme="loud"] .chat-header button:hover,
+  :root[data-theme="loud"] .contact:hover,
+  :root[data-theme="loud"] .mnemonic-grid li:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  :root[data-theme="loud"] .topbar .tabs .tab {
+    font-size: 0.85rem;
+  }
+
+  :root[data-theme="loud"] .chat {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

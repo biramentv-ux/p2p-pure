@@ -54,6 +54,21 @@ flowchart LR
 
 Сървърът (Worker) вижда само кратки покани и не може да прочете нито една. Съобщенията, снимките и разговорите не минават през него.
 
+## 🎬 Урок за деца: как двама се свързват от разстояние
+
+<img src="docs/assets/tutorial-far-away.gif" alt="Анимация: Ани и Петър се свързват от разстояние, всеки със своя телефон" width="640">
+
+Ани и Петър са далеч един от друг, всеки със собствен телефон. Ето как се свързват:
+
+1. Всеки създава своя идентичност на телефона си. Не трябва телефонен номер или имейл.
+2. Ани натиска „Покажи моята покана“ и показва QR код или кратък код (10 знака, важи 10 минути и работи само веднъж).
+3. Петър натиска „Сканирай чужда покана“ и сканира QR кода или въвежда краткия код.
+4. Петър показва „Отговор“, а Ани го сканира с „Сканирай отговора“.
+5. И двамата виждат едни и същи 6 думи. Сравняват ги лично или по видео и натискат „Думите съвпадат“.
+6. Пишат си. Съобщенията са шифровани и минават директно между телефоните.
+
+> ⚠️ Връзката е директна, без посредник. Не винаги минава: някои мобилни мрежи блокират директните връзки. Ако не се свърже, опитайте с една Wi‑Fi мрежа за първото сдвояване.
+
 ## ⚠️ Ограничения, които приемаме
 
 - **Само публични STUN сървъри** (`stun.l.google.com`). Без TURN релей, затова строги NAT или корпоративни firewall-и може да блокират връзката.
@@ -200,6 +215,21 @@ flowchart LR
 ```
 
 The server (Worker) only sees short invitations and cannot read any of them. Messages, photos and calls never pass through it.
+
+## 🎬 Kid-friendly tutorial: connecting from a distance
+
+<img src="docs/assets/tutorial-far-away.gif" alt="Animation: Ani and Petar connect from a distance, each with their own phone" width="640">
+
+Ani and Petar are far apart, each with their own phone. Here is how they connect:
+
+1. Each person creates their identity on their phone. No phone number or email is needed.
+2. Ani taps "Show my invitation" and shows a QR code or a short code (10 characters, valid for 10 minutes, works only once).
+3. Petar taps "Scan someone else's invitation" and scans the QR code or types the short code.
+4. Petar shows an "Answer", and Ani scans it with "Scan the answer".
+5. Both see the same 6 words. They compare them in person or on a video call and tap "The words match".
+6. They chat. Messages are encrypted and go directly between the phones.
+
+> ⚠️ The connection is direct, with no relay. It does not always work: some mobile networks block direct connections. If it does not connect, try one Wi‑Fi network for the first pairing.
 
 ## ⚠️ Trade-offs we accept
 

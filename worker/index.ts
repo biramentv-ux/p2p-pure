@@ -31,6 +31,19 @@ export interface Env {
    * and short-code invitations (code -> signed invitation), each with a TTL.
    */
   DELIVERIES: KVNamespace;
+  /**
+   * Optional Cloudflare Rate Limiting binding for the invitation endpoints, keyed by client IP.
+   * When it is absent (tests, local runs) requests are not limited.
+   */
+  INVITE_LIMITER?: RateLimiter;
+}
+
+/** Invitation endpoints allow this many requests per client IP per period (see wrangler.jsonc). */
+async function overInviteLimit(request: Request, env: Env): Promise<boolean> {
+  if (!env.INVITE_LIMITER) return false;
+  const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const { success } = await env.INVITE_LIMITER.limit({ key: ip });
+  return !success;
 }
 
 /** Short-code bodies are small JSON objects; anything larger is refused before parsing. */
@@ -192,6 +205,13 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/") {
       return new Response("ok", { status: 200 });
+    }
+
+    const isInviteRoute = url.pathname === "/invite" || url.pathname.startsWith("/invite/");
+    if (isInviteRoute && (request.method === "POST" || request.method === "GET")) {
+      if (await overInviteLimit(request, env)) {
+        return json({ error: "rate_limited" }, 429);
+      }
     }
 
     if (request.method === "POST" && url.pathname === "/invite") {

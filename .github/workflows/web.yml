@@ -1,0 +1,43 @@
+name: Web CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Secret scan
+        run: node scripts/security/scan-secrets.mjs
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit and worker tests
+        run: npm test
+
+      - name: Build (type check + PWA)
+        run: npm run build
+
+      - name: Pack Chrome extension
+        run: npm run extension:pack
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
