@@ -43,8 +43,26 @@ function contentSecurityPolicy(): Plugin {
   }
 }
 
+/**
+ * Response headers for `vite preview` (the origin the tunnel serves) and `vite dev`.
+ * The meta CSP above cannot set frame-ancestors, so it is sent as a header here too.
+ * Camera and microphone stay allowed for this origin only (QR scanner, calls); location
+ * is allowed only for the app's own origin; everything else is switched off.
+ */
+export const SECURITY_HEADERS: Record<string, string> = {
+  'Content-Security-Policy': "frame-ancestors 'none'",
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), serial=(), bluetooth=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+}
+
 // https://vite.dev/config/
 export default defineConfig({
+  server: { headers: SECURITY_HEADERS },
+  preview: { headers: SECURITY_HEADERS },
   plugins: [
     react(),
     contentSecurityPolicy(),

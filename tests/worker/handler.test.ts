@@ -123,3 +123,43 @@ describe("commands", () => {
     expect(sent).toHaveLength(0);
   });
 });
+
+describe("invitation rate limit", () => {
+  const limited = (success: boolean) => ({
+    ...env,
+    INVITE_LIMITER: { limit: vi.fn(async () => ({ success })) },
+  });
+
+  it("answers 429 to POST /invite when the client is over the limit, without storing", async () => {
+    const e = limited(false);
+    const req = new Request("https://tg.dyrakarmy.online/invite", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.7" },
+      body: JSON.stringify({ invitation: INVITE }),
+    });
+    const res = await worker.fetch(req, e);
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: "rate_limited" });
+    expect(e.INVITE_LIMITER.limit).toHaveBeenCalledWith({ key: "203.0.113.7" });
+  });
+
+  it("answers 429 to GET /invite/:code when over the limit", async () => {
+    const res = await worker.fetch(
+      new Request("https://tg.dyrakarmy.online/invite/ABCDE-FGHJK", { headers: { "cf-connecting-ip": "203.0.113.8" } }),
+      limited(false),
+    );
+    expect(res.status).toBe(429);
+  });
+
+  it("does not limit other routes or requests under the limit", async () => {
+    const e = limited(true);
+    const ok = await worker.fetch(new Request("https://tg.dyrakarmy.online/"), e);
+    expect(ok.status).toBe(200);
+    expect(e.INVITE_LIMITER.limit).not.toHaveBeenCalled();
+    const notLimited = await worker.fetch(
+      new Request("https://tg.dyrakarmy.online/invite/ABCDE-FGHJK", { headers: { "cf-connecting-ip": "203.0.113.9" } }),
+      e,
+    );
+    expect(notLimited.status).toBe(404);
+  });
+});

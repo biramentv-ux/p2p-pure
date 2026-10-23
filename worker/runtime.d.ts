@@ -16,3 +16,8 @@ interface ScheduledController {
   readonly scheduledTime: number;
   readonly cron: string;
 }
+
+/** Cloudflare Rate Limiting binding (ratelimits in wrangler.jsonc). */
+interface RateLimiter {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+}
