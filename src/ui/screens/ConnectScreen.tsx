@@ -7,7 +7,6 @@ import {
   assertKind,
   bytesEqual,
   createInvitation,
-  decodeInvitation,
   encodeInvitation,
   encodeInvitationHex,
   InvitationError,
@@ -23,6 +22,8 @@ import { useI18n } from "../../i18n";
 import { QrCode } from "../components/QrCode";
 import { QrScanner } from "../components/QrScanner";
 import { ShortCodeEnter, ShortCodeShare } from "../components/ShortCode";
+import { OfflineSignalingProvider } from "../../signaling/offlineProvider";
+import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
 
 export interface ConnectedResult {
   contact: Contact;
@@ -102,6 +103,24 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   /** Our own SDP, kept so a failed connection can explain this network's reachability. */
   const mySdpRef = useRef<string | null>(null);
   const busyRef = useRef(false);
+  // Offline signaling: generated offers and answers come back through the provider.
+  const providerRef = useRef<OfflineSignalingProvider | null>(null);
+  const pendingHexRef = useRef<string>("");
+
+  function getProvider(): OfflineSignalingProvider {
+    if (!providerRef.current) {
+      const provider = new OfflineSignalingProvider();
+      provider.onLocalPayloadGenerated((payload) => {
+        const net = t(describeReachability(summarizeCandidates(payload.sdp)));
+        const invitation = payload.invitation ?? "";
+        const hex = pendingHexRef.current;
+        if (payload.type === "offer") setView({ k: "offer-qr", payload: invitation, hex, net });
+        else setView({ k: "answer-qr", payload: invitation, hex, net });
+      });
+      providerRef.current = provider;
+    }
+    return providerRef.current;
+  }
   const doneRef = useRef(false);
 
   useEffect(() => {
@@ -179,8 +198,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
-      const hex = await encodeInvitationHex(offer);
-      setView({ k: "offer-qr", payload, hex, net: t(describeReachability(summarizeCandidates(sdp))) });
+      pendingHexRef.current = await encodeInvitationHex(offer);
+      await getProvider().sendOffer(toSignalingPayload(offer, payload));
     } catch (err) {
       fail(err);
     }
@@ -194,7 +213,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     const eph = ephemeralRef.current;
     try {
       if (!link || !offer || !eph) throw new Error("Няма активна покана.");
-      const answer = await decodeInvitation(text);
+      const { invitation: answer } = await parseScannedInvitation(text);
       assertKind(answer, "answer");
       if (!answer.answersNonce || !bytesEqual(answer.answersNonce, offer.nonce)) {
         throw new InvitationError("Този отговор не е за тази покана.", "INVALID_FIELD");
@@ -228,7 +247,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     if (busyRef.current) return;
     busyRef.current = true;
     try {
-      const offer = await decodeInvitation(text);
+      const { invitation: offer } = await parseScannedInvitation(text);
       assertKind(offer, "offer");
       setView({ k: "busy", label: t("Подготвям отговор…") });
       const { link, sdp } = await PeerLink.createAnswer(offer.sdp);
@@ -240,10 +259,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         answersNonce: offer.nonce,
       });
       const payload = await encodeInvitation(answer);
-      const hex = await encodeInvitationHex(answer);
+      pendingHexRef.current = await encodeInvitationHex(answer);
       // Start waiting before showing the QR, so the handshake can't be missed.
       const handshake = completeHandshake(link, identity.did, offer.publicKey, RESPONDER_TIMEOUT_MS);
-      setView({ k: "answer-qr", payload, hex, net: t(describeReachability(summarizeCandidates(sdp))) });
+      await getProvider().sendAnswer(toSignalingPayload(answer, payload));
       await handshake;
       const session = SecureSession.derive({
         role: "responder",
