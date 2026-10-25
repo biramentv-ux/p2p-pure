@@ -153,7 +153,7 @@ describe("SecureSession", () => {
     const wire = await responder.seal("секретен отговор");
     expect(wire).not.toContain("секретен");
     const parsed = JSON.parse(wire) as Record<string, unknown>;
-    expect(Object.keys(parsed)).toEqual(["t", "n", "pn", "dh", "iv", "ct"]);
+    expect(Object.keys(parsed)).toEqual(["t", "s", "n", "pn", "dh", "iv", "ct"]);
     expect(parsed.n).toBe(0);
     expect(typeof parsed.dh).toBe("string");
     expect(isEncryptedMessage(wire)).toBe(true);
