@@ -9,6 +9,11 @@ export interface SignalingPayload {
   did: string;
   nonce: string;
   displayName?: string;
+  /**
+   * The signed invitation string (p2p1:...), carried whole so its signature and expiry are
+   * checked where they always were, in invitation.ts. Present for the offline mode.
+   */
+  invitation?: string;
 }
 
 export type PayloadHandler = (payload: SignalingPayload) => void;
@@ -31,6 +36,7 @@ export function isSignalingPayload(value: unknown): value is SignalingPayload {
     typeof v.sdp === "string" &&
     typeof v.did === "string" &&
     typeof v.nonce === "string" &&
-    (v.displayName === undefined || typeof v.displayName === "string")
+    (v.displayName === undefined || typeof v.displayName === "string") &&
+    (v.invitation === undefined || typeof v.invitation === "string")
   );
 }
