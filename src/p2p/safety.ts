@@ -1,5 +1,5 @@
 /**
- * Safety code: 6 words derived from BOTH identity public keys.
+ * Safety code: 6 words derived from BOTH identity X25519 public keys.
  *
  * Both sides compute the same words because the two keys are sorted before
  * hashing (order-independent). The words are compared out of band (in person
@@ -12,7 +12,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 
-const SAFETY_DOMAIN = new TextEncoder().encode("p2p-messenger/safety-code/v1");
+const SAFETY_DOMAIN = new TextEncoder().encode("p2p-messenger/safety-code/v2");
 export const SAFETY_WORD_COUNT = 6;
 
 function compareBytes(a: Uint8Array, b: Uint8Array): number {
@@ -22,14 +22,14 @@ function compareBytes(a: Uint8Array, b: Uint8Array): number {
   return a.length - b.length;
 }
 
-export function safetyWords(myPublicKey: Uint8Array, peerPublicKey: Uint8Array): string[] {
-  if (myPublicKey.length !== 32 || peerPublicKey.length !== 32) {
-    throw new Error("Safety code needs two 32-byte public keys.");
+export function safetyWords(myX25519Key: Uint8Array, peerX25519Key: Uint8Array): string[] {
+  if (myX25519Key.length !== 32 || peerX25519Key.length !== 32) {
+    throw new Error("Safety code needs two 32-byte X25519 public keys.");
   }
   const [first, second] =
-    compareBytes(myPublicKey, peerPublicKey) <= 0
-      ? [myPublicKey, peerPublicKey]
-      : [peerPublicKey, myPublicKey];
+    compareBytes(myX25519Key, peerX25519Key) <= 0
+      ? [myX25519Key, peerX25519Key]
+      : [peerX25519Key, myX25519Key];
 
   const input = new Uint8Array(SAFETY_DOMAIN.length + 64);
   input.set(SAFETY_DOMAIN, 0);
