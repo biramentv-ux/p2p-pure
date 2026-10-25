@@ -7,7 +7,7 @@ import {
   validLocation,
   type ChatMessage,
 } from "../../history/messageStore";
-import { decodeControl, encodeControl, isControlMessage } from "../../p2p/control";
+import { decodeControl, encodeControl, isControlMessage, type ControlMessage } from "../../p2p/control";
 import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
 import { buildPhotoFrames, PhotoReceiver, sanitizeText, sniffMime } from "../../p2p/photo";
@@ -18,6 +18,16 @@ import { acquireMedia } from "../../call/media";
 import { CallPanel } from "../components/CallPanel";
 import { LanguageSwitch } from "../components/LanguageSwitch";
 import { useI18n } from "../../i18n";
+import { CIPHER_SUITES, suiteLabel, type CipherSuite } from "../../p2p/cipherSuite";
+import {
+  answerIncoming,
+  initialNegotiation,
+  newProposalId,
+  proposeSuite,
+  receiveSuiteMessage,
+  type NegotiationState,
+  type Step,
+} from "../../p2p/suiteNegotiation";
 
 /** Longer than the browser's own 20 s timeout, so it only fires when the browser says nothing. */
 const LOCATION_GUARD_MS = 25_000;
@@ -48,6 +58,10 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const assemblerRef = useRef(new SignalAssembler());
   const [locating, setLocating] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
+  // Cipher-suite agreement. The ref is read by the receive loop; the state drives the panel.
+  const suiteRef = useRef<NegotiationState>(initialNegotiation());
+  const [suiteView, setSuiteView] = useState<NegotiationState>(initialNegotiation());
+  const [showCrypto, setShowCrypto] = useState(false);
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
 
@@ -58,6 +72,35 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     queueRef.current = next.catch(() => undefined);
     return next;
   };
+
+  /** Applies a negotiation step: stores the new state, switches the send suite, sends the reply. */
+  function runSuiteStep(step: Step) {
+    suiteRef.current = step.state;
+    setSuiteView(step.state);
+    if (step.activate) {
+      session.setSendSuite(step.activate);
+      setNotice(tRef.current("Методът е сменен на {suite}.", { suite: suiteLabel(step.activate) }));
+    }
+    if (step.rejected) setNotice(tRef.current("Този метод вече е активен."));
+    if (step.send) {
+      const message = step.send;
+      void enqueue(async () => {
+        try {
+          link.send(await session.seal(encodeControl(message)));
+        } catch {
+          setNotice(tRef.current("Връзката е прекъсната. Опитайте отново, когато се свържете."));
+        }
+      });
+    }
+  }
+
+  function onSuiteMessage(message: Extract<ControlMessage, { t: "suite" }>) {
+    if (message.op === "decline" && suiteRef.current.outgoing?.id === message.id) {
+      setNotice(tRef.current("Събеседникът отказа смяната на метода."));
+    }
+    if (message.op === "propose") setShowCrypto(true);
+    runSuiteStep(receiveSuiteMessage(suiteRef.current, message));
+  }
 
   useEffect(() => {
     let alive = true;
@@ -98,6 +141,10 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           if (isControlMessage(plaintext)) {
             const control = decodeControl(plaintext);
             if (!control) return;
+            if (control.t === "suite") {
+              if (alive) onSuiteMessage(control);
+              return;
+            }
             if (control.t === "wipe") {
               receiverRef.current.discardInProgress();
               await deleteHistory(contact.did);
@@ -321,8 +368,60 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             {connected ? t(" · свързан") : t(" · връзката е прекъсната")}
           </span>
         </div>
+        <button
+          className="secondary"
+          onClick={() => setShowCrypto((v) => !v)}
+          aria-expanded={showCrypto}
+          aria-controls="crypto-panel"
+        >
+          {t("Криптография")}
+        </button>
         <LanguageSwitch />
       </header>
+
+      {showCrypto && (
+        <section id="crypto-panel" className="call-panel" aria-label={t("Криптографски настройки")}>
+          <p>
+            <strong>{t("Текущ метод")}:</strong> {suiteLabel(suiteView.active)}
+          </p>
+          <p>
+            {t(
+              "Промяната влиза в сила само когато и двамата я потвърдите. Ключовете и Double Ratchet остават същите; сменя се само шифроването на съобщенията.",
+            )}
+          </p>
+          {suiteView.incoming && (
+            <div role="group" aria-label={t("Предложение за смяна")}>
+              <p>{t("Събеседникът предлага {suite}.", { suite: suiteLabel(suiteView.incoming.suite) })}</p>
+              <div className="call-actions">
+                <button onClick={() => runSuiteStep(answerIncoming(suiteRef.current, true))}>{t("Приеми")}</button>
+                <button className="secondary" onClick={() => runSuiteStep(answerIncoming(suiteRef.current, false))}>
+                  {t("Откажи")}
+                </button>
+              </div>
+            </div>
+          )}
+          {suiteView.outgoing && (
+            <p role="status">
+              {t("Чака потвърждение от събеседника за {suite}.", { suite: suiteLabel(suiteView.outgoing.suite) })}
+            </p>
+          )}
+          <div className="call-actions">
+            {CIPHER_SUITES.filter((suite: CipherSuite) => suite !== suiteView.active).map((suite) => (
+              <button
+                key={suite}
+                className="secondary"
+                disabled={!connected || suiteView.outgoing !== null}
+                onClick={() => {
+                  const step = proposeSuite(suiteRef.current, suite, newProposalId());
+                  runSuiteStep(step);
+                }}
+              >
+                {t("Предложи {suite}", { suite: suiteLabel(suite) })}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {notice && <p role="alert" className="chat-notice">{notice}</p>}
 

@@ -30,7 +30,8 @@
     "test:i18n": "node tests/e2e/i18n-en.mjs",
     "test:extension-browser": "node tests/extension/browser.mjs",
     "extension:pack": "node scripts/extension/pack.mjs",
-    "test:a11y": "node tests/e2e/a11y.mjs"
+    "test:a11y": "node tests/e2e/a11y.mjs",
+    "test:crypto-suite": "node tests/e2e/crypto-suite.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
@@ -39,6 +40,7 @@
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/instrument-sans": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "@scure/base": "^2.4.0",

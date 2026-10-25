@@ -31,7 +31,15 @@ import { ed25519, x25519 } from "@noble/curves/ed25519.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { asBufferSource } from "../identity/bufferUtils";
+import {
+  aeadOpen,
+  aeadSeal,
+  DEFAULT_CIPHER_SUITE,
+  suiteAadByte,
+  suiteFromWireTag,
+  suiteWireTag,
+  type CipherSuite,
+} from "./cipherSuite";
 import type { Ed25519KeyPair } from "../identity/types";
 import { base64UrlToBytes, bytesToBase64Url } from "./encoding";
 
@@ -108,10 +116,10 @@ function dh(secretKey: Uint8Array, publicKey: Uint8Array): Uint8Array {
   }
 }
 
-/** AAD = 'm' || direction || n || pn || dh. */
-function headerAad(direction: number, n: number, pn: number, dhPub: Uint8Array): Uint8Array {
+/** AAD = suite byte || direction || n || pn || dh. The suite byte is 'm' for AES-GCM. */
+function headerAad(suite: CipherSuite, direction: number, n: number, pn: number, dhPub: Uint8Array): Uint8Array {
   const out = new Uint8Array(2 + 4 + 4 + DH_LEN);
-  out[0] = 0x6d; // 'm'
+  out[0] = suiteAadByte(suite);
   out[1] = direction;
   const view = new DataView(out.buffer);
   view.setUint32(2, n >>> 0);
@@ -121,6 +129,7 @@ function headerAad(direction: number, n: number, pn: number, dhPub: Uint8Array):
 }
 
 interface ParsedMessage {
+  suite: CipherSuite;
   n: number;
   pn: number;
   dh: Uint8Array;
@@ -151,6 +160,9 @@ function parseWire(wire: string): ParsedMessage {
   ) {
     throw new SessionError("Malformed message.");
   }
+  // Messages from before suites existed have no "s" field: they are AES-GCM.
+  const suite = msg.s === undefined ? DEFAULT_CIPHER_SUITE : suiteFromWireTag(msg.s);
+  if (suite === null) throw new SessionError("Malformed message.");
   let dhPub: Uint8Array;
   try {
     dhPub = base64UrlToBytes(msg.dh);
@@ -158,7 +170,7 @@ function parseWire(wire: string): ParsedMessage {
     throw new SessionError("Malformed message.");
   }
   if (dhPub.length !== DH_LEN) throw new SessionError("Malformed message.");
-  return { n: msg.n, pn: msg.pn, dh: dhPub, iv: msg.iv, ct: msg.ct };
+  return { suite, n: msg.n, pn: msg.pn, dh: dhPub, iv: msg.iv, ct: msg.ct };
 }
 
 interface PendingKey {
@@ -221,6 +233,8 @@ export class SecureSession {
   private readonly skipped = new Map<string, Uint8Array>();
   private readonly sendDirection: number;
   private readonly recvDirection: number;
+  /** AEAD used for messages this side sends. Receiving accepts either suite. */
+  private sendSuite: CipherSuite = DEFAULT_CIPHER_SUITE;
 
   private constructor(s: SessionState) {
     this.rk = s.rootKey;
@@ -230,6 +244,20 @@ export class SecureSession {
     this.ckr = s.recvChain;
     this.sendDirection = s.sendDirection;
     this.recvDirection = s.recvDirection;
+  }
+
+  /** The suite used for the next messages this side sends. */
+  get activeSuite(): CipherSuite {
+    return this.sendSuite;
+  }
+
+  /**
+   * Changes the suite for messages sent from now on. Both sides must agree on this
+   * first (see suiteNegotiation.ts); the session itself does not check consent.
+   * Keys and the ratchet are unchanged.
+   */
+  setSendSuite(suite: CipherSuite): void {
+    this.sendSuite = suite;
   }
 
   static derive(p: DeriveParams): SecureSession {
@@ -316,19 +344,12 @@ export class SecureSession {
     this.ns++;
 
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const aad = headerAad(this.sendDirection, n, this.pn, this.dhs.publicKey);
-    const key = await crypto.subtle.importKey("raw", asBufferSource(messageKey), "AES-GCM", false, [
-      "encrypt",
-    ]);
-    const ct = new Uint8Array(
-      await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv: asBufferSource(iv), additionalData: asBufferSource(aad) },
-        key,
-        asBufferSource(enc.encode(plaintext)),
-      ),
-    );
+    const suite = this.sendSuite;
+    const aad = headerAad(suite, this.sendDirection, n, this.pn, this.dhs.publicKey);
+    const ct = await aeadSeal(suite, messageKey, iv, aad, enc.encode(plaintext));
     return JSON.stringify({
       t: MSG_TYPE,
+      s: suiteWireTag(suite),
       n,
       pn: this.pn,
       dh: bytesToBase64Url(this.dhs.publicKey),
@@ -399,21 +420,10 @@ export class SecureSession {
   }
 
   private async decrypt(messageKey: Uint8Array, direction: number, m: ParsedMessage): Promise<string> {
-    const aad = headerAad(direction, m.n, m.pn, m.dh);
-    const key = await crypto.subtle.importKey("raw", asBufferSource(messageKey), "AES-GCM", false, [
-      "decrypt",
-    ]);
-    let pt: ArrayBuffer;
+    const aad = headerAad(m.suite, direction, m.n, m.pn, m.dh);
+    let pt: Uint8Array;
     try {
-      pt = await crypto.subtle.decrypt(
-        {
-          name: "AES-GCM",
-          iv: asBufferSource(base64UrlToBytes(m.iv)),
-          additionalData: asBufferSource(aad),
-        },
-        key,
-        asBufferSource(base64UrlToBytes(m.ct)),
-      );
+      pt = await aeadOpen(m.suite, messageKey, base64UrlToBytes(m.iv), aad, base64UrlToBytes(m.ct));
     } catch {
       throw new SessionError("Message failed authentication.");
     }
