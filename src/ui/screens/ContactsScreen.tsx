@@ -6,9 +6,10 @@ import { Avatar, ConstellationArt } from "../components/Art";
 interface ContactsScreenProps {
   onChat: (contact: Contact) => void;
   onNewContact: () => void;
+  onGroups: () => void;
 }
 
-export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
+export function ContactsScreen({ onChat, onNewContact, onGroups }: ContactsScreenProps) {
   const { t } = useI18n();
   const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +73,9 @@ export function ContactsScreen({ onChat, onNewContact }: ContactsScreenProps) {
         ))}
       </ul>
       <button onClick={onNewContact}>{t("Добави контакт")}</button>
+      <button className="secondary" onClick={onGroups}>
+        {t("Групов чат")}
+      </button>
     </div>
   );
 }

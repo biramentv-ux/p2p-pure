@@ -9,6 +9,9 @@ import { useI18n } from "./i18n";
 import { CreateIdentityScreen } from "./ui/screens/CreateIdentityScreen";
 import { ChatScreen } from "./ui/screens/ChatScreen";
 import { ConnectScreen, type ConnectedResult } from "./ui/screens/ConnectScreen";
+import { GroupScreen } from "./ui/screens/GroupScreen";
+import { GroupSession } from "./group/groupSession";
+import { newProposalId } from "./p2p/suiteNegotiation";
 import { ContactsScreen } from "./ui/screens/ContactsScreen";
 import { ShowQrScreen } from "./ui/screens/ShowQrScreen";
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
@@ -25,7 +28,8 @@ type AppState =
 type Screen =
   | { k: "identity" }
   | { k: "contacts" }
-  | { k: "connect"; expected?: Contact }
+  | { k: "connect"; expected?: Contact; forGroup?: boolean }
+  | { k: "group" }
   | { k: "chat"; contact: Contact; link: PeerLink; session: SecureSession };
 
 type TabScreen = "identity" | "contacts" | "connect";
@@ -54,6 +58,8 @@ function App() {
   const { t } = useI18n();
   const [state, setState] = useState<AppState>({ kind: "loading" });
   const [screen, setScreen] = useState<Screen>({ k: "identity" });
+  // The group lives across screens. It is closed only when the device locks.
+  const groupRef = useRef<GroupSession | null>(null);
 
   useEffect(() => {
     getUnlockMethod()
@@ -72,6 +78,8 @@ function App() {
   useAutoLock(state.kind === "unlocked", () => {
     const current = screenRef.current;
     if (current.k === "chat") current.link.close();
+    groupRef.current?.closeAll();
+    groupRef.current = null;
     setScreen({ k: "identity" });
     getUnlockMethod()
       .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
@@ -119,7 +127,19 @@ function App() {
   }
 
   function onConnected(result: ConnectedResult) {
+    if (screen.k === "connect" && screen.forGroup) {
+      // A link for the group: it joins the mesh, not a one-to-one chat.
+      ensureGroup().attach(result.contact, result.link, result.session);
+      setScreen({ k: "group" });
+      return;
+    }
     setScreen({ k: "chat", contact: result.contact, link: result.link, session: result.session });
+  }
+
+  /** The group on this device, created empty the first time the group screen opens. */
+  function ensureGroup(): GroupSession {
+    if (!groupRef.current) groupRef.current = new GroupSession(identity.keyPair);
+    return groupRef.current;
   }
 
   function closeChat() {
@@ -142,7 +162,7 @@ function App() {
     );
   }
 
-  const activeTab: TabScreen = screen.k === "connect" ? "connect" : (screen.k as TabScreen);
+  const activeTab: TabScreen = screen.k === "connect" ? "connect" : screen.k === "group" ? "contacts" : (screen.k as TabScreen);
 
   return (
     <Frame
@@ -182,6 +202,10 @@ function App() {
         <ContactsScreen
           onChat={(contact) => setScreen({ k: "connect", expected: contact })}
           onNewContact={() => setScreen({ k: "connect" })}
+          onGroups={() => {
+            ensureGroup();
+            setScreen({ k: "group" });
+          }}
         />
       )}
       {screen.k === "connect" && (
@@ -190,7 +214,19 @@ function App() {
           identity={identity}
           expected={screen.expected}
           onConnected={onConnected}
-          onCancel={() => setScreen({ k: "contacts" })}
+          onCancel={() => setScreen(screen.forGroup ? { k: "group" } : { k: "contacts" })}
+        />
+      )}
+      {screen.k === "group" && (
+        <GroupScreen
+          session={groupRef.current}
+          onCreate={(name, creatorName) => {
+            groupRef.current?.closeAll();
+            groupRef.current = GroupSession.create(identity.keyPair, newProposalId(), name, creatorName);
+            setScreen({ k: "group" });
+          }}
+          onLink={(contact) => setScreen({ k: "connect", expected: contact, forGroup: true })}
+          onLeave={() => setScreen({ k: "contacts" })}
         />
       )}
     </Frame>
