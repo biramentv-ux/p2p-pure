@@ -51,6 +51,10 @@ const dec = new TextDecoder();
 
 export type GroupWire =
   | { t: "gsnap"; state: GroupState; sig: string }
+  /** Admin to a candidate: the current signed state, so the candidate can link to the members. */
+  | { t: "gpend"; state: GroupState; sig: string }
+  /** Candidate to admin: "I am linked to these members", signed by the candidate. */
+  | { t: "gjoin"; g: string; f: DidKey; linked: DidKey[]; sig: string }
   | { t: "gkey"; g: string; e: number; key: string }
   | { t: "gmsg"; g: string; e: number; f: DidKey; n: number; s: string; iv: string; ct: string; sig: string }
   | { t: "gvote"; op: "open"; g: string; id: string; suite: CipherSuite; sig: string }
@@ -78,6 +82,16 @@ export function decodeGroupWire(plaintext: string): GroupWire | null {
   switch (o.t) {
     case "gsnap":
       return typeof o.sig === "string" && isGroupState(o.state) ? { t: "gsnap", state: o.state, sig: o.sig } : null;
+    case "gpend":
+      return typeof o.sig === "string" && isGroupState(o.state) ? { t: "gpend", state: o.state, sig: o.sig } : null;
+    case "gjoin":
+      if (
+        typeof o.g === "string" && typeof o.f === "string" && typeof o.sig === "string" &&
+        Array.isArray(o.linked) && o.linked.every((d) => typeof d === "string")
+      ) {
+        return { t: "gjoin", g: o.g, f: o.f, linked: o.linked as DidKey[], sig: o.sig };
+      }
+      return null;
     case "gkey":
       return typeof o.g === "string" && isEpoch(o.e) && typeof o.key === "string"
         ? { t: "gkey", g: o.g, e: o.e, key: o.key }
@@ -141,6 +155,32 @@ function stateBytes(state: GroupState): Uint8Array {
       state.suite,
     ]),
   );
+}
+
+function joinBytes(g: string, f: string, linked: DidKey[]): Uint8Array {
+  return enc.encode(JSON.stringify(["p2p-group/join/v1", g, f, [...linked].sort()]));
+}
+
+/** Candidate side: signs "I am linked to these members". */
+export function signJoinRequest(keys: Ed25519KeyPair, g: string, linked: DidKey[]): GroupWire & { t: "gjoin" } {
+  const f = publicKeyToDidKey(keys.publicKey);
+  return {
+    t: "gjoin",
+    g,
+    f,
+    linked: [...linked].sort(),
+    sig: bytesToBase64Url(ed25519.sign(joinBytes(g, f, linked), keys.secretKey)),
+  };
+}
+
+/** Admin side: checks that the join request is genuine. The caller checks the links. */
+export function verifyJoinRequest(message: GroupWire & { t: "gjoin" }): boolean {
+  return verifySig(message.sig, joinBytes(message.g, message.f, message.linked), message.f);
+}
+
+/** True if a signed state (creator-signed) is genuine. Used for gpend and gsnap. */
+export function verifyStateSignature(message: { state: GroupState; sig: string }): boolean {
+  return verifySig(message.sig, stateBytes(message.state), message.state.creatorDid);
 }
 
 function voteBytes(g: string, id: string, suite: string): Uint8Array {
@@ -340,7 +380,7 @@ export class GroupChat {
     };
   }
 
-  /** Member: a change opened by the admin. Returns the approval to send back. */
+/** Member: a change opened by the admin. Returns the approval to send back. */
   approveSuiteVote(message: GroupWire & { t: "gvote"; op: "open" }): GroupWire & { t: "gvote" } {
     if (!verifySig(message.sig, voteBytes(message.g, message.id, message.suite), this.state.creatorDid)) {
       throw new GroupError("not-admin", "Подписът на предложението не е валиден.");
@@ -376,6 +416,11 @@ export class GroupChat {
   get openVote(): SuiteVote | null {
     return this.vote;
   }
+}
+
+/** True if an opened vote carries a valid signature by the group's admin. */
+export function verifyVoteOpen(message: GroupWire & { t: "gvote"; op: "open" }, adminDid: DidKey): boolean {
+  return verifySig(message.sig, voteBytes(message.g, message.id, message.suite), adminDid);
 }
 
 function didOf(keys: Ed25519KeyPair): DidKey {
