@@ -25,6 +25,7 @@ import {
   type EphemeralKeyPair,
 } from "../../../src/p2p/secureSession";
 import { safetyWords, formatSafetyCode } from "../../../src/p2p/safety";
+import { identityX25519Public } from "../../../src/identity/x25519";
 import QRCode from "qrcode";
 
 const identity: Ed25519KeyPair = deriveIdentityKeyPair(mnemonicToSeed(generateMnemonic12()));
@@ -137,7 +138,9 @@ const api = {
 
   /** Safety code words from both public keys, as the UI would show them. */
   safetyCode(): string {
-    return formatSafetyCode(safetyWords(identity.publicKey, peerPublicKey!));
+    return formatSafetyCode(
+      safetyWords(identityX25519Public(identity.publicKey), identityX25519Public(peerPublicKey!)),
+    );
   },
 
   /** Render a payload to a QR canvas and decode it back with jsQR. */

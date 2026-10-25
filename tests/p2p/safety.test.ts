@@ -3,36 +3,40 @@ import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { deriveIdentityKeyPair } from "../../src/identity/keypair";
 import { generateMnemonic12, mnemonicToSeed } from "../../src/identity/mnemonic";
 import { safetyWords, SAFETY_WORD_COUNT } from "../../src/p2p/safety";
+import { identityX25519Public } from "../../src/identity/x25519";
 
 const alice = deriveIdentityKeyPair(mnemonicToSeed(generateMnemonic12())).publicKey;
 const bob = deriveIdentityKeyPair(mnemonicToSeed(generateMnemonic12())).publicKey;
 const carol = deriveIdentityKeyPair(mnemonicToSeed(generateMnemonic12())).publicKey;
 
+// The code is computed from the X25519 identity keys, as the session does.
+const [aliceX, bobX, carolX] = [alice, bob, carol].map(identityX25519Public);
+
 describe("safety code", () => {
   it("produces 6 words from the BIP39 list", () => {
-    const words = safetyWords(alice, bob);
+    const words = safetyWords(aliceX, bobX);
     expect(words).toHaveLength(SAFETY_WORD_COUNT);
     for (const w of words) expect(wordlist).toContain(w);
   });
 
   it("is the same on both sides (order-independent)", () => {
-    expect(safetyWords(alice, bob)).toEqual(safetyWords(bob, alice));
+    expect(safetyWords(aliceX, bobX)).toEqual(safetyWords(bobX, aliceX));
   });
 
   it("is deterministic", () => {
-    expect(safetyWords(alice, bob)).toEqual(safetyWords(alice, bob));
+    expect(safetyWords(aliceX, bobX)).toEqual(safetyWords(aliceX, bobX));
   });
 
   it("differs when a different key is presented (MITM detection)", () => {
     // Mallory presents her own key to Bob while Alice believes it is Bob's.
-    expect(safetyWords(alice, bob)).not.toEqual(safetyWords(alice, carol));
+    expect(safetyWords(aliceX, bobX)).not.toEqual(safetyWords(aliceX, carolX));
   });
 
   it("differs for different pairs", () => {
-    expect(safetyWords(alice, bob)).not.toEqual(safetyWords(bob, carol));
+    expect(safetyWords(aliceX, bobX)).not.toEqual(safetyWords(bobX, carolX));
   });
 
   it("rejects keys that are not 32 bytes", () => {
-    expect(() => safetyWords(new Uint8Array(31), bob)).toThrow();
+    expect(() => safetyWords(new Uint8Array(31), bobX)).toThrow();
   });
 });

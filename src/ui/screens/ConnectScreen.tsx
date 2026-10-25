@@ -18,6 +18,7 @@ import { describeReachability, summarizeCandidates } from "../../p2p/network";
 import { completeHandshake } from "../../p2p/session";
 import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "../../p2p/secureSession";
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
+import { identityX25519Public } from "../../identity/x25519";
 import { useI18n } from "../../i18n";
 import { QrCode } from "../components/QrCode";
 import { QrScanner } from "../components/QrScanner";
@@ -157,7 +158,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       onConnected({ contact: expected, link, session });
       return;
     }
-    const words = safetyWords(identity.keyPair.publicKey, peerPublicKey);
+    const words = safetyWords(
+      identityX25519Public(identity.keyPair.publicKey),
+      identityX25519Public(peerPublicKey),
+    );
     setView({ k: "confirm", peerPublicKey, words, link, session });
   }
 
