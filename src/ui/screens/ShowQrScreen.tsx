@@ -4,9 +4,11 @@ import { useI18n } from "../../i18n";
 
 interface ShowQrScreenProps {
   identity: UnlockedIdentity;
+  /** Opens the one-time move of the identity to a new device. */
+  onMove?: () => void;
 }
 
-export function ShowQrScreen({ identity }: ShowQrScreenProps) {
+export function ShowQrScreen({ identity, onMove }: ShowQrScreenProps) {
   const { t } = useI18n();
   return (
     <div className="screen">
@@ -16,6 +18,11 @@ export function ShowQrScreen({ identity }: ShowQrScreenProps) {
       <p className="did-text" title={identity.did}>
         {identity.did}
       </p>
+      {onMove && (
+        <button className="secondary" onClick={onMove}>
+          {t("Премести на ново устройство")}
+        </button>
+      )}
     </div>
   );
 }

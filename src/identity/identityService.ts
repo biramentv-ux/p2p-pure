@@ -110,7 +110,7 @@ export async function recoverIdentity(
   };
 }
 
-async function encryptAndPersistSeed(
+export async function encryptAndPersistSeed(
   seed: Uint8Array,
   did: string,
   publicKey: Uint8Array,
