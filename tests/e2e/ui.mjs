@@ -283,11 +283,30 @@ try {
   const darkChat = await blockingViolations(alice.page);
   check("dark: chat screen has no serious accessibility violations", darkChat.length === 0, darkChat.join(" | "));
 
+  // Outgoing audio call, then hang up.
   await alice.page.getByRole("button", { name: "Аудио разговор" }).click();
-  await alice.page.locator(".call-panel").first().waitFor({ timeout: 15_000 });
+  await alice.page.locator('.call-panel[aria-label="Разговор"]').waitFor({ timeout: 15_000 });
   await alice.page.waitForTimeout(300);
-  const darkCall = await blockingViolations(alice.page);
-  check("dark: outgoing call screen has no serious accessibility violations", darkCall.length === 0, darkCall.join(" | "));
+  const darkAudio = await blockingViolations(alice.page);
+  check("dark: outgoing audio call screen passes", darkAudio.length === 0, darkAudio.join(" | "));
+  await alice.page.getByRole("button", { name: "Край", exact: true }).click();
+
+  // Outgoing video call (fake camera from the browser flags), then hang up.
+  await alice.page.getByRole("button", { name: "Видео разговор" }).click();
+  await alice.page.locator('.call-panel[aria-label="Разговор"]').waitFor({ timeout: 15_000 });
+  await alice.page.waitForTimeout(300);
+  const darkVideo = await blockingViolations(alice.page);
+  check("dark: outgoing video call screen passes", darkVideo.length === 0, darkVideo.join(" | "));
+  await alice.page.getByRole("button", { name: "Край", exact: true }).click();
+
+  // Incoming call: Bob calls Alice, Alice's screen shows the incoming panel, then she declines.
+  await bob.page.getByRole("button", { name: "Аудио разговор" }).click();
+  await alice.page.locator('.call-panel[aria-label="Входящ разговор"]').waitFor({ timeout: 20_000 });
+  await alice.page.waitForTimeout(300);
+  const darkIncoming = await blockingViolations(alice.page);
+  check("dark: incoming call screen passes", darkIncoming.length === 0, darkIncoming.join(" | "));
+  await alice.page.locator('.call-panel[aria-label="Входящ разговор"]').getByRole("button", { name: "Откажи" }).click();
+  await bob.page.getByRole("button", { name: "Край", exact: true }).click().catch(() => undefined);
 
   await alice.page.getByRole("button", { name: "Назад" }).click();
   await alice.page.getByRole("button", { name: "Контакти", exact: true }).click();
