@@ -210,7 +210,7 @@ npx cap open android     # отваря Android Studio; или ios за Xcode
 
 Пакетът още не е подписан: при първо стартиране натисни **More info → Run anyway**. С winget, след приемане в официалното хранилище: `winget install DyrakArmy.P2PMessenger`. Подробности: [docs/WINDOWS.md](docs/WINDOWS.md).
 
-> В програмата за Windows отключването с passkey след рестарт може да не работи (WebView2 не връща PRF тайната). Тогава ползвай парола. CI проверява и двата пътя.
+> В програмата за Windows отключването с passkey след рестарт може да не работи (WebView2 не връща PRF тайната). Тогава ползвай парола, а след това можеш да включиш отключване с Windows Hello (лице, пръст или PIN) — виж [docs/WINDOWS.md](docs/WINDOWS.md#отключване-с-windows-hello). Паролата и 12-те думи остават. CI проверява и трите пътя доколкото може (на CI машините няма Windows Hello).
 
 ## 🐧 Linux
 
@@ -496,7 +496,7 @@ Download from [Releases](https://github.com/biramentv-ux/p2p-pure/releases):
 
 The package is not signed yet: on first start choose **More info → Run anyway**. With winget, once accepted in the official repository: `winget install DyrakArmy.P2PMessenger`. Details: [docs/WINDOWS.md](docs/WINDOWS.md).
 
-> In the Windows app, unlocking with a passkey after a restart may not work (WebView2 does not return the PRF secret). Use a password then. CI tests both paths.
+> In the Windows app, unlocking with a passkey after a restart may not work (WebView2 does not return the PRF secret). Use a password then; after that you can turn on Windows Hello unlock (face, fingerprint or PIN), see docs/WINDOWS.md. The password and the 12 words stay. CI runners have no Windows Hello, so CI only checks that the method stays hidden and the commands are locked down.
 
 ## 🐧 Linux
 

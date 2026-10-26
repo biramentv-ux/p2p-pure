@@ -24,8 +24,31 @@ export interface Ed25519KeyPair {
 /** A did:key string, e.g. "did:key:z6MkpzW...". */
 export type DidKey = string;
 
-/** How the at-rest seed encryption key was derived. */
-export type UnlockMethod = "webauthn-prf" | "password";
+/** How the at-rest seed encryption key was derived (what IdentityRecord.unlockMethod stores). */
+export type StoredUnlockMethod = "webauthn-prf" | "password";
+
+/**
+ * How the UI should offer unlock. "windows-hello" is never stored as the record's method: it is
+ * an extra wrap of the same seed next to the password one (see WindowsHelloWrap), offered only
+ * in the Tauri desktop app on Windows when Hello is available.
+ */
+export type UnlockMethod = StoredUnlockMethod | "windows-hello";
+
+/**
+ * Second copy of the seed, encrypted with a key from a Windows Hello signature. The password
+ * copy (encryptedSeed) stays, so the password always works and the 12 words stay the recovery.
+ */
+export interface WindowsHelloWrap {
+  /** KeyCredentialManager credential name, "p2p-messenger-<32 hex>". */
+  credentialName: string;
+  /** Random salt mixed into the signed challenge. */
+  challengeSalt: Uint8Array;
+  /** HKDF salt for the AES key. */
+  kdfSalt: Uint8Array;
+  encryptedSeed: Uint8Array;
+  nonce: Uint8Array;
+  createdAt: number;
+}
 
 /** Non-secret identity record persisted in IndexedDB. */
 export interface IdentityRecord {
@@ -38,7 +61,9 @@ export interface IdentityRecord {
   /** AES-GCM nonce used for encryptedSeed. */
   nonce: Uint8Array;
   /** Which method protects encryptedSeed. */
-  unlockMethod: UnlockMethod;
+  unlockMethod: StoredUnlockMethod;
+  /** Optional Windows Hello copy of the seed (desktop app on Windows, password identities only). */
+  windowsHello?: WindowsHelloWrap;
   /** WebAuthn credential id (base64url), when unlockMethod is webauthn-prf. */
   credentialId?: string;
   /** Salt used in the PRF evaluation / password KDF, for reproducibility. */
@@ -58,7 +83,9 @@ export type IdentityErrorCode =
   | "NO_IDENTITY"
   | "ALREADY_EXISTS"
   | "DECRYPTION_FAILED"
-  | "INVALID_MNEMONIC";
+  | "INVALID_MNEMONIC"
+  | "WINDOWS_HELLO_UNAVAILABLE"
+  | "WINDOWS_HELLO_FAILED";
 
 export class IdentityError extends Error {
   readonly code: IdentityErrorCode;

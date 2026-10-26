@@ -6,3 +6,4 @@ export * from "./webauthn";
 export * from "./atRestCrypto";
 export * from "./storage";
 export * from "./identityService";
+export * from "./windowsHelloUnlock";
