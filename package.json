@@ -38,7 +38,9 @@
     "test:crypto-suite": "node tests/e2e/crypto-suite.mjs",
     "test:demo": "node tests/e2e/demo-signaling.mjs",
     "test:pages": "node tests/e2e/pages-smoke.mjs",
-    "test:files": "node tests/e2e/files.mjs"
+    "test:files": "node tests/e2e/files.mjs",
+    "build:linux": "npm run build:desktop && npm --prefix electron ci && npm --prefix electron run dist",
+    "test:linux": "node tests/desktop/electron-linux.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

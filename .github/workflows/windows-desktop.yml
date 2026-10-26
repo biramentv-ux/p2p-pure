@@ -218,7 +218,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$env:RELEASE_TAG" out/* --target "${{ github.sha }}" --title "P2P Messenger for Windows $env:RELEASE_TAG" --notes-file docs/WINDOWS.md --prerelease
+          # The release is shared with the Linux workflow: whichever comes first creates it.
+          gh release view "$env:RELEASE_TAG" 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create "$env:RELEASE_TAG" --target "${{ github.sha }}" --title "P2P Messenger $env:RELEASE_TAG" --notes-file docs/DESKTOP-RELEASE.md --prerelease
+            if ($LASTEXITCODE -ne 0) { gh release view "$env:RELEASE_TAG" | Out-Null; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          }
+          gh release upload "$env:RELEASE_TAG" (Get-ChildItem out | ForEach-Object FullName) --clobber
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Install with winget from the release (release only)
         if: env.RELEASE_TAG != ''
