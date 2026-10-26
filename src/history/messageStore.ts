@@ -21,8 +21,19 @@ export interface LocationFix {
   accuracy: number;
 }
 
+/** A file sent or received in the chat. The bytes are in fileStore.ts when `stored` is true. */
+export interface FileCard {
+  id: string;
+  name: string;
+  size: number;
+  mime: string;
+  stored: boolean;
+}
+
 export interface ChatMessage {
   text: string;
+  /** A file card. When set, `text` is empty. */
+  file?: FileCard;
   /** Photo as a data URL (jpeg, png or webp). When set, `text` is empty. */
   image?: string;
   /** Shared location. When set, `text` is empty. */
@@ -33,6 +44,26 @@ export interface ChatMessage {
 
 const IMAGE_MARK = "\u0001I|";
 const LOCATION_MARK = "\u0001G|";
+const FILE_MARK = "\u0001F|";
+const FILE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+/** Returns the card if every field is sane, otherwise null. */
+export function validFileCard(c: FileCard): FileCard | null {
+  const ok =
+    c !== null &&
+    typeof c === "object" &&
+    typeof c.id === "string" &&
+    FILE_ID_RE.test(c.id) &&
+    typeof c.name === "string" &&
+    c.name.length > 0 &&
+    c.name.length <= 200 &&
+    Number.isInteger(c.size) &&
+    c.size > 0 &&
+    typeof c.mime === "string" &&
+    c.mime.length <= 100 &&
+    typeof c.stored === "boolean";
+  return ok ? { id: c.id, name: c.name, size: c.size, mime: c.mime, stored: c.stored } : null;
+}
 const IMAGE_URL_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** Returns the fix if the values are real coordinates, otherwise null. */
@@ -50,11 +81,21 @@ export function validLocation(fix: LocationFix): LocationFix | null {
 
 /** Text, photos and locations share one encrypted field; the marker tells them apart. */
 function toPayload(m: ChatMessage): string {
+  if (m.file) return FILE_MARK + JSON.stringify(m.file);
   if (m.location) return LOCATION_MARK + JSON.stringify(m.location);
   return m.image ? IMAGE_MARK + m.image : m.text;
 }
 
-function fromPayload(payload: string): Pick<ChatMessage, "text" | "image" | "location"> {
+function fromPayload(payload: string): Pick<ChatMessage, "text" | "image" | "location" | "file"> {
+  if (payload.startsWith(FILE_MARK)) {
+    try {
+      const card = validFileCard(JSON.parse(payload.slice(FILE_MARK.length)) as FileCard);
+      if (card) return { text: "", file: card };
+    } catch {
+      /* fall through */
+    }
+    return { text: "" };
+  }
   if (payload.startsWith(LOCATION_MARK)) {
     try {
       const fix = validLocation(JSON.parse(payload.slice(LOCATION_MARK.length)) as LocationFix);
