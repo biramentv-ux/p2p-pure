@@ -1,6 +1,6 @@
 # Security and privacy
 
-## Data on the device: IndexedDB `p2p-messenger`, version 5 (IndexedDB `p2p-messenger`, version 5)
+## Data on the device (IndexedDB `p2p-messenger`, version 5)
 
 Every store except `identity` holds only AES-256-GCM ciphertext (WebCrypto, random 12-byte IV,
 associated data that binds each record to its store and key). The keys exist only in memory
