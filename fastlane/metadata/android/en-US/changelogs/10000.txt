@@ -1,0 +1,5 @@
+First release for F-Droid.
+* Chats with end-to-end encryption and a direct P2P connection
+* QR and short-code invitations, 12 verification words
+* Files, photos, calls, groups of up to 9
+* Bulgarian and English

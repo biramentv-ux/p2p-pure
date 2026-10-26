@@ -1,0 +1,49 @@
+# Draft for fdroiddata: copy to metadata/bg.p2pmessenger.app.yml in
+# https://gitlab.com/fdroid/fdroiddata (merge request). Texts, icon and changelogs
+# are read from fastlane/metadata/android/ in this repository.
+Categories:
+  - Internet
+  - Messaging
+License: MIT
+AuthorName: DyrakArmy
+WebSite: https://github.com/biramentv-ux/p2p-pure
+SourceCode: https://github.com/biramentv-ux/p2p-pure
+IssueTracker: https://github.com/biramentv-ux/p2p-pure/issues
+Changelog: https://github.com/biramentv-ux/p2p-pure/commits/main
+
+# GIF search (GIPHY) is only built in when VITE_GIPHY_API_KEY is set; the F-Droid
+# build does not set it. The demo room / short code uses the author's signalling
+# Worker (tg.dyrakarmy.online), which is open source in this repository (worker/).
+AntiFeatures:
+  NonFreeNet:
+    en-US: Optional short-code and demo-room signalling uses a hosted Cloudflare Worker run by the developer; STUN uses stun.l.google.com.
+    bg: По избор кратките кодове и демо стаята ползват хостван Cloudflare Worker на разработчика; STUN е stun.l.google.com.
+
+AutoName: P2P Messenger
+
+RepoType: git
+Repo: https://github.com/biramentv-ux/p2p-pure.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 10000
+    commit: android-v1.0.0
+    subdir: android/app
+    # Needs Node.js >= 22 on the build server (see package.json / CI); adjust sudo/srclibs in review.
+    sudo:
+      - apt-get update || apt-get update
+      - apt-get install -y nodejs npm
+    init: cd ../.. && npm ci
+    # Strip the proprietary Google bits that the Capacitor template and the
+    # passkey overlay add, then build the web app and sync it into android/.
+    prebuild:
+      - sed -i -e '/credentials-play-services-auth/d' -e "/apply plugin: 'com.google.gms.google-services'/d" build.gradle
+      - sed -i -e '/namespace = /a\    dependenciesInfo { includeInApk = false; includeInBundle = false }' build.gradle
+      - cd ../.. && npm run build && npx cap sync android
+    gradle:
+      - yes
+
+AutoUpdateMode: Version android-v%v
+UpdateCheckMode: Tags ^android-v[0-9.]+$
+CurrentVersion: 1.0.0
+CurrentVersionCode: 10000
