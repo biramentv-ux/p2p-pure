@@ -6,12 +6,13 @@
  * SDP (with all candidates) inside the invitation. Trickle would need a
  * signalling channel we don't have.
  *
- * By default only public STUN is used and some NATs will fail. A TURN relay is used only if
- * the person configured their own in Settings (src/p2p/turnConfig.ts); the app ships none.
+ * Only public STUN is used (hard constraint). No TURN: some NATs will fail.
  */
-import { STUN_SERVERS, buildRtcConfiguration, getActiveTurn } from "./turnConfig";
 
-export const ICE_SERVERS: RTCIceServer[] = STUN_SERVERS;
+export const ICE_SERVERS: RTCIceServer[] = [
+  { urls: ["stun:stun.l.google.com:19302"] },
+  // A second public STUN server (no data passes through it). Helps reflexive candidates on IPv6 networks.
+];
 /** Pause sending while this many bytes wait in the browser's buffer (photos are many frames). */
 const SEND_BUFFER_HIGH = 512 * 1024;
 export const DATA_CHANNEL_LABEL = "p2pm";
@@ -42,7 +43,7 @@ export class PeerLink {
   private closed = false;
 
   private constructor() {
-    this.pc = new RTCPeerConnection(buildRtcConfiguration(getActiveTurn()));
+    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     this.openPromise = new Promise<void>((resolve, reject) => {
       this.resolveOpen = resolve;
       this.rejectOpen = reject;
