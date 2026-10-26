@@ -36,6 +36,8 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
   private opened: Promise<void> | null = null;
   private offerHandlers: PayloadHandler[] = [];
   private answerHandlers: PayloadHandler[] = [];
+  private peerJoined = false;
+  private joinWaiters: Array<() => void> = [];
   private readonly apiBase: string;
   private readonly makeSocket: SocketFactory;
   private readonly fetchImpl: FetchLike;
@@ -71,6 +73,12 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
     await this.connect(code);
   }
 
+  /** Offering device: resolves once the second device has joined the room. */
+  waitForPeer(): Promise<void> {
+    if (this.peerJoined) return Promise.resolve();
+    return new Promise<void>((resolve) => this.joinWaiters.push(resolve));
+  }
+
   async sendOffer(payload: SignalingPayload): Promise<void> {
     if (payload.type !== "offer") throw new SignalingError("Очаква се покана.", "not_open");
     await this.send(payload);
@@ -95,6 +103,8 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
     this.opened = null;
     this.offerHandlers = [];
     this.answerHandlers = [];
+    this.peerJoined = false;
+    this.joinWaiters = [];
     if (socket && socket.readyState <= WebSocket.OPEN) socket.close(1000, "done");
   }
 
@@ -136,6 +146,13 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
     try {
       parsed = JSON.parse(data);
     } catch {
+      return;
+    }
+    if (typeof parsed === "object" && parsed !== null && (parsed as { type?: unknown }).type === "joined") {
+      this.peerJoined = true;
+      const waiters = this.joinWaiters;
+      this.joinWaiters = [];
+      for (const resolve of waiters) resolve();
       return;
     }
     if (!isSignalingPayload(parsed)) return;

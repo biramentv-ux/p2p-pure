@@ -11,6 +11,9 @@ export const ROOM_TTL_MS = 10 * 60 * 1000;
 /** Largest frame the relay forwards. A signed invitation is far below this. */
 export const MAX_RELAY_CHARS = 16_384;
 
+/** Sent to the offering peer when the second peer joins, so it knows when to send its offer. */
+export const ROOM_JOINED_FRAME = '{"type":"joined"}';
+
 export interface RoomPeer {
   send(text: string): void;
   close(code: number, reason: string): void;
@@ -27,6 +30,7 @@ export class RoomRelay {
   join(peer: RoomPeer): boolean {
     if (this.peers.length >= 2) return false;
     this.peers.push(peer);
+    if (this.peers.length === 2) this.peers[0].send(ROOM_JOINED_FRAME);
     return true;
   }
 

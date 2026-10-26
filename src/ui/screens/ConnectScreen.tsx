@@ -23,6 +23,9 @@ import { QrCode } from "../components/QrCode";
 import { QrScanner } from "../components/QrScanner";
 import { ShortCodeEnter, ShortCodeShare } from "../components/ShortCode";
 import { OfflineSignalingProvider } from "../../signaling/offlineProvider";
+import { WebSocketSignalingProvider } from "../../signaling/websocketProvider";
+import { getSignalMode, setSignalMode, type SignalMode } from "../../signaling/mode";
+import { formatShortCode, normalizeShortCode } from "../../p2p/shortInvite";
 import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
 
 export interface ConnectedResult {
@@ -48,6 +51,8 @@ type View =
   | { k: "offer-qr"; payload: string; hex: string; net: string }
   | { k: "scan-answer" }
   | { k: "scan-offer" }
+  | { k: "demo-wait"; code: string; net: string }
+  | { k: "demo-join" }
   | { k: "answer-qr"; payload: string; hex: string; net: string }
   | {
       k: "confirm";
@@ -106,6 +111,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   // Offline signaling: generated offers and answers come back through the provider.
   const providerRef = useRef<OfflineSignalingProvider | null>(null);
   const pendingHexRef = useRef<string>("");
+  // Demo signalling: an open room connection, and the mode the user picked (persisted).
+  const wsRef = useRef<WebSocketSignalingProvider | null>(null);
+  const [mode, setMode] = useState<SignalMode>(() => getSignalMode());
+  useEffect(() => () => wsRef.current?.disconnect(), []);
 
   function getProvider(): OfflineSignalingProvider {
     if (!providerRef.current) {
@@ -130,6 +139,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   }, []);
 
   function clearAll() {
+    wsRef.current?.disconnect();
+    wsRef.current = null;
     linkRef.current?.close();
     linkRef.current = null;
     mySdpRef.current = null;
@@ -199,6 +210,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
       pendingHexRef.current = await encodeInvitationHex(offer);
+      if (mode === "demo") {
+        await startDemoOffer(offer, payload);
+        return;
+      }
       await getProvider().sendOffer(toSignalingPayload(offer, payload));
     } catch (err) {
       fail(err);
@@ -240,7 +255,37 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
 
   function startAsResponder() {
     setError(null);
-    setView({ k: "scan-offer" });
+    setView(mode === "demo" ? { k: "demo-join" } : { k: "scan-offer" });
+  }
+
+  /** Demo: opens a room, shows its code, and sends the offer once the other device has joined. */
+  async function startDemoOffer(offer: Invitation, payload: string) {
+    const ws = new WebSocketSignalingProvider();
+    wsRef.current = ws;
+    ws.onAnswerReceived((p) => {
+      if (p.invitation) void onAnswerScanned(p.invitation);
+    });
+    const code = await ws.openRoom();
+    setView({ k: "demo-wait", code, net: t(describeReachability(summarizeCandidates(mySdpRef.current ?? ""))) });
+    await ws.waitForPeer();
+    await ws.sendOffer(toSignalingPayload(offer, payload));
+  }
+
+  /** Demo: joins the room whose code the user typed, and waits for the offer. */
+  async function startDemoJoin(code: string) {
+    setError(null);
+    setView({ k: "busy", label: t("Свързвам се със стаята…") });
+    try {
+      const ws = new WebSocketSignalingProvider();
+      wsRef.current = ws;
+      ws.onOfferReceived((p) => {
+        if (p.invitation) void onOfferScanned(p.invitation);
+      });
+      await ws.joinRoom(code);
+      setView({ k: "busy", label: t("Чакам поканата от другия човек…") });
+    } catch (err) {
+      fail(err);
+    }
   }
 
   async function onOfferScanned(text: string) {
@@ -259,10 +304,16 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         answersNonce: offer.nonce,
       });
       const payload = await encodeInvitation(answer);
-      pendingHexRef.current = await encodeInvitationHex(answer);
-      // Start waiting before showing the QR, so the handshake can't be missed.
+      // Start waiting before the answer leaves, so the handshake can't be missed.
       const handshake = completeHandshake(link, identity.did, offer.publicKey, RESPONDER_TIMEOUT_MS);
-      await getProvider().sendAnswer(toSignalingPayload(answer, payload));
+      const demo = wsRef.current;
+      if (demo) {
+        await demo.sendAnswer(toSignalingPayload(answer, payload));
+        setView({ k: "busy", label: t("Свързвам…") });
+      } else {
+        pendingHexRef.current = await encodeInvitationHex(answer);
+        await getProvider().sendAnswer(toSignalingPayload(answer, payload));
+      }
       await handshake;
       const session = SecureSession.derive({
         role: "responder",
@@ -304,10 +355,57 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
 
   /* ---------- Rendering ---------- */
 
+  if (view.k === "demo-wait") {
+    return (
+      <div className="screen">
+        <h1>{t("Стая")}</h1>
+        <p>{t("Другият човек въвежда този код в „Сканирай чужда покана“, режим Демо.")}</p>
+        <p className="short-code" aria-label={t("Кратък код")}>
+          {formatShortCode(view.code)}
+        </p>
+        <p className="net-hint">{view.net}</p>
+        <button className="secondary" onClick={reset}>
+          {t("Отказ")}
+        </button>
+      </div>
+    );
+  }
+
+  if (view.k === "demo-join") {
+    return <DemoCodeEntry onSubmit={(code) => void startDemoJoin(code)} onCancel={reset} />;
+  }
+
   if (view.k === "choose") {
     return (
       <div className="screen">
         <h1>{expected ? t("Свързване с {name}", { name: expected.name }) : t("Нов контакт")}</h1>
+        <div role="group" aria-label={t("Начин на свързване")} className="call-actions">
+          <button
+            className={mode === "local" ? "" : "secondary"}
+            aria-pressed={mode === "local"}
+            onClick={() => {
+              setSignalMode("local");
+              setMode("local");
+            }}
+          >
+            {t("Локален (QR)")}
+          </button>
+          <button
+            className={mode === "demo" ? "" : "secondary"}
+            aria-pressed={mode === "demo"}
+            onClick={() => {
+              setSignalMode("demo");
+              setMode("demo");
+            }}
+          >
+            {t("Демо (стая)")}
+          </button>
+        </div>
+        <p>
+          {mode === "demo"
+            ? t("Демо режимът използва сигналния сървър за стая с кратък код. Сървърът не съхранява нищо.")
+            : t("Локалният режим не прави мрежови заявки.")}
+        </p>
         <p>
           {t(
             "Връзката е директна между двете устройства. Нищо не минава през сървър. Двамата трябва да са на едно място или да могат да си показват екраните.",
@@ -425,6 +523,35 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       </button>
       <button className="secondary" onClick={() => rejectMatch(view.link)}>
         {t("Не съвпадат")}
+      </button>
+    </div>
+  );
+}
+
+/** Demo: the other device's room code, typed in. */
+function DemoCodeEntry({ onSubmit, onCancel }: { onSubmit: (code: string) => void; onCancel: () => void }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState("");
+  const code = normalizeShortCode(value);
+  return (
+    <div className="screen">
+      <h1>{t("Въведи кода на стаята")}</h1>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (code) onSubmit(code);
+        }}
+      >
+        <label>
+          {t("Кратък код")}
+          <input value={value} onChange={(e) => setValue(e.target.value)} autoComplete="off" spellCheck={false} />
+        </label>
+        <button type="submit" disabled={!code}>
+          {t("Присъедини се")}
+        </button>
+      </form>
+      <button className="secondary" onClick={onCancel}>
+        {t("Отказ")}
       </button>
     </div>
   );
