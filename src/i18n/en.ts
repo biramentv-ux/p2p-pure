@@ -3,7 +3,10 @@
  * Placeholders ({name}, {n}, ...) must appear in both the key and the value;
  * tests/i18n/i18n.test.ts enforces this.
  */
+import { EN_TRANSFER } from "./enTransfer";
+
 export const EN_DICTIONARY: Record<string, string> = {
+  ...EN_TRANSFER,
   // App shell and tabs
   "Език": "Language",
   "Зареждане…": "Loading…",
