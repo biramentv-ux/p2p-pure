@@ -12,10 +12,22 @@
  *   Installed:  APP_BIN=/opt/P2P\ Messenger/p2p-messenger node tests/desktop/electron-linux.mjs
  *   Checkout:   npm run build:desktop && (cd electron && npm ci) && node tests/desktop/electron-linux.mjs
  * Env: APP_BIN, OUT_DIR (default desktop-test), NO_SANDBOX=1 (root in a container only).
+ * Opt-in extras (command line of the test only, nothing of this is built into the app):
+ *   WAYLAND=1        starts a headless Weston and runs the app on it with --ozone-platform=wayland
+ *                    (no X11 display is given to the app); the same checks must pass, and the app
+ *                    process must really have loaded libwayland-client.
+ *   FAKE_CAMERA=auto|<file.y4m>
+ *                    a last run with Chromium's fake camera (--use-fake-device-for-media-stream
+ *                    --use-file-for-fake-video-capture) and the app's own permission handler (the
+ *                    fake-UI flag is NOT used): getUserMedia must work, and the QR scanner screen must
+ *                    decode the QR code in the video. "auto" builds the video with ffmpeg from the
+ *                    invitation QR the app itself shows; a file must contain a current invitation.
+ *                    A fake camera tests the software path (permission, getUserMedia, decoder), not
+ *                    real camera hardware.
  */
 import { chromium } from "playwright-core";
-import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, existsSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -46,16 +58,41 @@ function check(name, ok, detail = "") {
   if (IS_CI && !ok) console.log(`::error title=${name}::${detail}`);
 }
 
+const WAYLAND = process.env.WAYLAND === "1";
+const FAKE_CAMERA = process.env.FAKE_CAMERA ?? "";
+let appEnv = process.env;
+let weston = null;
+if (WAYLAND) {
+  // A real compositor, headless: no X server is reachable for the app, so it cannot fall back to X11.
+  const runtime = mkdtempSync(join(tmpdir(), "p2p-xdg-"));
+  chmodSync(runtime, 0o700);
+  const socket = "p2p-wl-test";
+  weston = spawn("weston", ["--backend=headless", "--socket=" + socket, "--width=1280", "--height=900"], {
+    stdio: ["ignore", "ignore", "ignore"],
+    env: { ...process.env, XDG_RUNTIME_DIR: runtime },
+  });
+  for (let i = 0; i < 50 && !existsSync(join(runtime, socket)); i++) await new Promise((r) => setTimeout(r, 200));
+  if (!existsSync(join(runtime, socket))) {
+    console.error("weston did not create its socket");
+    process.exit(2);
+  }
+  appEnv = { ...process.env, XDG_RUNTIME_DIR: runtime, WAYLAND_DISPLAY: socket, XDG_SESSION_TYPE: "wayland" };
+  delete appEnv.DISPLAY;
+  log(`weston up on ${socket}`);
+}
+process.on("exit", () => weston?.kill());
+
 const PORT = 9333;
 /**
  * Starts the app and attaches over the Chromium DevTools port. The shipped app has the Node.js
  * inspector fuse switched off, so Playwright's own Electron launcher (which needs it) is not
  * used: the test must run against the very binary users get.
  */
-async function launch() {
-  const args = [`--user-data-dir=${profile}`, `--remote-debugging-port=${PORT}`];
+async function launch(extraArgs = []) {
+  const args = [`--user-data-dir=${profile}`, `--remote-debugging-port=${PORT}`, ...extraArgs];
   if (process.env.NO_SANDBOX) args.push("--no-sandbox");
-  const child = spawn(APP_BIN ?? dev, APP_BIN ? args : [...args, resolve("electron/main.mjs")], { stdio: "ignore", detached: true });
+  if (WAYLAND) args.push("--ozone-platform=wayland");
+  const child = spawn(APP_BIN ?? dev, APP_BIN ? args : [...args, resolve("electron/main.mjs")], { stdio: "ignore", detached: true, env: appEnv });
   let exited = false;
   child.on("exit", () => (exited = true));
   let browser = null;
@@ -69,6 +106,7 @@ async function launch() {
   const page = context.pages()[0] ?? (await context.waitForEvent("page"));
   await page.waitForSelector("main", { timeout: 30_000 });
   const app = {
+    pid: child.pid,
     async close() {
       await browser.close().catch(() => {});
       // The whole group: an AppImage starts the app as a child of its launcher.
@@ -89,6 +127,9 @@ const state = (page) =>
     if (document.querySelector(".did-text")) return "main";
     return "other";
   });
+
+// The app follows the system language; the checks below name buttons in Bulgarian.
+const bulgarian = (page) => page.getByRole("button", { name: /^БГ/ }).click({ timeout: 3000 }).catch(() => {});
 
 async function waitState(page, wanted, ms = 45_000) {
   const end = Date.now() + ms;
@@ -119,6 +160,14 @@ try {
   check("WebRTC, WebCrypto, IndexedDB are there", caps.webrtc === "function" && caps.subtle && caps.idb === "object");
   check("no Node.js inside the page", caps.node === "undefinedundefined");
   check("page keeps its Content-Security-Policy", caps.csp);
+  if (WAYLAND) {
+    const maps = readFileSync(`/proc/${app.pid}/maps`, "utf8");
+    const env = readFileSync(`/proc/${app.pid}/environ`, "utf8").split("\0");
+    check(
+      "app runs on Wayland (libwayland-client loaded, no DISPLAY, WAYLAND_DISPLAY set)",
+      maps.includes("libwayland-client") && !env.some((e) => e.startsWith("DISPLAY=")) && env.some((e) => e.startsWith("WAYLAND_DISPLAY=")),
+    );
+  }
 
   const dc = await page.evaluate(async () => {
     try {
@@ -192,6 +241,33 @@ try {
   const did = (await page.locator(".did-text").innerText()).trim();
   check("identity created (12 words, did:key)", words === 12 && did.startsWith("did:key:z6Mk"), `${words} words, ${did.slice(0, 20)}…`);
   await page.screenshot({ path: join(OUT, "electron-main.png") });
+  let cameraFile = FAKE_CAMERA === "auto" ? "" : FAKE_CAMERA;
+  if (FAKE_CAMERA === "auto") {
+    // The invitation QR the app shows is the picture the fake camera will film.
+    await bulgarian(page);
+    await page.getByRole("button", { name: "Свържи се" }).click();
+    await page.getByRole("button", { name: "Покажи моята покана" }).click();
+    await page.waitForSelector("canvas[aria-label]", { timeout: 30_000 });
+    let shot = null;
+    for (let i = 0; i < 50 && !shot; i++) {
+      shot = await page.evaluate(() => {
+        const c = document.querySelector("canvas[aria-label]");
+        return c && c.width > 0 ? { url: c.toDataURL("image/png"), size: c.width } : null;
+      });
+      if (!shot) await page.waitForTimeout(300);
+    }
+    if (!shot) throw new Error("the invitation QR was not drawn");
+    const png = join(OUT, "invite-qr.png");
+    cameraFile = join(OUT, "invite-qr.y4m");
+    writeFileSync(png, Buffer.from(shot.url.split(",")[1], "base64"));
+    const k = Math.max(1, Math.floor(400 / shot.size));
+    const ff = spawnSync(
+      "ffmpeg",
+      ["-y", "-loglevel", "error", "-loop", "1", "-i", png, "-vf", `scale=iw*${k}:ih*${k}:flags=neighbor,pad=640:480:(ow-iw)/2:(oh-ih)/2:white,format=yuv420p`, "-frames:v", "30", "-r", "10", cameraFile],
+      { encoding: "utf8" },
+    );
+    check("ffmpeg made a y4m video of the invitation QR", ff.status === 0 && existsSync(cameraFile), ff.stderr?.slice(0, 200));
+  }
   await app.close();
 
   // ------------------------------------------------------------------ restart
@@ -209,12 +285,55 @@ try {
     const again = (await page.locator(".did-text").innerText()).trim();
     check("same identity after the restart", again === did);
   }
+
+  if (cameraFile) {
+    await app.close();
+    // Only the test command line carries the fake-device flags. No --use-fake-ui-for-media-stream:
+    // the request goes through the app's own permission handler.
+    ({ app, page } = await launch(["--use-fake-device-for-media-stream", `--use-file-for-fake-video-capture=${cameraFile}`]));
+    await waitState(page, ["unlock-password", "main"]);
+    if ((await state(page)) === "unlock-password") {
+      await page.locator('input[autocomplete="current-password"]').fill(PASSWORD);
+      await page.locator("main > form.screen button[type=submit]").click();
+      await waitState(page, ["main"]);
+    }
+    const cam = await page.evaluate(async () => {
+      try {
+        const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput").length;
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const track = stream.getVideoTracks()[0];
+        const v = document.createElement("video");
+        v.muted = true;
+        v.srcObject = stream;
+        await v.play();
+        await new Promise((r) => setTimeout(r, 500));
+        const out = { ok: true, devices, state: track.readyState, w: v.videoWidth, h: v.videoHeight };
+        stream.getTracks().forEach((t) => t.stop());
+        return out;
+      } catch (err) {
+        return { ok: false, error: String(err) };
+      }
+    });
+    log(`camera ${JSON.stringify(cam)}`);
+    check("getUserMedia works through the app's permission handler", cam.ok && cam.state === "live" && cam.w > 0, JSON.stringify(cam));
+
+    await bulgarian(page);
+    await page.getByRole("button", { name: "Свържи се" }).click();
+    await page.getByRole("button", { name: "Сканирай чужда покана" }).click();
+    // Nothing is pasted: the scanner has to read the QR code from the camera video by itself.
+    // Decoding the invitation moves the app on to its answer QR code.
+    const decoded = await page.waitForSelector("canvas[aria-label]", { timeout: 40_000 }).then(() => true, () => false);
+    const alert = await page.locator('[role="alert"]').allInnerTexts().catch(() => []);
+    await page.screenshot({ path: join(OUT, "electron-scanner.png") });
+    check("QR scanner decodes the invitation from the fake camera", decoded && alert.length === 0, alert.join(" | "));
+  }
 } catch (err) {
   failures++;
   console.error("FAILED", err);
   await page?.screenshot({ path: join(OUT, "electron-failed.png") }).catch(() => {});
 } finally {
   await app?.close().catch(() => {});
+  weston?.kill();
 }
 log(failures ? `${failures} check(s) failed` : "all checks passed");
 process.exit(failures ? 1 : 0);
