@@ -233,6 +233,70 @@ try {
   check("an HTML file arrives as a plain download (application/octet-stream)", type === "application/octet-stream", type);
   check("no inline frame or page was created", (await bob.page.locator(".messages iframe, .messages object").count()) === 0);
 
+  // ---- Music: a WAV file gets a player with volume − / + ----
+  const rate = 8000;
+  const samples = rate * 2;
+  const wav = Buffer.alloc(44 + samples * 2);
+  wav.write("RIFF", 0);
+  wav.writeUInt32LE(36 + samples * 2, 4);
+  wav.write("WAVEfmt ", 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36);
+  wav.writeUInt32LE(samples * 2, 40);
+  for (let i = 0; i < samples; i++) wav.writeInt16LE(Math.round(Math.sin((i / rate) * 2 * Math.PI * 440) * 8000), 44 + i * 2);
+  const wavPath = join(dir, "tune.wav");
+  writeFileSync(wavPath, wav);
+  await put(alice.page, wavPath);
+  await bob.page.getByText("иска да ти изпрати файл").waitFor({ timeout: 30_000 });
+  await bob.page.locator(".transfer").getByRole("button", { name: "Приеми" }).click();
+  const player = bob.page.locator(".messages .audio-player");
+  await player.waitFor({ timeout: 30_000 });
+  check("a music file shows a player, not a download link", (await player.count()) === 1);
+  await alice.page.locator(".messages .audio-player").waitFor({ timeout: 30_000 });
+  await player.getByRole("button", { name: "По-тихо" }).click();
+  await player.getByRole("button", { name: "По-тихо" }).click();
+  const vol = await bob.page.evaluate(() => document.querySelector(".audio-player audio").volume);
+  check("volume − lowers the sound by 10% a step", Math.abs(vol - 0.8) < 0.001, String(vol));
+  await player.getByRole("button", { name: "По-силно" }).click();
+  check("volume + raises it again", Math.abs((await bob.page.evaluate(() => document.querySelector(".audio-player audio").volume)) - 0.9) < 0.001);
+  await player.getByRole("button", { name: "Пусни" }).click();
+  await bob.page.waitForFunction(() => document.querySelector(".audio-player audio").currentTime > 0.1 || !document.querySelector(".audio-player audio").paused, null, { timeout: 15_000 });
+  check("the track plays", true);
+  await player.getByRole("button", { name: "Пауза" }).click();
+  check("and pauses", await bob.page.evaluate(() => document.querySelector(".audio-player audio").paused));
+
+  // ---- Ctrl+V of a picture: staged above the message box, sent on "Send" ----
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const imagesBefore = await bob.page.locator(".messages .msg.in img.msg-image").count();
+  await alice.page.evaluate((b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], "image.png", { type: "image/png" }));
+    document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, png);
+  await alice.page.locator(".paste-preview img").waitFor({ timeout: 10_000 });
+  check("a pasted picture waits above the message box", (await alice.page.locator(".paste-preview").count()) === 1);
+  check("nothing is sent before the person confirms", (await bob.page.locator(".messages .msg.in img.msg-image").count()) === imagesBefore);
+  await alice.page.getByRole("button", { name: "Изпрати снимката" }).click();
+  await bob.page.waitForFunction((n) => document.querySelectorAll(".messages .msg.in img.msg-image").length > n, imagesBefore, { timeout: 30_000 });
+  check("the pasted picture arrives after Send", true);
+  check("the preview is gone after sending", (await alice.page.locator(".paste-preview").count()) === 0);
+  // A text paste is not taken over.
+  const textPrevented = await alice.page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", "hello");
+    const ev = new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true });
+    document.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  });
+  check("a text paste is left to the text field", !textPrevented && (await alice.page.locator(".paste-preview").count()) === 0);
+
   check("no page errors (alice)", alice.errors.length === 0, alice.errors.join(" | "));
   check("no page errors (bob)", bob.errors.length === 0, bob.errors.join(" | "));
 } catch (err) {
