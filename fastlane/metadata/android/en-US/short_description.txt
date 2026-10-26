@@ -1,1 +1,0 @@
-Private end-to-end encrypted messenger with direct P2P links, no accounts
