@@ -14,12 +14,24 @@
  *
  * Removing: the admin sends a new snapshot and a new key to the members who stay, and
  * a snapshot to the removed member, who then sees that it is no longer a member.
+ *
+ * Auto-linking (step 2 without QR codes):
+ *  - admin -> member  gintro  "link with <peer>", signed by the admin. Sent to every member
+ *    for a new candidate, to a new member for candidates still waiting, and to a member that
+ *    links to the admin again (after a reload) for every other member the admin is linked to.
+ *  - member -> admin -> peer  grelay  a WebRTC invitation (offer, then answer) signed by its
+ *    real sender (p2p/invitation.ts). The admin only forwards it and sets `from`.
+ *  - The receiver accepts a relayed invitation only from the admin's link, only if `from` is
+ *    a member of the signed state (or a candidate the admin introduced with a valid gintro),
+ *    and the app then checks the invitation's signature against `from` (groupLinker.ts).
+ *    The admin can refuse to forward, but it cannot forge another member's invitation.
  */
 import type { DidKey, Ed25519KeyPair } from "../identity/types";
-import { base64UrlToBytes } from "../p2p/encoding";
+import { base64UrlToBytes, bytesToBase64Url } from "../p2p/encoding";
 import type { CipherSuite } from "../p2p/cipherSuite";
 import { newProposalId } from "../p2p/suiteNegotiation";
 import {
+  verifyIntro,
   verifyVoteOpen,
   decodeGroupWire,
   encodeGroupWire,
@@ -27,6 +39,7 @@ import {
   signJoinRequest,
   verifyJoinRequest,
   verifyStateSignature,
+  type GroupSecrets,
   type GroupWire,
 } from "./groupChat";
 import { GroupError, isMember, type GroupState } from "./groupModel";
@@ -49,6 +62,15 @@ export interface MeshEvents {
   removed(): void;
   /** Something was refused or could not be sent. */
   error(message: string): void;
+  /** The admin asks this device to make a link to `peer` (auto-linking). */
+  introduced?(peer: DidKey, name: string): void;
+  /**
+   * A WebRTC invitation from `from`, forwarded by the admin. `from` is a member or an
+   * introduced candidate; the invitation's own signature is still to be checked.
+   */
+  relayed?(from: DidKey, invitation: string): void;
+  /** `from` (a member) asks for the group photo with this hash. */
+  photoRequested?(from: DidKey, hash: string): void;
 }
 
 export type LinkSend = (plaintext: string) => Promise<void> | void;
@@ -58,6 +80,8 @@ type Snapshot = GroupWire & { t: "gsnap" };
 export class GroupMesh {
   private readonly links = new Map<DidKey, LinkSend>();
   private readonly invitees = new Map<DidKey, string>();
+  /** Candidates the admin introduced to this member (signed gintro), with their expiry. */
+  private readonly intros = new Map<DidKey, { name: string; exp: number }>();
   private chat: GroupChat | null;
   private pendingState: GroupState | null = null;
   private pendingSnapshot: Snapshot | null = null;
@@ -95,10 +119,35 @@ export class GroupMesh {
     return state.members.map((m) => m.did).filter((d) => d !== this.myDid && !this.links.has(d));
   }
 
-  /** Registers a pairwise link. Candidates may send their join request now. */
+  /** The record to save between sessions, or null when this device is not (or no longer) a member. */
+  exportSecrets(): GroupSecrets | null {
+    return this.chat?.exportSecrets() ?? null;
+  }
+
+  /**
+   * Registers a pairwise link. Candidates may send their join request now. When a member
+   * links to the admin (again), the admin asks it to link with the other members.
+   */
   attach(did: DidKey, send: LinkSend): void {
     this.links.set(did, send);
     void this.maybeRequestJoin();
+    if (this.isAdmin && did !== this.myDid && isMember(this.chat!.snapshot, did)) {
+      void this.welcomeBack(did).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Admin: a member linked again (after a reload, or a lost link). It may have missed changes
+   * while it was away, so it gets the current snapshot and key, then the introductions.
+   */
+  private async welcomeBack(did: DidKey): Promise<void> {
+    const chat = this.chat;
+    if (!chat) return;
+    const epoch = chat.snapshot.epoch;
+    const key = chat.keyFor(epoch);
+    await this.sendTo(did, chat.signedSnapshot());
+    if (key) await this.sendTo(did, { t: "gkey", g: chat.snapshot.groupId, e: epoch, key: bytesToBase64Url(key) });
+    await this.introduceOthersTo(did);
   }
 
   detach(did: DidKey): void {
@@ -112,6 +161,69 @@ export class GroupMesh {
     this.invitees.set(did, name);
     const snap = this.chat!.signedSnapshot();
     await this.sendTo(did, { t: "gpend", state: snap.state, sig: snap.sig });
+    // Ask every linked member to link with the candidate, so nobody has to scan a QR code.
+    for (const m of this.chat!.snapshot.members) {
+      if (m.did === this.myDid || m.did === did || !this.links.has(m.did)) continue;
+      await this.sendTo(m.did, this.chat!.signIntro(did, name)).catch(() => undefined);
+    }
+  }
+
+  /** Admin: sends a member signed introductions to the other linked members and the waiting candidates. */
+  private async introduceOthersTo(did: DidKey): Promise<void> {
+    const chat = this.chat;
+    if (!chat) return;
+    for (const m of chat.snapshot.members) {
+      if (m.did === this.myDid || m.did === did || !this.links.has(m.did)) continue;
+      await this.sendTo(did, chat.signIntro(m.did, m.name));
+    }
+    for (const [candidate, name] of this.invitees) {
+      if (candidate === did || !this.links.has(candidate)) continue;
+      await this.sendTo(did, chat.signIntro(candidate, name));
+    }
+  }
+
+  /**
+   * A member or candidate: sends a signed WebRTC invitation to `to` through the admin.
+   * The admin itself never needs this: it is linked to everyone directly.
+   */
+  async relay(to: DidKey, invitation: string): Promise<void> {
+    const state = this.state;
+    if (!state) throw new GroupError("not-member", "Още няма група.");
+    if (this.isAdmin) throw new GroupError("not-admin", "Създателят се свързва директно.");
+    await this.sendTo(state.creatorDid, { t: "grelay", g: state.groupId, to, inv: invitation });
+  }
+
+  /** Asks `to` for the group photo with this hash. */
+  async requestPhoto(to: DidKey, hash: string): Promise<void> {
+    const state = this.state;
+    if (!state) return;
+    await this.sendTo(to, { t: "gphoto", g: state.groupId, h: hash });
+  }
+
+  /** Admin: sets or clears the group photo hash and sends the new snapshot to everyone. */
+  async setPhoto(hash: string | null): Promise<void> {
+    this.requireAdmin();
+    const snapshot = this.chat!.setPhoto(hash);
+    await this.broadcast(snapshot);
+    this.events.membership(this.chat!.snapshot);
+  }
+
+  /** A member of the signed state, or a candidate the admin introduced and whose introduction is still valid. */
+  isKnownPeer(did: DidKey, now = Date.now()): boolean {
+    const state = this.state;
+    if (!state || did === this.myDid) return false;
+    if (isMember(state, did)) return true;
+    const intro = this.intros.get(did);
+    return intro !== undefined && intro.exp > now;
+  }
+
+  /** The name the group knows a peer by: from the signed state, or from the admin's introduction. */
+  peerName(did: DidKey): string | undefined {
+    return this.state?.members.find((m) => m.did === did)?.name ?? this.intros.get(did)?.name;
+  }
+
+  private isMemberOrInvitee(did: DidKey): boolean {
+    return this.chat !== null && (isMember(this.chat.snapshot, did) || this.invitees.has(did));
   }
 
   /** Admin: sends a text message to every linked member. */
@@ -168,6 +280,10 @@ export class GroupMesh {
     switch (wire.t) {
       case "gpend": {
         if (this.chat || from !== wire.state.creatorDid || !verifyStateSignature(wire)) return;
+        const before = this.pendingState;
+        if (before && before.groupId === wire.state.groupId && wire.state.version <= before.version) return;
+        // A newer member list (someone else was admitted meanwhile): the join request is sent again.
+        if (before) this.joinSent = false;
         this.pendingState = wire.state;
         this.events.pending();
         await this.maybeRequestJoin();
@@ -194,6 +310,7 @@ export class GroupMesh {
           this.chat.receiveSnapshot(wire);
           if (!isMember(wire.state, this.myDid)) {
             this.chat = null;
+            this.intros.clear();
             this.events.removed();
             return;
           }
@@ -246,6 +363,47 @@ export class GroupMesh {
         }
         return;
       }
+      case "gintro": {
+        const chat = this.chat;
+        if (!chat || this.isAdmin || from !== chat.snapshot.creatorDid || wire.g !== chat.snapshot.groupId) return;
+        if (wire.peer === this.myDid || wire.peer === chat.snapshot.creatorDid) return;
+        if (!verifyIntro(wire, chat.snapshot.creatorDid)) return;
+        this.intros.set(wire.peer, { name: wire.name, exp: wire.exp });
+        this.events.introduced?.(wire.peer, wire.name);
+        return;
+      }
+      case "grelay": {
+        const state = this.state;
+        if (!state || wire.g !== state.groupId) return;
+        if (this.isAdmin) {
+          // Forward only between members and invited candidates. Only the admin sets `from`.
+          if (wire.from !== undefined || wire.to === from || wire.to === this.myDid) return;
+          if (!this.isMemberOrInvitee(from) || !this.isMemberOrInvitee(wire.to)) {
+            this.events.error("Покана между хора извън групата не беше препратена.");
+            return;
+          }
+          if (!this.links.has(wire.to)) {
+            this.events.error("Няма връзка с участника, за когото е поканата.");
+            return;
+          }
+          await this.sendTo(wire.to, { t: "grelay", g: wire.g, to: wire.to, from, inv: wire.inv });
+          return;
+        }
+        if (from !== state.creatorDid || wire.to !== this.myDid || wire.from === undefined) return;
+        if (wire.from === this.myDid || wire.from === state.creatorDid) return;
+        if (!this.isKnownPeer(wire.from)) {
+          this.events.error("Покана от човек извън групата беше отказана.");
+          return;
+        }
+        this.events.relayed?.(wire.from, wire.inv);
+        return;
+      }
+      case "gphoto": {
+        const chat = this.chat;
+        if (!chat || wire.g !== chat.snapshot.groupId || !isMember(chat.snapshot, from)) return;
+        this.events.photoRequested?.(from, wire.h);
+        return;
+      }
       default:
         return;
     }
@@ -259,6 +417,13 @@ export class GroupMesh {
       await this.sendTo(member, wire);
     }
     this.events.membership(this.chat!.snapshot);
+    // Candidates still waiting must link with the new member too: they get the new member
+    // list, and the new member is asked to link with them.
+    for (const [candidate, candidateName] of this.invitees) {
+      if (!this.links.has(candidate)) continue;
+      await this.sendTo(candidate, { t: "gpend", state: snapshot.state, sig: snapshot.sig }).catch(() => undefined);
+      await this.sendTo(did, this.chat!.signIntro(candidate, candidateName)).catch(() => undefined);
+    }
   }
 
   /** Candidate: once linked to every member, tell the admin. Sent once per pending state. */

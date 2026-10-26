@@ -13,6 +13,10 @@
  * Group keys travel only inside the pairwise encrypted links, and only to the members
  * who stay after a change.
  *
+ * Also here: the record a device keeps between sessions (GroupSecrets: signed snapshot,
+ * epoch keys, role, send counter). It is only ever written encrypted (groupStore.ts), and
+ * restore() checks the creator's signature again before trusting it.
+ *
  * Not here: the screens, the photo transfer, and the orchestration of the mesh (who
  * connects to whom). Those are the next layer.
  */
@@ -32,6 +36,7 @@ import { FRAME_MARK } from "../p2p/photo";
 import {
   acceptSnapshot,
   addMember,
+  MAX_GROUP_NAME_CHARS,
   applySuiteVote,
   approveSuite,
   createGroup,
@@ -39,6 +44,7 @@ import {
   isMember,
   proposeSuite,
   removeMember,
+  setPhotoHash,
   suiteVoteComplete,
   type GroupMember,
   type GroupState,
@@ -46,6 +52,19 @@ import {
 } from "./groupModel";
 
 export const GROUP_MARK = `${FRAME_MARK}G|`;
+/**
+ * A relayed invitation must fit in one pairwise message (SecureSession seals at most 4000
+ * characters). Invitations are built to fit in a QR code, so this is generous.
+ */
+export const MAX_RELAY_INVITATION_CHARS = 3_400;
+/**
+ * Longest group message, in UTF-8 bytes. A sealed group message travels inside one pairwise
+ * message, which holds at most 4000 characters; 2000 bytes (1000 Cyrillic letters) still fit.
+ */
+export const MAX_GROUP_TEXT_BYTES = 2_000;
+/** Introductions by the admin are valid this long (the same as a QR invitation). */
+export const INTRO_TTL_MS = 10 * 60 * 1000;
+const HASH_HEX = /^[0-9a-f]{64}$/;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -58,7 +77,20 @@ export type GroupWire =
   | { t: "gkey"; g: string; e: number; key: string }
   | { t: "gmsg"; g: string; e: number; f: DidKey; n: number; s: string; iv: string; ct: string; sig: string }
   | { t: "gvote"; op: "open"; g: string; id: string; suite: CipherSuite; sig: string }
-  | { t: "gvote"; op: "approve"; g: string; id: string; f: DidKey; sig: string };
+  | { t: "gvote"; op: "approve"; g: string; id: string; f: DidKey; sig: string }
+  /**
+   * Admin to a member: "make a link to `peer`". Signed by the admin, so the member can show
+   * the peer that a candidate was really introduced by the admin.
+   */
+  | { t: "gintro"; g: string; peer: DidKey; name: string; exp: number; sig: string }
+  /**
+   * A signed WebRTC invitation (offer or answer, see p2p/invitation.ts) on its way between two
+   * members, through the admin. `from` is set by the admin when it forwards. The receiver
+   * checks the invitation's own signature, so the admin can pass it on but cannot forge it.
+   */
+  | { t: "grelay"; g: string; to: DidKey; from?: DidKey; inv: string }
+  /** "Please send me the group photo with this hash." Answered by anyone who has it. */
+  | { t: "gphoto"; g: string; h: string };
 
 export function encodeGroupWire(message: GroupWire): string {
   return GROUP_MARK + JSON.stringify(message);
@@ -113,6 +145,28 @@ export function decodeGroupWire(plaintext: string): GroupWire | null {
         return { t: "gvote", op: "approve", g: o.g, id: o.id, f: o.f, sig: o.sig };
       }
       return null;
+    case "gintro":
+      if (
+        typeof o.g === "string" && typeof o.peer === "string" && typeof o.name === "string" &&
+        [...o.name].length <= MAX_GROUP_NAME_CHARS && Number.isSafeInteger(o.exp) && typeof o.sig === "string"
+      ) {
+        return { t: "gintro", g: o.g, peer: o.peer, name: o.name, exp: o.exp as number, sig: o.sig };
+      }
+      return null;
+    case "grelay":
+      if (
+        typeof o.g === "string" && typeof o.to === "string" && typeof o.inv === "string" &&
+        o.inv.length <= MAX_RELAY_INVITATION_CHARS && (o.from === undefined || typeof o.from === "string")
+      ) {
+        return o.from === undefined
+          ? { t: "grelay", g: o.g, to: o.to, inv: o.inv }
+          : { t: "grelay", g: o.g, to: o.to, from: o.from as string, inv: o.inv };
+      }
+      return null;
+    case "gphoto":
+      return typeof o.g === "string" && typeof o.h === "string" && HASH_HEX.test(o.h)
+        ? { t: "gphoto", g: o.g, h: o.h }
+        : null;
     default:
       return null;
   }
@@ -183,6 +237,16 @@ export function verifyStateSignature(message: { state: GroupState; sig: string }
   return verifySig(message.sig, stateBytes(message.state), message.state.creatorDid);
 }
 
+function introBytes(g: string, peer: string, name: string, exp: number): Uint8Array {
+  return enc.encode(JSON.stringify(["p2p-group/intro/v1", g, peer, name, exp]));
+}
+
+/** True if an introduction carries a valid signature by the group's admin and has not expired. */
+export function verifyIntro(message: GroupWire & { t: "gintro" }, adminDid: DidKey, now = Date.now()): boolean {
+  if (message.exp <= now || message.exp > now + 2 * INTRO_TTL_MS) return false;
+  return verifySig(message.sig, introBytes(message.g, message.peer, message.name, message.exp), adminDid);
+}
+
 function voteBytes(g: string, id: string, suite: string): Uint8Array {
   return enc.encode(JSON.stringify(["p2p-group/vote/v1", g, id, suite]));
 }
@@ -216,11 +280,35 @@ function randomKey(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(32));
 }
 
+/**
+ * What a device keeps about its group between sessions. Contains the epoch keys, so it is
+ * secret: groupStore.ts writes it only AES-GCM encrypted, never in plaintext.
+ */
+export interface GroupSecrets {
+  v: 1;
+  role: "admin" | "member";
+  /** The creator-signed state. Checked again on restore. */
+  snapshot: { state: GroupState; sig: string };
+  /** Keys for the current epoch and newer (base64url). Older keys are not kept. */
+  keys: Array<{ e: number; key: string }>;
+  /** Next send counter. */
+  counter: number;
+}
+
+/**
+ * After a restore the counter jumps ahead by this much. A message sealed just before the
+ * last save may not have been recorded, and reusing its counter would make the others drop
+ * the next message as a replay.
+ */
+export const COUNTER_RESTORE_GAP = 64;
+
 export class GroupChat {
   private state: GroupState;
   private readonly keys = new Map<number, Uint8Array>();
   private readonly seen = new Set<string>();
   private counter = 0;
+  /** The creator's signature over the current state (member side; the admin signs fresh). */
+  private sig: string | null = null;
   private vote: SuiteVote | null = null;
   private readonly me: { did: DidKey; keys: Ed25519KeyPair };
 
@@ -259,8 +347,77 @@ export class GroupChat {
     const did = didOf(keys);
     if (!isMember(snapshot.state, did)) throw new GroupError("not-member", "Не сте участник в тази група.");
     const chat = new GroupChat({ did, keys }, snapshot.state);
+    chat.sig = snapshot.sig;
     chat.keys.set(key.epoch, key.key);
     return chat;
+  }
+
+  /**
+   * Rebuilds the group from a saved record. Refuses a record whose snapshot is not signed by
+   * its creator, that does not list this device, or whose role or keys do not add up.
+   */
+  static restore(keys: Ed25519KeyPair, saved: GroupSecrets): GroupChat {
+    const bad = (why: string) => new GroupError("stale", `Запазената група е повредена (${why}).`);
+    if (saved?.v !== 1 || !isGroupState(saved.snapshot?.state) || typeof saved.snapshot.sig !== "string") {
+      throw bad("формат");
+    }
+    const state = saved.snapshot.state;
+    if (!verifySig(saved.snapshot.sig, stateBytes(state), state.creatorDid)) throw bad("подпис");
+    const did = didOf(keys);
+    if (!isMember(state, did)) throw new GroupError("not-member", "Не сте участник в тази група.");
+    const admin = state.creatorDid === did;
+    if (saved.role !== (admin ? "admin" : "member")) throw bad("роля");
+    if (!isEpoch(saved.counter) || !Array.isArray(saved.keys)) throw bad("формат");
+    const chat = new GroupChat({ did, keys }, state);
+    chat.sig = saved.snapshot.sig;
+    for (const k of saved.keys) {
+      if (!isEpoch(k?.e) || typeof k.key !== "string" || k.e < state.epoch) throw bad("ключ");
+      const raw = base64UrlToBytes(k.key);
+      if (raw.length !== 32) throw bad("ключ");
+      chat.keys.set(k.e, raw);
+    }
+    if (admin && !chat.keys.has(state.epoch)) throw bad("ключ");
+    chat.counter = Math.min(0xffffffff, saved.counter + COUNTER_RESTORE_GAP);
+    return chat;
+  }
+
+  /** The record to save. Secret: hand it only to the encrypted store. */
+  exportSecrets(): GroupSecrets {
+    const snapshot = this.isAdmin ? this.signedSnapshot() : { state: this.state, sig: this.sig ?? "" };
+    const keys: Array<{ e: number; key: string }> = [];
+    for (const [e, key] of this.keys) {
+      if (e >= this.state.epoch) keys.push({ e, key: bytesToBase64Url(key) });
+    }
+    keys.sort((a, b) => a.e - b.e);
+    return {
+      v: 1,
+      role: this.isAdmin ? "admin" : "member",
+      snapshot: { state: snapshot.state, sig: snapshot.sig },
+      keys,
+      counter: this.counter,
+    };
+  }
+
+  /** Admin: sets or clears the photo hash. Returns the new snapshot to send to everyone. */
+  setPhoto(hash: string | null): GroupWire & { t: "gsnap" } {
+    this.requireAdmin();
+    this.state = setPhotoHash(this.state, this.me.did, hash);
+    return this.signedSnapshot();
+  }
+
+  /** Admin: asks a member to link with `peer`, signed so the peer can check the request. */
+  signIntro(peer: DidKey, name: string, now = Date.now()): GroupWire & { t: "gintro" } {
+    this.requireAdmin();
+    const exp = now + INTRO_TTL_MS;
+    const g = this.state.groupId;
+    return {
+      t: "gintro",
+      g,
+      peer,
+      name,
+      exp,
+      sig: bytesToBase64Url(ed25519.sign(introBytes(g, peer, name, exp), this.me.keys.secretKey)),
+    };
   }
 
   /** Admin: the signed snapshot to send to every member. */
@@ -314,10 +471,14 @@ export class GroupChat {
       throw new GroupError("stale", "Подписът на групата не е валиден.");
     }
     this.state = acceptSnapshot(this.state, message.state);
+    this.sig = message.sig;
   }
 
   /** Encrypts a group message with the current epoch key and the group suite. */
   async seal(text: string): Promise<GroupWire & { t: "gmsg" }> {
+    if (enc.encode(text).length > MAX_GROUP_TEXT_BYTES) {
+      throw new GroupError("too-long", "Съобщението е твърде дълго за групата.");
+    }
     const key = this.keys.get(this.state.epoch);
     if (!key) throw new GroupError("stale", "Още няма групов ключ.");
     const suite = this.state.suite;
