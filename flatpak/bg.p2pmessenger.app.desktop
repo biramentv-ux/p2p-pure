@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=P2P Messenger
+GenericName=Encrypted messenger
+Comment=Encrypted peer-to-peer messenger without an account or a phone number
+Comment[bg]=Шифрован peer-to-peer месинджър без акаунт и телефонен номер
+Exec=p2p-messenger %U
+Icon=bg.p2pmessenger.app
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=messenger;chat;p2p;encrypted;
+StartupWMClass=p2p-messenger
+StartupNotify=true
