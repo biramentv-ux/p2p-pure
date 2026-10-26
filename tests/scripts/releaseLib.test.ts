@@ -84,3 +84,12 @@ describe("writeSums", () => {
     );
   });
 });
+
+describe("summarizeBom required components", () => {
+  const bom = { bomFormat: "CycloneDX", specVersion: "1.5", components: [{ name: "tauri" }, { name: "windows" }] };
+  it("passes when all are present and names the missing ones otherwise", () => {
+    expect(summarizeBom(bom, { required: ["tauri", "windows"] }).components).toBe(2);
+    expect(() => summarizeBom(bom, { required: ["windows", "gtk", "tauri", "webkit2gtk"] }))
+      .toThrow(/missing required components: gtk, webkit2gtk/);
+  });
+});

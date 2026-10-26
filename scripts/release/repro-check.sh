@@ -40,8 +40,14 @@ build_one() {
   (
     cd "$dir"
     # NODE_ENV=production would make `npm ci` skip devDependencies (vite, tsc); install them.
-    NODE_ENV=development npm ci --no-audit --no-fund --ignore-scripts --loglevel=error
-    if [ -n "$MODE" ]; then npm run build:desktop; else npm run build; fi
+    if [ "${REPRO_FAKE_BUILD:-}" = 1 ]; then
+      # Test hook: skip npm, write a tiny dist (build 2 differs with REPRO_INJECT_DIFF=1).
+      mkdir -p dist/assets; echo same >dist/index.html; echo "app $n" | sed 's/[0-9]//' >dist/assets/app.js
+      if [ "${REPRO_INJECT_DIFF:-}" = 1 ] && [ "$n" = 2 ]; then echo changed >dist/assets/app.js; fi
+    else
+      NODE_ENV=development npm ci --no-audit --no-fund --ignore-scripts --loglevel=error
+      if [ -n "$MODE" ]; then npm run build:desktop; else npm run build; fi
+    fi
   ) >"$WORK/build$n.log" 2>&1 || { echo "build $n failed, see log:" >&2; tail -30 "$WORK/build$n.log" >&2; exit 2; }
   (cd "$dir/dist" && find . -type f -print0 | sort -z | xargs -0 sha256sum) >"$WORK/hashes$n.txt"
   echo "build $n: $(wc -l <"$WORK/hashes$n.txt") files, tree hash $(sha256sum <"$WORK/hashes$n.txt" | cut -c1-16)"
@@ -54,8 +60,10 @@ if diff -u "$WORK/hashes1.txt" "$WORK/hashes2.txt" >"$WORK/diff.txt"; then
   echo "OK: both builds are byte-identical"
   exit 0
 fi
-echo "DIFFERENT: the builds are not reproducible. Differing files:" >&2
-diff "$WORK/hashes1.txt" "$WORK/hashes2.txt" | grep '^[<>]' | awk '{print $3}' | sort -u >&2
+# Keep the trees for inspection before anything below can fail (set -e / pipefail).
 KEEP=1
+echo "DIFFERENT: the builds are not reproducible. Differing files:" >&2
+# diff exits 1 when the inputs differ, which is the expected case here.
+{ diff "$WORK/hashes1.txt" "$WORK/hashes2.txt" || true; } | grep '^[<>]' | awk '{print $3}' | sort -u >&2
 echo "compare the two trees: diff -r $WORK/build1/dist $WORK/build2/dist" >&2
 exit 1

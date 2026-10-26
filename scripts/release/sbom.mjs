@@ -5,7 +5,7 @@
 //
 // web      npm production dependencies of the root package (what ends up in the bundle)
 // electron every dependency of electron/ (runtime + builder), from its lockfile
-// rust     the src-tauri crate (cargo-cyclonedx), from Cargo.lock
+// rust     the src-tauri crate (cargo-cyclonedx) for the Windows target, from Cargo.lock
 //
 // The generators are pinned to exact versions. Output is made reproducible (no timestamp or
 // random serial), so the same lockfiles give byte-identical SBOMs.
@@ -31,6 +31,19 @@ const flag = (name) => process.argv.includes(`--${name}`)
 // to run the trusted scripts of one ref against the tree of a release tag.
 const root = resolve(arg('root', resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')))
 
+// SBOM timestamps come from the subject commit, so the same tree gives the same bytes.
+// cargo-cyclonedx honours SOURCE_DATE_EPOCH; without it the timestamp and serial are random.
+function sourceDateEpoch() {
+  if (process.env.SOURCE_DATE_EPOCH) return process.env.SOURCE_DATE_EPOCH
+  const r = spawnSync('git', ['-C', root, 'log', '-1', '--format=%ct'], { encoding: 'utf8' })
+  if (r.status !== 0 || !/^\d+$/.test(r.stdout.trim())) throw new Error('set SOURCE_DATE_EPOCH (no git history in --root)')
+  return r.stdout.trim()
+}
+
+// The Tauri app ships for Windows only; the host default (Linux in CI) would list GTK crates
+// and miss the Windows ones (KeyCredentialManager / Windows Hello). Needs no installed target.
+export const RUST_TARGET = 'x86_64-pc-windows-msvc'
+
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { stdio: ['ignore', 'inherit', 'inherit'], cwd: root, ...opts })
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} exited with ${r.status}`)
@@ -55,8 +68,9 @@ const generators = {
     if (!ver.stdout.includes(CYCLONEDX_CARGO)) console.warn(`warning: expected cargo-cyclonedx ${CYCLONEDX_CARGO}, got ${ver.stdout.trim()}`)
     run('cargo', [
       'cyclonedx', '--manifest-path', 'src-tauri/Cargo.toml', '--format', 'json',
-      '--spec-version', SPEC_VERSION, '--override-filename', 'p2p-pure-tauri.cdx',
-    ])
+      '--spec-version', SPEC_VERSION, '--target', RUST_TARGET,
+      '--override-filename', 'p2p-pure-tauri.cdx',
+    ], { env: { ...process.env, SOURCE_DATE_EPOCH: sourceDateEpoch() } })
     // cargo-cyclonedx writes next to the manifest; move it out of the source tree.
     renameSync(join(root, 'src-tauri', 'p2p-pure-tauri.cdx.json'), out)
   },
@@ -66,6 +80,8 @@ const outDir = resolve(arg('out', 'release-sbom'))
 const version = arg('version', 'dev')
 const only = arg('only', 'web,electron,rust').split(',').filter(Boolean)
 const minComponents = { web: 20, electron: 100, rust: 100 }
+// Components that must be present, so a wrong target or lockfile fails the release.
+const required = { web: ['react'], electron: ['electron'], rust: ['tauri', 'windows'] }
 
 mkdirSync(outDir, { recursive: true })
 const produced = []
@@ -75,7 +91,7 @@ for (const name of only) {
   const path = join(outDir, file)
   console.log(`== ${name} -> ${file}`)
   generators[name](path)
-  const s = summarizeBom(JSON.parse(readFileSync(path, 'utf8')), { minComponents: minComponents[name] })
+  const s = summarizeBom(JSON.parse(readFileSync(path, 'utf8')), { minComponents: minComponents[name], required: required[name] })
   console.log(`   CycloneDX ${s.specVersion}, ${s.components} components`)
   produced.push(file)
 }
