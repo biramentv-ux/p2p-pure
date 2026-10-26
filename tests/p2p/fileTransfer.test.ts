@@ -157,6 +157,21 @@ describe("file transfer", () => {
     expect(log.failed.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("recognises music files by their first bytes", () => {
+    const head = (...bytes: number[]) => new Uint8Array([...bytes, ...new Array(16).fill(0)]);
+    const text = (t: string) => [...t].map((c) => c.charCodeAt(0));
+    expect(sniffInlineMime(head(...text("ID3")))).toBe("audio/mpeg");
+    expect(sniffInlineMime(head(0xff, 0xfb))).toBe("audio/mpeg");
+    expect(sniffInlineMime(head(0xff, 0xf1))).toBe("audio/aac");
+    expect(sniffInlineMime(head(...text("OggS")))).toBe("audio/ogg");
+    expect(sniffInlineMime(head(...text("fLaC")))).toBe("audio/flac");
+    expect(sniffInlineMime(head(...text("RIFF"), 0, 0, 0, 0, ...text("WAVE")))).toBe("audio/wav");
+    expect(sniffInlineMime(head(0, 0, 0, 0x20, ...text("ftypM4A ")))).toBe("audio/mp4");
+    expect(sniffInlineMime(head(0, 0, 0, 0x20, ...text("ftypisom")))).toBe("video/mp4");
+    // A JPEG starts with 0xFF 0xD8, which is not an MPEG frame sync.
+    expect(sniffInlineMime(head(0xff, 0xd8, 0xff))).toBe("image/jpeg");
+  });
+
   it("only real media is marked for inline display", async () => {
     const gif = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
     expect(sniffInlineMime(gif)).toBe("image/gif");

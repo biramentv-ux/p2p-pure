@@ -9,6 +9,10 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 10000
         versionName "1.0.0"
+        // The GitHub APK workflow overrides these (-PapkVersionCode / -PapkVersionName);
+        // F-Droid and local builds keep the values above.
+        if (project.findProperty('apkVersionCode')) versionCode((project.findProperty('apkVersionCode')) as int)
+        if (project.findProperty('apkVersionName')) versionName(project.findProperty('apkVersionName') as String)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +20,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        // Filled from the environment by .github/workflows/android-apk.yml; absent on a plain
+        // local build, which then produces an unsigned release APK.
+        release {
+            def keystorePath = System.getenv('ANDROID_KEYSTORE_PATH')
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (System.getenv('ANDROID_KEYSTORE_PATH')) signingConfig = signingConfigs.release
+            debuggable false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
