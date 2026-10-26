@@ -26,3 +26,6 @@ desktop-test
 
 # Local agent worktrees
 .claude/worktrees/
+
+# Release SBOM output (scripts/release/sbom.mjs)
+release-sbom
