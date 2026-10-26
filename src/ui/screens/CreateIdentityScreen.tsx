@@ -6,13 +6,15 @@ import { IdentityArt } from "../components/Art";
 
 interface CreateIdentityScreenProps {
   onIdentityCreated: (identity: UnlockedIdentity) => void;
+  /** Opens the transfer from another device (src/transfer). */
+  onHaveOtherDevice?: () => void;
 }
 
 const MIN_PASSWORD_LENGTH = 12;
 
 type Stage = "intro" | "password" | "creating" | "show-mnemonic";
 
-export function CreateIdentityScreen({ onIdentityCreated }: CreateIdentityScreenProps) {
+export function CreateIdentityScreen({ onIdentityCreated, onHaveOtherDevice }: CreateIdentityScreenProps) {
   const { t } = useI18n();
   const [stage, setStage] = useState<Stage>("intro");
   const [mnemonic, setMnemonic] = useState("");
@@ -150,6 +152,11 @@ export function CreateIdentityScreen({ onIdentityCreated }: CreateIdentityScreen
       >
         {stage === "creating" ? t("Създаване…") : t("Създай идентичност")}
       </button>
+      {onHaveOtherDevice && stage === "intro" && (
+        <button className="secondary" onClick={onHaveOtherDevice}>
+          {t("Имам друго устройство")}
+        </button>
+      )}
       {passkeyFailed && stage === "intro" && (
         <button
           className="secondary"

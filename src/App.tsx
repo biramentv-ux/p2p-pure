@@ -15,6 +15,7 @@ import { webrtcLinks } from "./group/groupLinker";
 import { newProposalId } from "./p2p/suiteNegotiation";
 import { ContactsScreen } from "./ui/screens/ContactsScreen";
 import { ShowQrScreen } from "./ui/screens/ShowQrScreen";
+import { TransferReceiveScreen, TransferSendScreen } from "./ui/screens/TransferScreen";
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
 import { LanguageSwitch } from "./ui/components/LanguageSwitch";
 import { useAutoLock } from "./ui/useAutoLock";
@@ -31,6 +32,7 @@ type Screen =
   | { k: "contacts" }
   | { k: "connect"; expected?: Contact; forGroup?: boolean }
   | { k: "group" }
+  | { k: "transfer" }
   | { k: "chat"; contact: Contact; link: PeerLink; session: SecureSession };
 
 type TabScreen = "identity" | "contacts" | "connect";
@@ -63,6 +65,8 @@ function App() {
   // saved encrypted, so it comes back after unlock.
   const groupRef = useRef<GroupSession | null>(null);
   const [, setGroupRestored] = useState(0);
+  // New device without an identity: receiving one from another device (src/transfer).
+  const [receiving, setReceiving] = useState(false);
 
   useEffect(() => {
     getUnlockMethod()
@@ -136,10 +140,18 @@ function App() {
   }
 
   if (state.kind === "no-identity") {
+    if (receiving) {
+      return (
+        <Frame>
+          <TransferReceiveScreen onDone={enter} onCancel={() => setReceiving(false)} />
+        </Frame>
+      );
+    }
     return (
       <Frame>
         <CreateIdentityScreen
           onIdentityCreated={enter}
+          onHaveOtherDevice={() => setReceiving(true)}
         />
       </Frame>
     );
@@ -200,7 +212,7 @@ function App() {
     );
   }
 
-  const activeTab: TabScreen = screen.k === "connect" ? "connect" : screen.k === "group" ? "contacts" : (screen.k as TabScreen);
+  const activeTab: TabScreen = screen.k === "connect" ? "connect" : screen.k === "group" ? "contacts" : screen.k === "transfer" ? "identity" : (screen.k as TabScreen);
 
   return (
     <Frame
@@ -235,7 +247,21 @@ function App() {
         </nav>
       }
     >
-      {screen.k === "identity" && <ShowQrScreen identity={identity} />}
+      {screen.k === "identity" && <ShowQrScreen identity={identity} onMove={() => setScreen({ k: "transfer" })} />}
+      {screen.k === "transfer" && (
+        <TransferSendScreen
+          identity={identity}
+          onCancel={() => setScreen({ k: "identity" })}
+          onMoved={() => {
+            // The device was wiped: drop everything in memory and return to the first-run screen.
+            groupRef.current?.closeAll();
+            groupRef.current = null;
+            lockContacts();
+            setScreen({ k: "identity" });
+            setState({ kind: "no-identity" });
+          }}
+        />
+      )}
       {screen.k === "contacts" && (
         <ContactsScreen
           onChat={(contact) => setScreen({ k: "connect", expected: contact })}

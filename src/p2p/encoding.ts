@@ -28,6 +28,9 @@ async function runTransform(
 ): Promise<Uint8Array> {
   const writer = transform.writable.getWriter();
   const writing = writer.write(asBufferSource(input)).then(() => writer.close());
+  // If decoding fails first (truncated or corrupt input) the read below throws; this keeps the
+  // write side's rejection from surfacing as an unhandled rejection too.
+  writing.catch(() => undefined);
 
   const reader = transform.readable.getReader();
   const chunks: Uint8Array[] = [];
