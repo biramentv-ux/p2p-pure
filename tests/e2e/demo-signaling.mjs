@@ -64,7 +64,7 @@ try {
     host.evaluate(() => window.harness.safetyCode()),
     guest.evaluate(() => window.harness.safetyCode()),
   ]);
-  check("safety code is identical on both devices", hostCode === guestCode && hostCode.split(" · ").length === 6, hostCode);
+  check("safety code is identical on both devices", hostCode === guestCode && hostCode.split(/ · |\n/).length === 12, hostCode);
 
   const secret = "тайна през стаята";
   await host.evaluate((text) => window.harness.sendSecure(text), secret);

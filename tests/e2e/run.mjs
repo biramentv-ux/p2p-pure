@@ -97,7 +97,7 @@ try {
   const aliceCode = await alice.evaluate(() => window.harness.safetyCode());
   const bobCode = await bob.evaluate(() => window.harness.safetyCode());
   check("safety code is identical on both devices", aliceCode === bobCode, aliceCode);
-  check("safety code has 6 words", aliceCode.split(" · ").length === 6);
+  check("safety code has 12 words", aliceCode.split(/ · |\n/).length === 12);
 
   // 5. Encrypted messages both ways
   const secret = "тайна: паролата е 42-tango";
