@@ -1,13 +1,17 @@
 /**
  * Single IndexedDB database for the app. Version 2 adds the `contacts` and
  * `messages` stores; upgrades from version 1 keep the existing `identity` data.
+ * Version 3 adds `groups` and `groupMessages` (both hold only AES-GCM ciphertext,
+ * see src/group/groupStore.ts); older stores are kept as they are.
  */
 export const DB_NAME = "p2p-messenger";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const STORE_IDENTITY = "identity";
 export const STORE_CONTACTS = "contacts";
 export const STORE_MESSAGES = "messages";
+export const STORE_GROUPS = "groups";
+export const STORE_GROUP_MESSAGES = "groupMessages";
 
 export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -23,6 +27,13 @@ export function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_MESSAGES)) {
         const messages = db.createObjectStore(STORE_MESSAGES, { keyPath: "id" });
         messages.createIndex("byPeer", "peerDid", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_GROUPS)) {
+        db.createObjectStore(STORE_GROUPS, { keyPath: "slot" });
+      }
+      if (!db.objectStoreNames.contains(STORE_GROUP_MESSAGES)) {
+        const groupMessages = db.createObjectStore(STORE_GROUP_MESSAGES, { keyPath: "id" });
+        groupMessages.createIndex("bySlot", "slot", { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);

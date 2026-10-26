@@ -62,6 +62,7 @@ export type GroupErrorCode =
   | "same-suite"
   | "vote-open"
   | "not-member"
+  | "too-long"
   | "stale";
 
 export class GroupError extends Error {
