@@ -16,6 +16,14 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $cf = (Get-Command cloudflared.exe -ErrorAction SilentlyContinue).Source
 if (-not $cf) { throw "cloudflared.exe не е в PATH. Инсталирайте го от Cloudflare." }
 
+# From 2026.7.3 "service install <token>" keeps the token in %ProgramData%\cloudflared\token
+# (Administrators and SYSTEM only) and starts the service with --token-file. Older versions
+# put the token in the service command line, which any local user can read.
+$cfVersion = (& $cf --version 2>&1 | Out-String)
+if ($cfVersion -match '(\d{4})\.(\d+)\.(\d+)' -and [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])" -lt [version]"2026.7.3") {
+    Write-Warning "cloudflared $($Matches[0]) записва токена в командния ред на услугата. Обновете до 2026.7.3 или по-нова (winget upgrade Cloudflare.cloudflared) и пуснете скрипта отново."
+}
+
 if (-not (Test-Path "dist\index.html")) {
     throw "Няма dist\index.html. Първо пуснете: npm ci; npm run build"
 }
