@@ -218,7 +218,7 @@ describe("database upgrade", () => {
     });
     const db = await openDatabase();
     expect(db.version).toBe(DB_VERSION);
-    expect([...db.objectStoreNames].sort()).toEqual(["contacts", "files", "groupMessages", "groups", "identity", "messages"]);
+    expect([...db.objectStoreNames].sort()).toEqual(["contacts", "contactsSealed", "files", "groupMessages", "groups", "identity", "messages"]);
     db.close();
     const old = await withStore<unknown>("messages", "readonly", (s) => s.get("old"));
     expect(old).toBeTruthy();
