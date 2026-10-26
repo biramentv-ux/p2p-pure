@@ -1,6 +1,7 @@
 import { QrCode } from "../components/QrCode";
 import type { UnlockedIdentity } from "../../identity";
 import { useI18n } from "../../i18n";
+import { TurnSettings } from "../components/TurnSettings";
 
 interface ShowQrScreenProps {
   identity: UnlockedIdentity;
@@ -16,6 +17,7 @@ export function ShowQrScreen({ identity }: ShowQrScreenProps) {
       <p className="did-text" title={identity.did}>
         {identity.did}
       </p>
+      <TurnSettings identity={identity} />
     </div>
   );
 }
