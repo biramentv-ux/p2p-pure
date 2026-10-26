@@ -58,8 +58,8 @@ npx wrangler deploy         # качва Worker-а и прилага мигра�
 ## Ако деплоят се провали
 
 - `durable_objects` грешка: провери, че `class_name` е `SignalRoom` и че миграцията `v1` е в конфигурацията.
-- Ако акаунтът няма достъп до Durable Objects, деплоят ще върне грешка за тях. Провери плана
-  на акаунта в таблото на Cloudflare. Без тях демо режимът не работи, а локалният остава напълно работещ.
+- Грешка `10097` („In order to use Durable Objects with a free plan…“): миграцията трябва да е
+  `new_sqlite_classes`, не `new_classes`. Така е в `worker/wrangler.jsonc`; безплатният план работи.
 - Ако Worker-ът е публикуван без миграцията, `POST /ws/rooms` ще върне `201`, но `GET` ще
   върне `503`, защото binding-ът `SIGNAL_ROOM` липсва.
 

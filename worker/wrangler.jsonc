@@ -30,7 +30,9 @@
   "durable_objects": {
     "bindings": [{ "name": "SIGNAL_ROOM", "class_name": "SignalRoom" }],
   },
-  "migrations": [{ "tag": "v1", "new_classes": ["SignalRoom"] }],
+  // new_sqlite_classes: the only Durable Object kind on the Workers free plan (error 10097 otherwise).
+  // SignalRoom keeps its rooms in memory and uses alarms; both work on SQLite-backed objects.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SignalRoom"] }],
   "kv_namespaces": [
     { "binding": "DELIVERIES", "id": "735f0036ab7a449f8935c147f5a0a28a" },
   ],
