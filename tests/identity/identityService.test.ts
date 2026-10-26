@@ -125,6 +125,16 @@ describe("identityService", () => {
     expect(result.usedPrf).toBe(false);
   });
 
+  it("skipPasskey: protects the seed with the password without asking for a passkey", async () => {
+    const result = await createIdentity("correct horse battery staple", { skipPasskey: true });
+    expect(result.usedPrf).toBe(false);
+    expect(createPasskey).not.toHaveBeenCalled();
+
+    const unlocked = await unlockIdentity("correct horse battery staple");
+    expect(unlocked.did).toBe(result.identity.did);
+    expect(getPasskey).not.toHaveBeenCalled();
+  });
+
   it("throws PRF_UNSUPPORTED if PRF is missing and no password fallback given", async () => {
     vi.mocked(createPasskey).mockResolvedValueOnce({
       credentialId: new Uint8Array([5, 5, 5, 5]).buffer,
