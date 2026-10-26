@@ -104,4 +104,7 @@ export const EN_TRANSFER: Record<string, string> = {
   "Новото устройство не потвърди навреме. Провери го; това устройство не е изтрито.":
     "The new device did not confirm in time. Check it; this device has not been deleted.",
   "Прехвърлянето не успя. Опитай отново.": "The transfer failed. Try again.",
+  "Старото устройство вече не чака потвърждение.": "The old device is no longer waiting for the confirmation.",
+  "Старото устройство вече не чака. Можеш да запазиш идентичността тук, но то няма да предложи изтриване.":
+    "The old device is no longer waiting. You can still store the identity here, but it will not offer to delete itself.",
 };

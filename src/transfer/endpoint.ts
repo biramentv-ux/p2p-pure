@@ -11,6 +11,16 @@
  *
  * Any frame that does not open, is out of order, or has a type that is wrong for the state
  * aborts the transfer. The sender never releases the seed before both SAS confirmations.
+ *
+ * Terminal-state rules (each one closes a race):
+ *   - Once the bundle has left, the sender never sends `abort`: it cannot un-send the seed, and
+ *     an abort would only make the new device throw away what it holds. On its deadline it
+ *     sends `gone` instead and stops waiting.
+ *   - A receiver in `received` keeps the authenticated bundle whatever happens next (abort,
+ *     gone, close, a bad frame, its own deadline). It only notes `peerEnded`; reportStored then
+ *     throws, so the screen says the old device got no confirmation and will not be wiped.
+ *   - Every await is followed by a check that the endpoint is still live, so a deadline or a
+ *     close that fires meanwhile cannot be followed by a release or a state change.
  */
 import { decodeBundle, encodeBundle, type TransferBundle } from "./bundle";
 import { TransferError } from "./packet";
@@ -50,6 +60,8 @@ export class TransferEndpoint {
   state: TransferState = "connecting";
   error: TransferError | null = null;
   bundle: TransferBundle | null = null;
+  /** Receiver in `received`: the old device stopped listening, an ack can no longer reach it. */
+  peerEnded = false;
   private listeners = new Set<(s: TransferState) => void>();
   private sendSeq = 0;
   private recvSeq = 0;
@@ -90,7 +102,10 @@ export class TransferEndpoint {
     if (this.finished()) return;
     // The new device already holds the bundle: it may still store it (the ack will fail
     // and the screen says so), so the bundle is not thrown away here.
-    if (this.state === "received") return;
+    if (this.state === "received") {
+      this.markPeerEnded();
+      return;
+    }
     this.fail(
       new TransferError(
         this.released
@@ -109,15 +124,24 @@ export class TransferEndpoint {
   private onDeadline(): void {
     this.timer = undefined;
     if (this.finished() || this.state === "received") return;
-    this.fail(
-      new TransferError(
-        this.released
-          ? "Новото устройство не потвърди навреме. Провери го; това устройство не е изтрито."
-          : "Времето за прехвърляне изтече.",
-        "EXPIRED",
-      ),
-      true,
-    );
+    if (this.released) {
+      // The seed is out: tell the new device we stop waiting, without voiding its bundle.
+      void this.write({ t: "gone" }).catch(() => undefined);
+      this.fail(
+        new TransferError("Новото устройство не потвърди навреме. Провери го; това устройство не е изтрито.", "EXPIRED"),
+        false,
+      );
+      return;
+    }
+    this.fail(new TransferError("Времето за прехвърляне изтече.", "EXPIRED"), true);
+  }
+
+  /** Receiver keeps its bundle; the old device simply can no longer be told. */
+  private markPeerEnded(): void {
+    if (this.peerEnded) return;
+    this.peerEnded = true;
+    // Same state, announced again, so the screen can show that the old device is gone.
+    for (const fn of [...this.listeners]) fn(this.state);
   }
 
   get words(): string[] {
@@ -134,15 +158,16 @@ export class TransferEndpoint {
   }
 
   private set(state: TransferState): void {
-    if (this.state === "aborted" || this.state === "failed") return;
+    if (this.finished()) return;
     this.state = state;
     for (const fn of [...this.listeners]) fn(state);
   }
 
   private fail(err: TransferError, notifyPeer: boolean): void {
-    if (this.state === "aborted" || this.state === "failed") return;
+    if (this.finished()) return;
     this.error = err;
-    if (notifyPeer) void this.write({ t: "abort" }).catch(() => undefined);
+    // After release an abort would only make the new device discard the seed it holds.
+    if (notifyPeer && !this.released) void this.write({ t: "abort" }).catch(() => undefined);
     this.state = err.code === "ABORTED" || err.code === "SAS_MISMATCH" ? "aborted" : "failed";
     for (const fn of [...this.listeners]) fn(this.state);
     this.dispose();
@@ -188,6 +213,7 @@ export class TransferEndpoint {
       this.fail(new TransferError("Времето за прехвърляне изтече.", "EXPIRED"), true);
       return;
     }
+    if (this.finished()) return;
     this.localOk = true;
     this.set(this.role === "sender" ? "waiting-peer" : "waiting-bundle");
     // Called from a button, outside receive()'s error handling: any failure (send, reading the
@@ -210,6 +236,9 @@ export class TransferEndpoint {
     if (this.role !== "receiver" || this.state !== "received") {
       throw new TransferError("Нищо за потвърждаване.", "BAD_STATE");
     }
+    if (this.peerEnded) {
+      throw new TransferError("Старото устройство вече не чака потвърждение.", "CLOSED");
+    }
     await this.write({ t: "stored", did });
     this.set("stored");
     this.dispose();
@@ -221,7 +250,7 @@ export class TransferEndpoint {
     this.fail(new TransferError("Запазването на това устройство не успя.", "BAD_BUNDLE"), false);
   }
 
-  /** Stop from the UI (cancel button). */
+  /** Stop from the UI (cancel button). After `received` this also drops the bundle. */
   abort(): void {
     this.fail(new TransferError("Прекратено.", "ABORTED"), true);
   }
@@ -235,7 +264,13 @@ export class TransferEndpoint {
     if (!this.opts.getBundle) throw new TransferError("Няма данни за изпращане.", "BAD_STATE");
     // Build and check the bundle BEFORE marking it released: a bundle that is too large or a
     // contact book that cannot be read fails here, and nothing has left this device.
-    const bundle = encodeBundle(await this.opts.getBundle());
+    const contents = await this.opts.getBundle();
+    // A deadline, close or abort may have ended the transfer while the contacts were read.
+    if (this.finished()) {
+      contents.seed.fill(0);
+      return;
+    }
+    const bundle = encodeBundle(contents);
     this.released = true;
     this.set("sending");
     try {
@@ -246,13 +281,24 @@ export class TransferEndpoint {
   }
 
   private async receive(text: string): Promise<void> {
-    if (this.state === "aborted" || this.state === "failed") return;
+    if (this.finished()) return;
     let msg: FrameMessage;
     try {
       msg = await openFrame(this.opts.keys, this.recvSeq, text);
       this.recvSeq++;
     } catch (err) {
+      if (this.state === "received") {
+        // Nothing after the bundle can take it back; the channel is just no longer usable.
+        this.markPeerEnded();
+        return;
+      }
       this.fail(err instanceof TransferError ? err : new TransferError("Подправена връзка.", "TAMPERED"), true);
+      return;
+    }
+    if (this.finished()) return;
+    if (this.state === "received") {
+      // abort, gone or anything else: keep the bundle, note that the old device stopped.
+      this.markPeerEnded();
       return;
     }
     try {
@@ -264,7 +310,7 @@ export class TransferEndpoint {
 
   private async handle(msg: FrameMessage): Promise<void> {
     const wrong = () => new TransferError("Неочакван ред на съобщенията.", "BAD_STATE");
-    if (msg.t === "abort") {
+    if (msg.t === "abort" || msg.t === "gone") {
       this.fail(new TransferError("Другото устройство прекрати прехвърлянето.", "ABORTED"), false);
       return;
     }

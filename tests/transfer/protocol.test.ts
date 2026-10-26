@@ -310,7 +310,7 @@ describe("protocol over a channel", () => {
   });
 
   it("a replayed sas-ok does not release a second bundle", async () => {
-    const { sender, receiver, ch, keys } = setup();
+    const { sender, receiver, ch } = setup();
     await sender.start();
     await receiver.start();
     await Promise.all([waitFor(sender, "compare"), waitFor(receiver, "compare")]);
@@ -321,9 +321,9 @@ describe("protocol over a channel", () => {
     ch.a.deliver(ch.b.sent[1]); // replay of sas-ok
     await tick();
     expect(sender.state).toBe("failed");
-    // The only thing the sender wrote afterwards is an abort, never a second bundle.
-    expect(ch.a.sent.length).toBe(before + 1);
-    await expect(openFrame(keys.receiver, 2, ch.a.sent[before])).resolves.toEqual({ t: "abort" });
+    // Nothing more leaves the sender: no second bundle, and no abort that would void the first.
+    expect(ch.a.sent.length).toBe(before);
+    expect(receiver.state).toBe("received");
   });
 
   it("a bundle that arrives before the new device's user confirmed is refused", async () => {

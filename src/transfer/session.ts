@@ -138,9 +138,11 @@ export type FrameMessage =
   | { t: "bundle"; d: string }
   | { t: "stored"; did: string }
   | { t: "failed" }
-  | { t: "abort" };
+  | { t: "abort" }
+  /** Sender, after the bundle left: "I stop waiting for your ack". Does not void the bundle. */
+  | { t: "gone" };
 
-const FRAME_TYPES = new Set(["hello", "sas-ok", "bundle", "stored", "failed", "abort"]);
+const FRAME_TYPES = new Set(["hello", "sas-ok", "bundle", "stored", "failed", "abort", "gone"]);
 
 export async function sealFrame(keys: TransferKeys, seq: number, msg: FrameMessage): Promise<string> {
   const { iv, aad, key } = frameParams(keys, keys.role, seq);

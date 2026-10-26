@@ -363,6 +363,8 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
   const busyRef = useRef(false);
   const doneRef = useRef(false);
   const progressRef = useRef(newReceiveProgress());
+  /** The old device stopped listening (deadline, close): storing still works, no wipe there. */
+  const [peerGone, setPeerGone] = useState(false);
   const webAuthnOk = isWebAuthnSupported();
 
   useEffect(
@@ -396,7 +398,8 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
       setWords(endpoint.words);
       const onState = (s: TransferState) => {
         setState(s);
-        if (s === "received") setView({ k: "unlock" });
+        setPeerGone(endpoint.peerEnded);
+        if (s === "received") setView((v) => (v.k === "unacked" ? v : { k: "unlock" }));
         else if (s === "failed" || s === "aborted") {
           const stored = progressRef.current.identity;
           if (stored) {
@@ -559,6 +562,11 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
       <div className="screen">
         <h1>{t("Защити идентичността на това устройство")}</h1>
         <p>{t("Идентичността е получена. Избери как да се отключва на това устройство. Паролата не се прехвърля от старото устройство.")}</p>
+        {peerGone && (
+          <p role="status">
+            {t("Старото устройство вече не чака. Можеш да запазиш идентичността тук, но то няма да предложи изтриване.")}
+          </p>
+        )}
         {webAuthnOk && (
           <button disabled={storing} onClick={() => void store(false)}>
             {t("Използвай passkey")}
