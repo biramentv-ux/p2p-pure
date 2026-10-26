@@ -1,0 +1,55 @@
+# Flatpak manifest for the Linux (Electron) shell. See docs/LINUX.md ("Flatpak").
+# Built by scripts/linux/build-flatpak.sh, which first makes the unpacked Electron app with
+# electron-builder (fuses, sealed asar, locked versions) and then fills in the SHA-256 of that
+# archive below. The build inside flatpak-builder needs no network: the only source is the
+# archive with its checksum, plus the files from this folder.
+app-id: bg.p2pmessenger.app
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '25.08'
+command: p2p-messenger
+separate-locales: false
+
+# Least privilege. Deliberately absent: any --filesystem (the profile lives in the app's own
+# ~/.var/app directory), the session and system bus, ssh-agent, gpg-agent.
+finish-args:
+  - --share=network        # WebRTC links and the signalling Worker (demo mode, short code)
+  - --share=ipc            # needed by X11 (MIT-SHM)
+  - --socket=wayland
+  - --socket=fallback-x11  # X11 only when there is no Wayland session
+  - --socket=pulseaudio    # microphone and sound for calls (PipeWire answers on this socket)
+  - --device=all           # /dev/video* for the QR scanner and video calls; also gives GPU access
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.secrets  # Electron safeStorage (cookie encryption) via libsecret
+
+modules:
+  - name: p2p-messenger
+    buildsystem: simple
+    build-commands:
+      - install -d /app/lib/p2p-messenger
+      - cp -a app/. /app/lib/p2p-messenger/
+      # zypak provides the sandbox inside Flatpak; the setuid helper is not used and not shipped.
+      - rm -f /app/lib/p2p-messenger/chrome-sandbox
+      - install -Dm755 p2p-messenger.sh /app/bin/p2p-messenger
+      - install -Dm644 bg.p2pmessenger.app.desktop /app/share/applications/bg.p2pmessenger.app.desktop
+      - install -Dm644 bg.p2pmessenger.app.metainfo.xml /app/share/metainfo/bg.p2pmessenger.app.metainfo.xml
+      - install -Dm644 icon-512.png /app/share/icons/hicolor/512x512/apps/bg.p2pmessenger.app.png
+    sources:
+      # Made in CI from the locked electron-builder output; the checksum is written in by
+      # build-flatpak.sh. In a committed copy it must be the 64 hex digits, never a placeholder
+      # that is not replaced (tests/desktop/flatpak.test.ts checks both forms).
+      - type: archive
+        path: p2p-messenger-app.tar.gz
+        sha256: '@APP_SHA256@'
+        strip-components: 0
+        dest: app
+      - type: file
+        path: p2p-messenger.sh
+      - type: file
+        path: bg.p2pmessenger.app.desktop
+      - type: file
+        path: bg.p2pmessenger.app.metainfo.xml
+      - type: file
+        path: icon-512.png
