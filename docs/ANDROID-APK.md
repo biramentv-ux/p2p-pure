@@ -40,3 +40,10 @@ keytool -genkeypair -keystore p2p-release.jks -storetype PKCS12 -alias p2p -keya
 | `ANDROID_KEY_PASSWORD` | паролата на ключа (същата, ако не си задал друга) |
 
 SHA-256 на сертификата се изписва в обобщението на всяко изпълнение. С постоянния ключ го сложи в `public/.well-known/assetlinks.json`. Тогава passkey работи и в APK-то.
+
+## Passkey в APK-то
+APK-то се сглобява с `VITE_PASSKEY_RP_ID=dyrakarmy.online` (или стойността на променливата `PASSKEY_RP_ID` в Settings → Variables). Passkey работи, когато:
+1. APK-то е подписано с постоянния ключ;
+2. `https://<този домейн>/.well-known/assetlinks.json` съдържа SHA-256 на ключа (от обобщението на изпълнението).
+
+Докато не е така, създаването на passkey пада и приложението предлага парола.

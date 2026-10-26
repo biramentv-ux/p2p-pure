@@ -18,9 +18,6 @@ on:
         description: 'Attach to this release (e.g. android-v0.7.0); empty = run artifact only'
         required: false
         default: ''
-  # TEMPORARY (removed before merge): builds this branch and attaches the APK to a preview release.
-  push:
-    branches: ["feat/android-apk", "preview/apk-chat-media"]
 
 permissions:
   contents: read
@@ -30,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: ${{ inputs.release_tag || (github.event_name == 'push' && format('android-v0.0.0-preview.{0}', github.run_number)) || '' }}
+  RELEASE_TAG: ${{ inputs.release_tag }}
 
 jobs:
   build:
@@ -59,6 +56,10 @@ jobs:
           case "$RELEASE_TAG" in android-v*) ;; *) echo "::error::release tag must start with android-v"; exit 1 ;; esac
 
       - name: Install, build the web app, sync the Android project
+        env:
+          # The WebView runs on localhost; Credential Manager needs the real domain that serves
+          # /.well-known/assetlinks.json with this APK's signing fingerprint.
+          VITE_PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID || 'dyrakarmy.online' }}
         run: |
           npm ci
           npm run build
@@ -142,7 +143,7 @@ jobs:
 
   release:
     needs: build
-    if: inputs.release_tag != '' || github.event_name == 'push'
+    if: inputs.release_tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
