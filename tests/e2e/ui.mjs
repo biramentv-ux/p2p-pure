@@ -308,6 +308,23 @@ try {
   await alice.page.locator('.call-panel[aria-label="Входящ разговор"]').getByRole("button", { name: "Откажи" }).click();
   await bob.page.getByRole("button", { name: "Край", exact: true }).click().catch(() => undefined);
 
+  // Active call: Bob calls again, Alice accepts, both reach "В разговор", then Alice hangs up.
+  await bob.page.locator('.call-panel[aria-label="Разговор"]').waitFor({ state: "detached", timeout: 15_000 }).catch(() => undefined);
+  await bob.page.getByRole("button", { name: "Аудио разговор" }).click();
+  const incoming = alice.page.locator('.call-panel[aria-label="Входящ разговор"]');
+  await incoming.waitFor({ timeout: 20_000 });
+  await incoming.getByRole("button", { name: "Приеми" }).click();
+  const inCall = (pg) => pg.locator('.call-panel[aria-label="Разговор"] [role="status"]').filter({ hasText: "В разговор" });
+  await inCall(alice.page).waitFor({ timeout: 30_000 });
+  await inCall(bob.page).waitFor({ timeout: 30_000 });
+  check("call: both sides show \"В разговор\" after Alice accepts", true);
+  await alice.page.waitForTimeout(300);
+  const darkActive = await blockingViolations(alice.page);
+  check("dark: active call screen passes", darkActive.length === 0, darkActive.join(" | "));
+  await alice.page.getByRole("button", { name: "Край", exact: true }).click();
+  await bob.page.getByText("Другият човек затвори разговора.").waitFor({ timeout: 15_000 });
+  check("call: hanging up on one side ends the call on the other", true);
+
   await alice.page.getByRole("button", { name: "Назад" }).click();
   await alice.page.getByRole("button", { name: "Контакти", exact: true }).click();
   await alice.page.getByRole("button", { name: "Групов чат", exact: true }).click();

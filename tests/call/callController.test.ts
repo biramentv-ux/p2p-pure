@@ -237,3 +237,53 @@ describe("in call", () => {
     expect(pc.ontrack).toBeNull();
   });
 });
+
+describe("active phase", () => {
+  /** jsdom has no MediaStream; a minimal one that keeps its tracks is enough here. */
+  class TestStream {
+    private tracks: MediaStreamTrack[] = [];
+    addTrack(t: MediaStreamTrack) {
+      this.tracks.push(t);
+    }
+    removeTrack(t: MediaStreamTrack) {
+      this.tracks = this.tracks.filter((x) => x !== t);
+    }
+    getTracks() {
+      return [...this.tracks];
+    }
+  }
+  beforeEach(() => vi.stubGlobal("MediaStream", TestStream));
+  afterEach(() => vi.unstubAllGlobals());
+
+  const remoteTrack = () => ({ kind: "audio", onended: null }) as unknown as MediaStreamTrack;
+
+  it("on a connection that is already up (shared with the chat), the first remote track makes it active", async () => {
+    const { pc, ctl } = setup();
+    pc.connectionState = "connected";
+    await ctl.handle({ t: "invite", kind: "audio" });
+    await ctl.accept();
+    expect(ctl.state.phase).toBe("connecting");
+    pc.ontrack?.({ track: remoteTrack(), streams: [] });
+    expect(ctl.state.phase).toBe("active");
+  });
+
+  it("on a fresh connection, it waits for both the track and the connected state", async () => {
+    const { pc, ctl } = setup();
+    await ctl.startCall("audio");
+    await ctl.handle({ t: "accept" });
+    pc.ontrack?.({ track: remoteTrack(), streams: [] });
+    expect(ctl.state.phase).toBe("connecting");
+    pc.connectionState = "connected";
+    pc.onconnectionstatechange?.();
+    expect(ctl.state.phase).toBe("active");
+  });
+
+  it("connected without any remote media stays connecting", async () => {
+    const { pc, ctl } = setup();
+    await ctl.startCall("audio");
+    await ctl.handle({ t: "accept" });
+    pc.connectionState = "connected";
+    pc.onconnectionstatechange?.();
+    expect(ctl.state.phase).toBe("connecting");
+  });
+});

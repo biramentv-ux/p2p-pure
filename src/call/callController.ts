@@ -86,12 +86,25 @@ export class CallController {
     if (!stream.getTracks().includes(ev.track)) stream.addTrack(ev.track);
     ev.track.onended = () => this.removeRemoteTrack(ev.track);
     this.patch({ remote: stream });
+    this.maybeActive();
+  }
+
+  /**
+   * The call is active once the connection is up AND the other side's media has arrived.
+   * The call shares the chat's RTCPeerConnection, which is usually "connected" already, so
+   * connectionstatechange does not fire again; the first remote track is the real signal.
+   */
+  private maybeActive(): void {
+    if (this.snap.phase !== "connecting") return;
+    if (this.deps.pc.connectionState !== "connected") return;
+    if (!this.remoteStream || this.remoteStream.getTracks().length === 0) return;
+    this.patch({ phase: "active" });
   }
 
   private handleConnectionState(): void {
     if (this.disposed) return;
     const state = this.deps.pc.connectionState;
-    if (state === "connected" && this.snap.phase === "connecting") this.patch({ phase: "active" });
+    if (state === "connected") this.maybeActive();
     if (state === "failed") this.fail("Връзката за разговора не можа да се установи.");
   }
 
