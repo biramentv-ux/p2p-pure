@@ -13,6 +13,9 @@ export const EN_DICTIONARY: Record<string, string> = {
   "Свържи се": "Connect",
 
   // Create identity
+  "Не успяхме да създадем passkey. Опитай отново или продължи с парола.":
+    "The passkey could not be created. Try again or continue with a password.",
+  "Продължи с парола": "Continue with a password",
   "Този passkey не поддържа PRF. Задай парола за това устройство.":
     "This passkey does not support PRF. Set a password for this device.",
   "Неочаквана грешка при създаване на идентичност.": "Unexpected error while creating the identity.",
