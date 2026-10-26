@@ -235,6 +235,12 @@ export class SecureSession {
   private readonly recvDirection: number;
   /** AEAD used for messages this side sends. Receiving accepts either suite. */
   private sendSuite: CipherSuite = DEFAULT_CIPHER_SUITE;
+  /**
+   * seal() and open() run one at a time. open() works on copies of the ratchet state and
+   * commits them after an await; a seal() running in that gap would have its new sending
+   * chain overwritten, and the two sides would never agree again.
+   */
+  private lock: Promise<unknown> = Promise.resolve();
 
   private constructor(s: SessionState) {
     this.rk = s.rootKey;
@@ -318,8 +324,26 @@ export class SecureSession {
     });
   }
 
+  private exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.lock.then(task, task);
+    this.lock = run.catch(() => undefined);
+    return run;
+  }
+
   /** Encrypts one message and returns the JSON wire string. */
-  async seal(plaintext: string): Promise<string> {
+  seal(plaintext: string): Promise<string> {
+    return this.exclusive(() => this.sealNow(plaintext));
+  }
+
+  /**
+   * Decrypts one wire message. Accepts out-of-order delivery within MAX_SKIP.
+   * A replayed message (its key already used and deleted) is rejected.
+   */
+  open(wire: string): Promise<string> {
+    return this.exclusive(() => this.openNow(wire));
+  }
+
+  private async sealNow(plaintext: string): Promise<string> {
     if (plaintext.length > MAX_PLAINTEXT_CHARS) {
       throw new SessionError("Message is too long.");
     }
@@ -358,11 +382,7 @@ export class SecureSession {
     });
   }
 
-  /**
-   * Decrypts one wire message. Accepts out-of-order delivery within MAX_SKIP.
-   * A replayed message (its key already used and deleted) is rejected.
-   */
-  async open(wire: string): Promise<string> {
+  private async openNow(wire: string): Promise<string> {
     const m = parseWire(wire);
     const dhB64 = bytesToBase64Url(m.dh);
 
