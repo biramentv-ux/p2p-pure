@@ -7,6 +7,7 @@
 // The Worker never changes invitation contents beyond format validation; the
 // client verifies the signature.
 
+import { MAX_RELAY_CHARS, ROOM_TTL_MS, RoomRelay, type RoomPeer } from "./room";
 import {
   DELETE_CALLBACK_PREFIX,
   DELIVERY_TTL_MS,
@@ -36,6 +37,8 @@ export interface Env {
    * When it is absent (tests, local runs) requests are not limited.
    */
   INVITE_LIMITER?: RateLimiter;
+  /** Demo WebSocket signaling: one SignalRoom Durable Object per room code. */
+  SIGNAL_ROOM?: DurableObjectNamespace;
 }
 
 /** Invitation endpoints allow this many requests per client IP per period (see wrangler.jsonc). */
@@ -191,6 +194,46 @@ async function handleDeleteButton(env: Env, cb: NonNullable<TelegramUpdate["call
   await callApi(env, "answerCallbackQuery", { callback_query_id: cb.id, text: "Поканата е изтрита." });
 }
 
+/**
+ * Holds the two sockets of one room and relays frames between them. The relay logic is in
+ * room.ts; this class only accepts sockets and sets the room's expiry alarm.
+ */
+export class SignalRoom {
+  private readonly relay = new RoomRelay();
+
+  constructor(private readonly state: DurableObjectState) {}
+
+  async fetch(_request: Request): Promise<Response> {
+    if (this.relay.size >= 2) return json({ error: "room_full" }, 409);
+
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    server.accept();
+
+    const peer: RoomPeer = {
+      send: (text) => server.send(text),
+      close: (code, reason) => server.close(code, reason),
+    };
+    if (!this.relay.join(peer)) return json({ error: "room_full" }, 409);
+
+    if (this.relay.size === 1) await this.state.storage.setAlarm(Date.now() + ROOM_TTL_MS);
+    server.addEventListener("message", (event) => {
+      if (typeof event.data === "string" && event.data.length <= MAX_RELAY_CHARS) {
+        this.relay.relay(peer, event.data);
+      }
+    });
+    server.addEventListener("close", () => this.relay.leave(peer));
+    server.addEventListener("error", () => this.relay.leave(peer));
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** Room expired: close whatever is still connected. */
+  async alarm(): Promise<void> {
+    this.relay.closeAll("room expired");
+  }
+}
+
 export default {
   async scheduled(_event: ScheduledController, env: Env): Promise<void> {
     await purgeDueDeliveries(env);
@@ -229,6 +272,23 @@ export default {
       const code = await storeInvitation(env, invitation);
       if (!code) return json({ error: "busy" }, 503);
       return json({ code, expiresInSec: INVITE_TTL_SEC }, 201);
+    }
+
+    // Demo WebSocket signaling. POST /ws/rooms makes a code; GET /ws/rooms/:code upgrades to
+    // the room, where the first peer is the offerer and the second the answerer.
+    if (request.method === "POST" && url.pathname === "/ws/rooms") {
+      if (await overInviteLimit(request, env)) return json({ error: "rate_limited" }, 429);
+      if (!env.SIGNAL_ROOM) return json({ error: "unavailable" }, 503);
+      return json({ code: newInviteCode(), ttlSec: Math.round(ROOM_TTL_MS / 1000) }, 201);
+    }
+    const roomMatch = /^\/ws\/rooms\/([^/]+)$/.exec(url.pathname);
+    if (request.method === "GET" && roomMatch) {
+      if (request.headers.get("upgrade") !== "websocket") return json({ error: "expected_websocket" }, 426);
+      const code = normalizeInviteCode(safeDecode(roomMatch[1]) ?? "");
+      if (!code) return json({ error: "invalid_code" }, 400);
+      if (!env.SIGNAL_ROOM) return json({ error: "unavailable" }, 503);
+      const stub = env.SIGNAL_ROOM.get(env.SIGNAL_ROOM.idFromName(code));
+      return stub.fetch(request);
     }
 
     const codeMatch = /^\/invite\/([^/]+)$/.exec(url.pathname);
