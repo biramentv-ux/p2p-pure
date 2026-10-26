@@ -1,0 +1,490 @@
+/*
+ * Default theme: "Sealed Post" (Запечатана поща).
+ * Cool paper, deep ink, sky blue for actions and my messages, electric magenta only where trust
+ * is confirmed (verified contact, matching words, the seal). IBM Plex Serif / Sans / Mono,
+ * self-hosted. Loaded after index.css and App.css, so it overrides tokens and component polish.
+ * Light by default; dark follows the system setting. Text and actions are AA in both themes
+ * (tests/e2e/a11y.mjs and the dark-mode checks in tests/e2e/ui.mjs).
+ */
+
+/* ---------- light (default) ---------- */
+:root:not([data-theme="dark"]) {
+  --ink-0: #f1f5fa;        /* page: cool paper */
+  --ink-1: #ffffff;        /* cards, bars, incoming bubbles */
+  --ink-2: #ffffff;
+  --ink-3: #e1eaf5;        /* hover / pressed */
+  --line: #cbd7e6;
+  --line-soft: rgba(19, 33, 58, 0.08);
+
+  --text: #13213a;
+  --text-h: #0c1628;
+  --muted: #5c6880;        /* 4.9:1 on paper */
+
+  /* action: sky blue (5.1:1 with white). seal: electric magenta (4.9:1 with white) */
+  --ember: #1f6fc4;
+  --ember-hi: #185ba3;
+  --ember-ink: #ffffff;
+  --ember-soft: rgba(31, 111, 196, 0.1);
+  --ember-line: rgba(31, 111, 196, 0.45);
+  --seal: #d41b7f;
+  --seal-ink: #ffffff;
+  --seal-soft: rgba(212, 27, 127, 0.1);
+  --sage: #b0146a;         /* verified text: magenta, 6:1 on its soft background */
+  --sage-soft: rgba(212, 27, 127, 0.1);
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.08);
+  --aqua: #1f6fc4;
+  --rose: #d41b7f;
+  --coral: #d41b7f;
+  --sunny: #d41b7f;
+
+  --msg-out: #1f6fc4;
+  --msg-out-text: #ffffff;
+  --focus: 0 0 0 2px #f1f5fa, 0 0 0 4px #1f6fc4;
+
+  --radius-s: 6px;
+  --radius: 10px;
+  --radius-l: 16px;
+  --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 12px 28px -20px rgba(19, 33, 58, 0.35);
+
+  --display: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+
+/* ---------- dark: night ink ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink-0: #0b1220;
+    --ink-1: #111a2c;
+    --ink-2: #152038;
+    --ink-3: #1d2a45;
+    --line: #24334f;
+    --line-soft: rgba(230, 238, 248, 0.07);
+    --text: #e6eef8;
+    --text-h: #ffffff;
+    --muted: #9fb0c8;
+    --ember: #6cc4ff;
+    --ember-hi: #9ad6ff;
+    --ember-ink: #0b1220;
+    --ember-soft: rgba(108, 196, 255, 0.13);
+    --ember-line: rgba(108, 196, 255, 0.45);
+    --seal: #ff4fb0;
+    --seal-ink: #0b1220;
+    --seal-soft: rgba(255, 79, 176, 0.14);
+    --sage: #ff7cc4;
+    --sage-soft: rgba(255, 79, 176, 0.14);
+    --danger: #fda4af;
+    --danger-soft: rgba(253, 164, 175, 0.12);
+    --aqua: #6cc4ff;
+    --rose: #ff4fb0;
+    --coral: #ff4fb0;
+    --sunny: #ff4fb0;
+    --msg-out: #6cc4ff;
+    --msg-out-text: #0b1220;
+    --focus: 0 0 0 2px #0b1220, 0 0 0 4px #6cc4ff;
+    --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 32px -18px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ink-0: #0b1220;
+  --ink-1: #111a2c;
+  --ink-2: #152038;
+  --ink-3: #1d2a45;
+  --line: #24334f;
+  --text: #e6eef8;
+  --text-h: #ffffff;
+  --muted: #9fb0c8;
+  --ember: #6cc4ff;
+  --ember-ink: #0b1220;
+  --seal: #ff4fb0;
+  --seal-ink: #0b1220;
+  --sage: #ff7cc4;
+  --sage-soft: rgba(255, 79, 176, 0.14);
+  --msg-out: #6cc4ff;
+  --msg-out-text: #0b1220;
+  color-scheme: dark;
+}
+
+/* ---------- base: flat paper, no drifting light ---------- */
+html,
+body,
+button,
+input,
+textarea,
+select {
+  /* Plex Sans has Bulgarian letter forms; the serif headings do not, so keep one consistent alphabet. */
+  font-feature-settings: "kern", "locl" 0;
+}
+body {
+  background-color: var(--ink-0);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3  0 0 0 0 0.4  0 0 0 0 0.55  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-attachment: fixed;
+}
+body::before,
+body::after {
+  display: none;
+}
+
+h1,
+h2,
+.screen h1 {
+  font-family: var(--display);
+  font-variation-settings: normal;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  color: var(--text-h);
+}
+.screen h1 {
+  font-size: clamp(1.8rem, 1.3rem + 2vw, 2.4rem);
+  line-height: 1.1;
+}
+
+.grad-text {
+  background: linear-gradient(100deg, var(--ember), var(--seal));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Screens settle in once: a short slide, nothing that bounces. */
+@keyframes settle {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.screen > * {
+  animation: settle 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* ---------- actions: firm rectangles, 48px targets ---------- */
+.screen button,
+.call-buttons button {
+  min-height: 48px;
+  padding: 0.7rem 1.2rem;
+  border-radius: var(--radius-s);
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 1rem;
+  letter-spacing: 0;
+  box-shadow: none;
+  transition: background-color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+.screen button:hover:not(:disabled) { transform: none; background: var(--ember-hi); }
+.screen button:active:not(:disabled) { transform: scale(0.985); }
+.screen button.secondary {
+  background: var(--ink-1);
+  color: var(--text-h);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.screen button.secondary:hover:not(:disabled) {
+  background: var(--ink-3);
+  border-color: var(--ember-line);
+}
+
+input,
+textarea {
+  min-height: 48px;
+  border-radius: var(--radius-s);
+  font-size: 1rem;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* ---------- top bar: tabs that never truncate ---------- */
+.topbar {
+  gap: 0.4rem;
+}
+.tabs {
+  border-radius: var(--radius);
+  padding: 0.25rem;
+  background: color-mix(in srgb, var(--ink-1) 90%, transparent);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lift);
+}
+.topbar .tabs .tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.35rem 0.3rem;
+  border-radius: var(--radius-s);
+  font-size: 0.78rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.tab:hover {
+  color: var(--text-h);
+}
+.topbar .tabs .tab.active,
+.tab.active {
+  background: var(--ember);
+  color: var(--ember-ink);
+  font-weight: 500;
+}
+/* The active tab carries its own fill: no sliding glider, and no colour fade that could be
+   caught half-way (low contrast) by a screen reader's or axe's first look. */
+.tab-glider {
+  display: none;
+}
+.tabs .tab,
+.lang-option {
+  transition: none;
+}
+.lang-switch {
+  border-radius: var(--radius);
+  padding: 0.25rem;
+}
+.lang-option {
+  min-width: 32px;
+  padding: 0 0.3rem;
+  font-size: 0.72rem;
+  border-radius: var(--radius-s);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+/* ---------- identity and codes: a ledger, not a bubble ---------- */
+.did-text {
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  padding: 0.7rem 0 0;
+}
+.qr-canvas {
+  border-radius: var(--radius-l);
+  border: 1px solid var(--line);
+}
+.safety-code {
+  font-family: var(--mono);
+  font-weight: 500;
+  background: var(--ink-1);
+  border: 0;
+  border-top: 2px solid var(--text-h);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  line-height: 2.1;
+  letter-spacing: 0.03em;
+}
+.short-code {
+  font-weight: 500;
+  border-radius: var(--radius-s);
+}
+
+/* ---------- contacts ---------- */
+.contact {
+  flex-wrap: wrap;
+  border-radius: var(--radius);
+  background: var(--ink-1);
+  border: 1px solid var(--line);
+}
+.contact-info {
+  flex: 1 1 10rem;
+  min-width: 10rem;
+}
+.contact-info strong {
+  font-family: var(--display);
+  font-weight: 500;
+}
+.contact .did-text {
+  border: 0;
+  padding: 0;
+  text-align: left;
+  word-break: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.contact-actions button {
+  min-height: 44px;
+}
+.badge {
+  border-radius: var(--radius-s);
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--sage);
+  background: var(--sage-soft);
+}
+.chips li {
+  border-radius: var(--radius-s);
+  background: var(--seal-soft);
+  color: var(--sage);
+  font-weight: 500;
+}
+
+/* ---------- messages: letters with one squared corner ---------- */
+.msg {
+  border-radius: 4px 14px 14px 14px;
+  padding: 0.6rem 0.9rem;
+  box-shadow: none;
+}
+.msg.in {
+  background: var(--ink-1);
+  border: 1px solid var(--line);
+}
+.msg.out {
+  border-radius: 14px 4px 14px 14px;
+}
+.msg time {
+  font-family: var(--mono);
+}
+
+/* Composer: the text field and send button on top, attachments as a quiet row under them. */
+.composer {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  border-radius: var(--radius-l);
+  padding: 0.4rem;
+  background: var(--ink-1);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lift);
+}
+.composer input {
+  order: -2;
+  flex: 1 1 10rem;
+  border: none;
+  background: transparent;
+  min-height: 48px;
+  padding-left: 0.8rem;
+}
+.composer button[type="submit"] {
+  order: -1;
+  min-height: 48px;
+  border-radius: 999px;
+  background: var(--seal);
+  color: var(--seal-ink);
+}
+.composer button.secondary {
+  min-height: 40px;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--radius-s);
+  font-size: 0.85rem;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+/* Chat header: actions stay on one line each and wrap as a group on narrow screens. */
+.chat-header {
+  flex-wrap: wrap;
+  row-gap: 0.4rem;
+}
+.chat-header > button,
+.chat-header .call-buttons button {
+  min-height: 44px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  border-radius: var(--radius-s);
+  background: var(--ink-1);
+  color: var(--text-h);
+  border: 1px solid var(--line);
+}
+.chat-header > button:hover:not(:disabled),
+.chat-header .call-buttons button:hover:not(:disabled) {
+  background: var(--ink-3);
+}
+.chat-header > button:disabled,
+.chat-header .call-buttons button:disabled,
+.chat-header .call-buttons button.secondary:disabled {
+  opacity: 1;
+  color: var(--muted);
+  background: transparent;
+  border-style: dashed;
+}
+/* Row 1: back, who, language. Row 2: chat and call actions. */
+.chat-header > button:first-child { order: -3; }
+.chat-header > div:not(.call-buttons):not(.lang-switch) {
+  order: -2;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.chat-header > div:not(.call-buttons):not(.lang-switch) strong {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 1.2rem;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-header > .lang-switch { order: -1; }
+.chat-header > .call-buttons {
+  order: 1;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.chat-header > button:not(:first-child) { order: 2; }
+
+/* Call panel: firm actions like the rest of the app. */
+.call-panel {
+  border-radius: var(--radius);
+  background: var(--ink-1);
+  border: 1px solid var(--ember-line);
+}
+.call-actions button {
+  min-height: 48px;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-s);
+  border: 1px solid transparent;
+  background: var(--ember);
+  color: var(--ember-ink);
+  font: 500 1rem/1.2 var(--sans);
+  cursor: pointer;
+}
+.call-actions button.secondary {
+  background: var(--ink-1);
+  color: var(--text-h);
+  border-color: var(--line);
+}
+.call-actions button.secondary[aria-pressed="true"] {
+  background: var(--ink-3);
+  border-color: var(--ember-line);
+}
+
+/* Live connection is sky; magenta stays reserved for verified trust. */
+.status.on,
+.status.on::before {
+  color: var(--ember);
+}
+.status.on::before {
+  background: var(--ember);
+}
+.msg.out time {
+  color: inherit;
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen > *,
+  .screen button,
+  .composer button {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .screen { padding-left: 16px; padding-right: 16px; }
+  .screen h1 { font-size: 1.75rem; }
+}
+
+/* The language switch keeps the same shape in the chat header as in the top bar. */
+.chat-header .lang-switch,
+.chat-header .lang-option {
+  border-radius: var(--radius-s);
+}

@@ -48,9 +48,9 @@
 
   --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -18px rgba(0, 0, 0, 0.7);
 
-  --sans: 'Instrument Sans Variable', 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --display: 'Fraunces Variable', 'Fraunces', Georgia, 'Times New Roman', serif;
-  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --display: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
 
   font: 16px/1.5 var(--sans);
   letter-spacing: 0.005em;

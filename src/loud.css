@@ -50,7 +50,7 @@
   --phosphor: #c6ff00;
   --hard-shadow: 5px 5px 0 #0a0a0a;
 
-  --display: 'Fraunces Variable', 'Fraunces', Georgia, 'Times New Roman', serif;
+  --display: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
 }
 
 /* ---- page: halftone dots and a few confetti dots, all static ---- */
@@ -111,7 +111,7 @@
   50% { transform: scale(1.09); }
 }
 
-/* ---- type: chunky, wonky Fraunces for headings ---- */
+/* ---- type: IBM Plex Serif headings ---- */
 :root[data-theme="loud"] h1,
 :root[data-theme="loud"] h2 {
   font-family: var(--display);

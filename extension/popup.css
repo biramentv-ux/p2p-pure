@@ -1,70 +1,70 @@
 /*
- * Same look as the app: the friendly "Daybreak Kitchen" theme (src/friendly.css).
+ * Same look as the app: the "Sealed Post" theme (src/post.css).
  * The extension cannot import the app's CSS, so the token values are copied here; keep them in sync.
- * Warm paper, deep ink, one teal action colour, coral and sunny accents, pill buttons.
+ * Cool paper, deep ink, sky blue for actions, electric magenta only as the seal accent.
  * Light by default; dark follows the browser setting.
- * No remote fonts (the extension CSP and the privacy promise): the app's fonts are used only
- * when they are installed locally, otherwise the system stack.
+ * No remote fonts (the extension CSP and the privacy promise): IBM Plex is used only when it is
+ * installed locally, otherwise the system stack.
  */
 
 /* ---------- light (default) ---------- */
 :root {
-  --ink-0: #fff7ec;        /* page: warm paper */
+  --ink-0: #f1f5fa;        /* page: cool paper */
   --ink-1: #ffffff;        /* cards */
-  --ink-2: #fdf0e0;        /* raised */
-  --ink-3: #f6e4cf;        /* hover / pressed */
-  --line: #ead9c4;
+  --ink-2: #ffffff;        /* raised */
+  --ink-3: #e1eaf5;        /* hover / pressed */
+  --line: #cbd7e6;
 
-  --text: #3b3146;
-  --text-h: #211a2b;
-  --muted: #6b6076;
+  --text: #13213a;
+  --text-h: #0c1628;
+  --muted: #5c6880;
 
-  /* action: teal (AA with white text), accent: coral for highlights only */
-  --ember: #0f766e;
-  --ember-hi: #115e59;
+  /* action: sky blue (5.1:1 with white); seal: electric magenta, accents only */
+  --ember: #1f6fc4;
+  --ember-hi: #185ba3;
   --ember-ink: #ffffff;
-  --ember-soft: rgba(15, 118, 110, 0.11);
-  --ember-line: rgba(15, 118, 110, 0.4);
+  --ember-soft: rgba(31, 111, 196, 0.1);
+  --ember-line: rgba(31, 111, 196, 0.45);
   --danger: #b42318;
-  --danger-soft: rgba(180, 35, 24, 0.09);
-  --coral: #ff7a59;
-  --sunny: #ffd166;
+  --danger-soft: rgba(180, 35, 24, 0.08);
+  --coral: #d41b7f;
+  --sunny: #1f6fc4;
 
-  /* The app uses a translucent ring; here it is solid so the ring itself is at least 3:1 (WCAG 1.4.11). */
-  --focus: 0 0 0 3px #fff7ec, 0 0 0 6px #0f766e;
-  --radius-s: 12px;
-  --radius: 18px;
-  --shadow-lift: 0 1px 0 #fff inset, 0 14px 30px -18px rgba(59, 49, 70, 0.35);
-  --shadow-action: 0 8px 18px -12px rgba(15, 118, 110, 0.7);
+  /* Solid ring, so the ring itself is at least 3:1 (WCAG 1.4.11). */
+  --focus: 0 0 0 2px #f1f5fa, 0 0 0 4px #1f6fc4;
+  --radius-s: 6px;
+  --radius: 10px;
+  --shadow-lift: 0 1px 0 #fff inset, 0 12px 28px -20px rgba(19, 33, 58, 0.35);
+  --shadow-action: none;
 
-  --display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
-  --sans: 'Instrument Sans Variable', 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display: 'IBM Plex Serif', Georgia, serif;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
 }
 
-/* ---------- dark (browser setting) ---------- */
+/* ---------- dark: night ink (browser setting) ---------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink-0: #1d1826;
-    --ink-1: #251f31;
-    --ink-2: #2e2740;
-    --ink-3: #382f4b;
-    --line: #3d3452;
-    --text: #e6dcef;
-    --text-h: #fff7ec;
-    --muted: #b3a7c2;
-    --ember: #5eead4;
-    --ember-hi: #99f6e4;
-    --ember-ink: #0f1b1c;
-    --ember-soft: rgba(94, 234, 212, 0.14);
-    --ember-line: rgba(94, 234, 212, 0.45);
+    --ink-0: #0b1220;
+    --ink-1: #111a2c;
+    --ink-2: #152038;
+    --ink-3: #1d2a45;
+    --line: #24334f;
+    --text: #e6eef8;
+    --text-h: #ffffff;
+    --muted: #9fb0c8;
+    --ember: #6cc4ff;
+    --ember-hi: #9ad6ff;
+    --ember-ink: #0b1220;
+    --ember-soft: rgba(108, 196, 255, 0.13);
+    --ember-line: rgba(108, 196, 255, 0.45);
     --danger: #fda4af;
     --danger-soft: rgba(253, 164, 175, 0.12);
-    --coral: #ff9a7a;
-    --sunny: #ffd166;
-    --focus: 0 0 0 3px #1d1826, 0 0 0 6px #5eead4;
-    --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 34px -18px rgba(0, 0, 0, 0.6);
-    --shadow-action: 0 8px 18px -12px rgba(0, 0, 0, 0.8);
+    --coral: #ff4fb0;
+    --sunny: #6cc4ff;
+    --focus: 0 0 0 2px #0b1220, 0 0 0 4px #6cc4ff;
+    --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 32px -18px rgba(0, 0, 0, 0.7);
+    --shadow-action: none;
     color-scheme: dark;
   }
 }
@@ -78,15 +78,15 @@
 html {
   min-height: 100%;
   background:
-    radial-gradient(320px 260px at 100% -10%, rgba(255, 122, 89, 0.14), transparent 70%),
-    radial-gradient(300px 240px at -10% 110%, rgba(15, 118, 110, 0.12), transparent 70%),
+    radial-gradient(320px 260px at 100% -10%, rgba(212, 27, 127, 0.06), transparent 70%),
+    radial-gradient(300px 240px at -10% 110%, rgba(31, 111, 196, 0.08), transparent 70%),
     var(--ink-0);
 }
 
 body {
   margin: 0;
   width: 340px;
-  /* daybreak: a thin coral-to-sunny line along the top edge */
+  /* the seal line: sky to electric magenta along the top edge */
   border-top: 4px solid var(--coral);
   border-image: linear-gradient(90deg, var(--coral), var(--sunny)) 1;
   color: var(--text);
@@ -152,7 +152,7 @@ p {
 button {
   min-height: 48px;
   padding: 0.6rem 1.4rem;
-  border-radius: 999px;
+  border-radius: var(--radius-s);
   font: inherit;
   font-weight: 600;
   letter-spacing: 0.01em;
