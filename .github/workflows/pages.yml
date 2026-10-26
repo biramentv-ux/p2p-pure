@@ -35,9 +35,11 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Build for /p2p-pure/
+      - name: Build
         env:
-          BASE_PATH: /p2p-pure/
+          # "/" when the site is served from its own domain (scripts/windows/point-domain-to-pages.ps1
+          # sets the variable PAGES_BASE); otherwise the project path.
+          BASE_PATH: ${{ vars.PAGES_BASE || '/p2p-pure/' }}
           # Public GIPHY client key (Settings -> Secrets and variables -> Actions -> Variables).
           # Empty: the GIF button is hidden.
           VITE_GIPHY_API_KEY: ${{ vars.GIPHY_API_KEY }}
