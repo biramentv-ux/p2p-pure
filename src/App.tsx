@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getUnlockMethod } from "./identity";
 import type { UnlockedIdentity, UnlockMethod } from "./identity";
-import type { Contact } from "./contacts/contacts";
+import { getContact, type Contact } from "./contacts/contacts";
 import { deriveHistoryKey } from "./history/messageStore";
 import type { PeerLink } from "./p2p/peer";
 import type { SecureSession } from "./p2p/secureSession";
@@ -11,6 +11,7 @@ import { ChatScreen } from "./ui/screens/ChatScreen";
 import { ConnectScreen, type ConnectedResult } from "./ui/screens/ConnectScreen";
 import { GroupScreen } from "./ui/screens/GroupScreen";
 import { GroupSession } from "./group/groupSession";
+import { webrtcLinks } from "./group/groupLinker";
 import { newProposalId } from "./p2p/suiteNegotiation";
 import { ContactsScreen } from "./ui/screens/ContactsScreen";
 import { ShowQrScreen } from "./ui/screens/ShowQrScreen";
@@ -58,8 +59,10 @@ function App() {
   const { t } = useI18n();
   const [state, setState] = useState<AppState>({ kind: "loading" });
   const [screen, setScreen] = useState<Screen>({ k: "identity" });
-  // The group lives across screens. It is closed only when the device locks.
+  // The group lives across screens. It is closed only when the device locks, and it is
+  // saved encrypted, so it comes back after unlock.
   const groupRef = useRef<GroupSession | null>(null);
+  const [, setGroupRestored] = useState(0);
 
   useEffect(() => {
     getUnlockMethod()
@@ -90,6 +93,29 @@ function App() {
     () => (state.kind === "unlocked" ? deriveHistoryKey(state.identity) : null),
     [state],
   );
+
+  // After unlock: bring back the saved group, unless one was already started meanwhile.
+  useEffect(() => {
+    if (state.kind !== "unlocked" || !historyKey) return;
+    let alive = true;
+    const keys = state.identity.keyPair;
+    GroupSession.restore(keys, historyKey, { linkFactory: webrtcLinks, findContact: getContact })
+      .then((restored) => {
+        const current = groupRef.current;
+        if (!restored) return;
+        if (!alive || (current && (current.snapshot.state !== null || current.snapshot.linked.length > 0))) {
+          restored.closeAll();
+          return;
+        }
+        current?.closeAll();
+        groupRef.current = restored;
+        setGroupRestored((n) => n + 1);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [state, historyKey]);
 
   if (state.kind === "loading") {
     return (
@@ -138,7 +164,9 @@ function App() {
 
   /** The group on this device, created empty the first time the group screen opens. */
   function ensureGroup(): GroupSession {
-    if (!groupRef.current) groupRef.current = new GroupSession(identity.keyPair);
+    if (!groupRef.current) {
+      groupRef.current = new GroupSession(identity.keyPair, { historyKey, linkFactory: webrtcLinks, findContact: getContact });
+    }
     return groupRef.current;
   }
 
@@ -222,7 +250,11 @@ function App() {
           session={groupRef.current}
           onCreate={(name, creatorName) => {
             groupRef.current?.closeAll();
-            groupRef.current = GroupSession.create(identity.keyPair, newProposalId(), name, creatorName);
+            groupRef.current = GroupSession.create(identity.keyPair, newProposalId(), name, creatorName, {
+              historyKey,
+              linkFactory: webrtcLinks,
+              findContact: getContact,
+            });
             setScreen({ k: "group" });
           }}
           onLink={(contact) => setScreen({ k: "connect", expected: contact, forGroup: true })}

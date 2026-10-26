@@ -41,7 +41,7 @@ function parseHello(text: string): HelloMessage | null {
  * `expectedPeerPublicKey`. Rejects on mismatch, timeout, or channel failure.
  */
 export async function completeHandshake(
-  link: PeerLink,
+  link: Pick<PeerLink, "onMessage" | "waitForOpen" | "send">,
   myDid: string,
   expectedPeerPublicKey: Uint8Array,
   timeoutMs?: number,

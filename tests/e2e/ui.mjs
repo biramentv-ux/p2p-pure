@@ -336,6 +336,37 @@ try {
   const darkGroup = await blockingViolations(alice.page);
   check("dark: group screen has no serious accessibility violations", darkGroup.length === 0, darkGroup.join(" | "));
 
+  // The group survives a reload: a message and a photo set before, both back after unlock.
+  await alice.page.getByLabel("Съобщение", { exact: true }).fill("Запазено в групата");
+  await alice.page.getByRole("button", { name: "Изпрати", exact: true }).click();
+  await alice.page.locator("li", { hasText: "Запазено в групата" }).waitFor({ timeout: 15_000 });
+  const groupPng = await alice.page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 300;
+    c.height = 300;
+    const x = c.getContext("2d");
+    x.fillStyle = "#3a7";
+    x.fillRect(0, 0, 300, 300);
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  await alice.page
+    .locator('input[type="file"]')
+    .setInputFiles({ name: "group.png", mimeType: "image/png", buffer: Buffer.from(groupPng, "base64") });
+  await alice.page.locator('img[alt="Снимка на групата"]').waitFor({ timeout: 15_000 });
+  check("group: the admin sets a group photo", true);
+  await alice.page.waitForTimeout(500); // let the encrypted save finish
+  await alice.page.reload();
+  const pw = alice.page.locator('input[type="password"]');
+  await alice.page.getByRole("button", { name: "Отключи" }).waitFor({ timeout: 30_000 });
+  if (await pw.isVisible()) await pw.fill(PASSWORD);
+  await alice.page.getByRole("button", { name: "Отключи" }).click();
+  await alice.page.getByRole("button", { name: "Контакти", exact: true }).click({ timeout: 30_000 });
+  await alice.page.getByRole("button", { name: "Групов чат", exact: true }).click();
+  await alice.page.locator("h1", { hasText: "Тест група" }).waitFor({ timeout: 15_000 });
+  const restoredMessage = await alice.page.locator("li", { hasText: "Запазено в групата" }).count();
+  const restoredPhoto = await alice.page.locator('img[alt="Снимка на групата"]').count();
+  check("group: name, history and photo come back after reload and unlock", restoredMessage === 1 && restoredPhoto === 1, `message=${restoredMessage} photo=${restoredPhoto}`);
+
   check("no page errors (alice)", alice.errors.length === 0, alice.errors.join(" | "));
   check("no page errors (bob)", bob.errors.length === 0, bob.errors.join(" | "));
 } catch (err) {

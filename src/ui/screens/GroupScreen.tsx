@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { listContacts, type Contact } from "../../contacts/contacts";
+import { listContacts, saveContact, type Contact } from "../../contacts/contacts";
 import { MAX_GROUP_MEMBERS } from "../../group/groupModel";
-import type { GroupSession } from "../../group/groupSession";
+import { MAX_GROUP_PHOTO_BYTES, type GroupSession } from "../../group/groupSession";
 import { CIPHER_SUITES, suiteLabel, type CipherSuite } from "../../p2p/cipherSuite";
+import { formatSafetyCode, safetyWords } from "../../p2p/safety";
+import { identityX25519Public } from "../../identity/x25519";
 import { useI18n } from "../../i18n";
+import { prepareImage } from "../image";
+
+/** The group photo is a small avatar: it is sent to every member. */
+const GROUP_PHOTO_SIDE = 512;
 
 interface GroupScreenProps {
   /** Null until the user creates or joins a group. */
@@ -28,7 +34,11 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** The member whose safety code is open for comparing. */
+  const [checking, setChecking] = useState<string | null>(null);
   const logRef = useRef<HTMLUListElement>(null);
+  const photoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let alive = true;
@@ -47,6 +57,11 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
     return (
       <section className="screen" aria-labelledby="group-title">
         <h1 id="group-title">{t("Групов чат")}</h1>
+        {view?.removed && (
+          <p className="chat-notice" role="alert">
+            {t("Бяхте махнат от групата. Ключовете и историята ѝ са изтрити от това устройство.")}
+          </p>
+        )}
         <p>{t("Групата е до {n} участника. Всеки участник е свързан с всеки другия, без сървър за съобщенията.", { n: MAX_GROUP_MEMBERS })}</p>
         <form
           onSubmit={(e) => {
@@ -85,37 +100,77 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
     );
   }
 
+  const group = session;
   const state = view.state;
   const members = state?.members ?? [];
-  const others = members.filter((m) => m.did !== session.me);
+  const others = members.filter((m) => m.did !== group.me);
   const invitable = contacts.filter((c) => !members.some((m) => m.did === c.did));
   const suiteChoices = CIPHER_SUITES.filter((s: CipherSuite) => s !== state?.suite);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
+    setError(null);
     try {
       await action();
+    } catch (err) {
+      setError(t(err instanceof Error ? err.message : "Действието не успя."));
     } finally {
       setBusy(false);
     }
   }
 
+  async function onPickPhoto(file: File | undefined) {
+    if (!file) return;
+    await run(async () => {
+      const bytes = await prepareImage(file, { maxBytes: MAX_GROUP_PHOTO_BYTES, maxSide: GROUP_PHOTO_SIDE });
+      await group.setPhoto(bytes);
+    });
+  }
+
+  /** The user compared the words with this member and they matched: saved as a verified contact. */
+  async function confirmCode(did: string, memberName: string) {
+    const contact = group.contactOf(did);
+    if (!contact) return;
+    await run(async () => {
+      await saveContact({ ...contact, name: contact.name || memberName, verified: true, verifiedAt: Date.now() });
+      group.markVerified(did);
+      setChecking(null);
+    });
+  }
+
+  function rejectCode(did: string) {
+    group.drop(did);
+    setChecking(null);
+    setError(t("Кодовете не съвпаднаха. Връзката с този участник е прекратена."));
+  }
+
   return (
     <section className="screen" aria-labelledby="group-title">
+      {view.photo && (
+        <img src={view.photo} alt={t("Снимка на групата")} width={96} height={96} style={{ borderRadius: "50%", objectFit: "cover" }} />
+      )}
       <h1 id="group-title">{state?.name ?? t("Групов чат")}</h1>
       <p role="status">
         {view.joined
           ? t("Участници: {n} от {max}", { n: members.length, max: MAX_GROUP_MEMBERS })
           : view.pending
-            ? t("Чакате допускане. Свържете се с всички участници.")
+            ? t("Чакате допускане. Връзките с участниците се правят автоматично през създателя.")
             : t("Още не сте в групата.")}
       </p>
+      {view.photoProgress && (
+        <p className="chat-notice" role="status">
+          {t("Получавам снимката на групата: {percent}%", {
+            percent: Math.min(100, Math.round((view.photoProgress.done / Math.max(1, view.photoProgress.total)) * 100)),
+          })}
+        </p>
+      )}
 
       {view.removed && <p className="chat-notice" role="alert">{t("Бяхте махнат от групата.")}</p>}
+      {error && <p role="alert">{error}</p>}
       {view.notices.length > 0 && (
         <ul className="chat-notice" aria-live="polite">
           {view.notices.map((n, i) => (
-            <li key={i}>{n}</li>
+            <li key={i}>{t(n.text, n.vars)}</li>
           ))}
         </ul>
       )}
@@ -123,13 +178,24 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
       <h2>{t("Участници")}</h2>
       <ul>
         {members.map((m) => {
-          const linked = m.did === session.me || view.linked.includes(m.did);
+          const linked = m.did === group.me || view.linked.includes(m.did);
+          const unverified = view.unverified.includes(m.did);
+          const contact = group.contactOf(m.did);
           return (
             <li key={m.did}>
               <strong>{m.name}</strong>{" "}
               {m.did === state?.creatorDid && <small>({t("админ")})</small>}{" "}
-              <small>{m.did === session.me ? t("това устройство") : linked ? t("свързан") : t("няма връзка")}</small>{" "}
-              {m.did !== session.me && !linked && (
+              <small>
+                {m.did === group.me
+                  ? t("това устройство")
+                  : linked
+                    ? t("свързан")
+                    : view.linking.includes(m.did)
+                      ? t("свързва се…")
+                      : t("няма връзка")}
+              </small>{" "}
+              {unverified && <small>({t("кодът не е сравнен")})</small>}{" "}
+              {m.did !== group.me && !linked && (
                 <button
                   className="secondary"
                   onClick={() => {
@@ -140,10 +206,37 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
                   {t("Свържи се")}
                 </button>
               )}
-              {view.isAdmin && m.did !== session.me && (
-                <button className="secondary" disabled={busy} onClick={() => void run(() => session.remove(m.did))}>
+              {unverified && contact && checking !== m.did && (
+                <button className="secondary" onClick={() => setChecking(m.did)}>
+                  {t("Сравни кода")}
+                </button>
+              )}
+              {view.isAdmin && m.did !== group.me && (
+                <button className="secondary" disabled={busy} onClick={() => void run(() => group.remove(m.did))}>
                   {t("Махни")}
                 </button>
+              )}
+              {unverified && contact && checking === m.did && (
+                <div role="group" aria-label={t("Код за сигурност")} className="call-panel">
+                  <p>
+                    {t("Връзката с {name} е направена през създателя. Сравнете думите с {name} лично или по видео.", {
+                      name: m.name,
+                    })}
+                  </p>
+                  <p className="safety-code" aria-label={t("Код за сигурност")}>
+                    {formatSafetyCode(
+                      safetyWords(identityX25519Public(group.myPublicKey), identityX25519Public(contact.publicKey)),
+                    )}
+                  </p>
+                  <div className="call-actions">
+                    <button disabled={busy} onClick={() => void confirmCode(m.did, m.name)}>
+                      {t("Думите съвпадат")}
+                    </button>
+                    <button className="secondary" onClick={() => rejectCode(m.did)}>
+                      {t("Не съвпадат")}
+                    </button>
+                  </div>
+                </div>
               )}
             </li>
           );
@@ -152,6 +245,28 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
 
       {view.isAdmin && view.joined && (
         <>
+          <h2>{t("Снимка на групата")}</h2>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void onPickPhoto(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <div className="call-actions">
+            <button className="secondary" disabled={busy} onClick={() => photoInput.current?.click()}>
+              {view.photo ? t("Смени снимката") : t("Избери снимка")}
+            </button>
+            {state?.photoHash && (
+              <button className="secondary" disabled={busy} onClick={() => void run(() => group.clearPhoto())}>
+                {t("Махни снимката")}
+              </button>
+            )}
+          </div>
+
           <h2>{t("Покани")}</h2>
           {members.length >= MAX_GROUP_MEMBERS && <p>{t("Групата е пълна.")}</p>}
           <ul>
@@ -161,7 +276,7 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
                 {view.linked.includes(c.did) ? (
                   <button
                     disabled={busy || members.length >= MAX_GROUP_MEMBERS}
-                    onClick={() => void run(() => session.invite(c.did, c.name))}
+                    onClick={() => void run(() => group.invite(c.did, c.name))}
                   >
                     {t("Покани")}
                   </button>
@@ -184,7 +299,7 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
                 key={suite}
                 className="secondary"
                 disabled={busy || others.length === 0}
-                onClick={() => void run(() => session.openSuite(suite))}
+                onClick={() => void run(() => group.openSuite(suite))}
               >
                 {t("Предложи {suite}", { suite: suiteLabel(suite) })}
               </button>
@@ -197,10 +312,10 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
         <div role="group" aria-label={t("Предложение за смяна")} className="call-panel">
           <p>{t("Създателят предлага {suite}.", { suite: suiteLabel(view.suiteRequest) })}</p>
           <div className="call-actions">
-            <button disabled={busy} onClick={() => void run(() => session.answerSuite(true))}>
+            <button disabled={busy} onClick={() => void run(() => group.answerSuite(true))}>
               {t("Приеми")}
             </button>
-            <button className="secondary" disabled={busy} onClick={() => void run(() => session.answerSuite(false))}>
+            <button className="secondary" disabled={busy} onClick={() => void run(() => group.answerSuite(false))}>
               {t("Откажи")}
             </button>
           </div>
@@ -224,12 +339,12 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
               const text = draft.trim();
               if (!text) return;
               setDraft("");
-              void run(() => session.sendText(text));
+              void run(() => group.sendText(text));
             }}
           >
             <label>
               {t("Съобщение")}
-              <input value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={4000} />
+              <input value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={1000} />
             </label>
             <button type="submit" disabled={busy || draft.trim() === ""}>
               {t("Изпрати")}

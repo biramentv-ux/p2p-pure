@@ -33,13 +33,17 @@ function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null
   return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
 }
 
-export async function prepareImage(file: File): Promise<Uint8Array> {
+/** `maxBytes` and `maxSide` default to the chat photo limits; the group photo uses smaller ones. */
+export async function prepareImage(
+  file: File,
+  { maxBytes = MAX_PHOTO_BYTES, maxSide = MAX_SIDE }: { maxBytes?: number; maxSide?: number } = {},
+): Promise<Uint8Array> {
   if (!file.type.startsWith("image/")) throw new Error("Избери снимка.");
   const img = await decode(file).catch(() => {
     throw new Error("Снимката не може да се прочете.");
   });
   try {
-    let side = MAX_SIDE;
+    let side = maxSide;
     for (let attempt = 0; attempt < 4; attempt++) {
       const scale = Math.min(1, side / Math.max(img.width, img.height));
       const canvas = document.createElement("canvas");
@@ -53,7 +57,7 @@ export async function prepareImage(file: File): Promise<Uint8Array> {
       for (const q of QUALITIES) {
         const blob = await toBlob(canvas, q);
         if (!blob) throw new Error("Снимката не може да се обработи.");
-        if (blob.size <= MAX_PHOTO_BYTES) return new Uint8Array(await blob.arrayBuffer());
+        if (blob.size <= maxBytes) return new Uint8Array(await blob.arrayBuffer());
       }
       side = Math.round(side * 0.75);
     }
