@@ -61,7 +61,8 @@ describe("Linux shell: hardening that must not be switched off by accident", () 
   });
 
   it("allows only camera and microphone, only for its own pages, and never leaves the app", () => {
-    expect(main).toMatch(/permission === "media" && own\(/);
+    expect(main).toMatch(/new Set\(\["media", "clipboard-sanitized-write"\]\)/);
+    expect(main).toMatch(/allowed\.has\(permission\) && own\(/);
     expect(main).toMatch(/will-navigate/);
     expect(main).toMatch(/setWindowOpenHandler/);
     expect(main).toMatch(/action: "deny"/);

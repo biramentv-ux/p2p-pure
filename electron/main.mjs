@@ -60,12 +60,14 @@ function createWindow() {
 function lockDown() {
   Menu.setApplicationMenu(null);
 
-  // Only camera and microphone (QR scanner, calls), only for the app's own pages.
+  // Camera and microphone (QR scanner, calls) and writing to the clipboard (the copy buttons),
+  // only for the app's own pages. Reading the clipboard stays refused.
+  const allowed = new Set(["media", "clipboard-sanitized-write"]);
   const own = (url) => typeof url === "string" && url.startsWith(`${ORIGIN}/`);
   session.defaultSession.setPermissionRequestHandler((_wc, permission, done, details) =>
-    done(permission === "media" && own(details.requestingUrl)),
+    done(allowed.has(permission) && own(details.requestingUrl)),
   );
-  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permission === "media" && own(origin + "/"));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => allowed.has(permission) && own(origin + "/"));
 
   app.on("web-contents-created", (_e, contents) => {
     contents.on("will-attach-webview", (e) => e.preventDefault());

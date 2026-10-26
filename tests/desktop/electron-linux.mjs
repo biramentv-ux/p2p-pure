@@ -158,6 +158,14 @@ try {
   check("window.open is refused", escape.opened);
   check("path traversal and other hosts are refused", escape.traversal !== 200 && escape.other !== 200);
   check("geolocation is not granted", escape.geo !== "granted");
+  // The copy buttons of the app write to the clipboard; reading it must stay refused.
+  const clip = await page.evaluate(async () => {
+    window.focus();
+    const wrote = await navigator.clipboard.writeText("p2p").then(() => true, () => false);
+    const read = await navigator.clipboard.readText().then(() => true, () => false);
+    return { wrote, read };
+  });
+  check("copy to the clipboard works, reading it is refused", clip.wrote && !clip.read, JSON.stringify(clip));
   const before = page.url();
   await page.evaluate(() => {
     location.href = "https://example.org/";
