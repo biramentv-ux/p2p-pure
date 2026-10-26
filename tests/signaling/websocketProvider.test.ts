@@ -135,4 +135,14 @@ describe("WebSocketSignalingProvider", () => {
     expect(worker.sockets[0].readyState).toBe(3);
     expect(got).toEqual([]);
   });
+
+  it("waitForPeer resolves when the second device joins, and sends the offer after that", async () => {
+    const worker = fakeWorker();
+    const host = new WebSocketSignalingProvider("https://sig.example", worker.makeSocket, okFetch("ABCDEFGHJK"));
+    await host.openRoom();
+    const waiting = host.waitForPeer();
+    worker.sockets[0].emit("message", { data: '{"type":"joined"}' });
+    await expect(waiting).resolves.toBeUndefined();
+    await expect(host.waitForPeer()).resolves.toBeUndefined();
+  });
 });
