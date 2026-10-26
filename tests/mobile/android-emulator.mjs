@@ -49,7 +49,13 @@ function launch() {
 /** Find the WebView devtools socket of the app and forward it to a local port. */
 async function forward() {
   for (let i = 0; i < 40; i++) {
-    const pid = adb("shell", "pidof", APP_ID).trim().split(/\s+/)[0];
+    // pidof exits 1 while the app is still starting: that is "not yet", not an error.
+    let pid = "";
+    try {
+      pid = adb("shell", "pidof", APP_ID).trim().split(/\s+/)[0];
+    } catch {
+      pid = "";
+    }
     if (pid) {
       const sockets = adb("shell", "cat", "/proc/net/unix");
       if (sockets.includes(`webview_devtools_remote_${pid}`)) {
@@ -59,7 +65,13 @@ async function forward() {
     }
     await sleep(1500);
   }
-  throw new Error("WebView devtools socket not found (is this a debug build?)");
+  let running = "";
+  try {
+    running = adb("shell", "pidof", APP_ID).trim();
+  } catch {
+    running = "";
+  }
+  throw new Error(running ? "WebView devtools socket not found (is this a debug build?)" : `${APP_ID} is not running after launch`);
 }
 
 async function connect(errors) {
