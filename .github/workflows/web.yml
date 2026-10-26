@@ -54,7 +54,19 @@ jobs:
 
       - name: Unit and worker tests
         # The github-actions reporter turns each failing test into an annotation (logs are not always readable).
-        run: npm test -- --reporter=default --reporter=github-actions
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --reporter=default --reporter=github-actions 2>&1 | tee vitest.log
+
+      - name: Show why the tests failed
+        if: failure()
+        shell: bash
+        run: |
+          # Errors outside a test (unhandled rejections, a crashed worker) get no annotation of their own.
+          grep -nE "Unhandled|Error:|FAIL|×|Tests +[0-9]|Test Files" vitest.log | tail -40 | while IFS= read -r line; do
+            echo "::error title=vitest::${line//%/%25}"
+          done
 
       - name: Build (type check + PWA)
         run: npm run build
