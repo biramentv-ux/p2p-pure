@@ -16,6 +16,7 @@
 | `P2P-Messenger-<версия>-amd64.deb` | Debian, Ubuntu, Mint, Pop!_OS | Системен пакет. Препоръчан за Ubuntu 24.04. |
 | `P2P-Messenger-<версия>-x86_64.rpm` | Fedora, RHEL, openSUSE | Системен пакет. |
 | `P2P-Messenger-<версия>-x86_64.AppImage` | Всяка друга система, без инсталиране | Един файл, само за теб, без root. |
+| `P2P-Messenger-<версия>-x86_64.flatpak` | Всяка система с Flatpak | Изолирано, с минимални права. Виж раздела „Flatpak“. |
 | `install.sh` | Всички | Сваля, проверява и инсталира сам правилния пакет. |
 | `SHA256SUMS-linux.txt` | Проверка | Контролни суми на всички файлове по-горе. |
 | `SHA256SUMS-linux.txt.asc` | Проверка | GPG подпис на сумите (само в подписани издания). |
@@ -126,6 +127,48 @@ namespaces“, а Chromium (и Electron) ги ползват за своята �
   libgbm (пакетите ги изискват и пакетният мениджър ги донася сам).
 - За камера и микрофон (QR сканиране, разговори): достъп до `/dev/video*` и PipeWire/Pulse.
 
+## Flatpak
+
+Пакет `bg.p2pmessenger.app` върху `org.freedesktop.Platform` и `org.electronjs.Electron2.BaseApp`
+(клон 25.08). Приложението е същото като в `.deb`, но върви в изолация на Flatpak и **без достъп до
+файловете ти**.
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS-linux.txt
+flatpak install --user ./P2P-Messenger-0.7.0-x86_64.flatpak     # runtime-ът се сваля от Flathub
+flatpak run bg.p2pmessenger.app
+flatpak uninstall --user bg.p2pmessenger.app                    # (--delete-data изтрива и профила)
+```
+
+Права (`finish-args` в `flatpak/bg.p2pmessenger.app.yml`): мрежа; Wayland, а X11 само ако няма Wayland;
+звук (микрофон за разговори); `--device=all` за `/dev/video*` (камерата за QR сканиране; Flatpak няма
+по-тясно право за камера без портал, а Chromium още не го ползва); известия и
+`org.freedesktop.secrets` (Electron пази ключа за бисквитките в libsecret). **Няма** `--filesystem`,
+няма достъп до сесийната и системната шина, до ssh/gpg агента. Тест (`tests/desktop/flatpak.test.ts`)
+пада, ако някое от тези права се добави.
+
+- **Данни:** `~/.var/app/bg.p2pmessenger.app/config/p2p-messenger`. Не се споделят с `.deb` версията;
+  за същата идентичност я възстанови с 12-те думи.
+- **Sandbox:** Chromium ползва `zypak` от BaseApp, не setuid `chrome-sandbox` (той не се слага в пакета).
+  Затова пакетът работи и на Ubuntu 24.04 с ограничени user namespaces.
+- **Какво е вързано:** манифестът няма адреси за сваляне. Единственият му източник е архив на
+  разопакованото приложение (от `electron-builder`, със заключените версии), вързан със SHA-256, който
+  `scripts/linux/build-flatpak.sh` записва при сглобяване. Runtime-ът и BaseApp идват от Flathub по клон
+  (25.08), не по отпечатък на commit.
+- **Не е във Flathub.** Пакетът е само файл от Releases; за Flathub трябва ново подаване и сглобяване
+  от изходен код без мрежа (flatpak-node-generator).
+
+Сглобяване на твоя машина (нужни са `flatpak`, `flatpak-builder` и runtime-ът от Flathub):
+
+```bash
+flatpak install --user flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.electronjs.Electron2.BaseApp//25.08
+npm run build:desktop && npm --prefix electron ci && npm --prefix electron run dist:dir
+bash scripts/linux/build-flatpak.sh out      # -> out/P2P-Messenger-<версия>-x86_64.flatpak
+```
+
+CI (`flatpak` в `linux-desktop.yml`) сглобява пакета, инсталира го, проверява правата и го пуска под
+Xvfb; при таг `desktop-v*` го качва в същия Release.
+
 ## Какво е различно от браузърната версия
 
 - **Отключване:** без passkey. Chromium на Linux няма вграден authenticator и не показва
@@ -172,10 +215,10 @@ npm run test:linux           # проверката по-горе върху п�
 - Или с таг: `git tag desktop-v0.7.0 && git push origin desktop-v0.7.0`. Тогава файловете
   се качват в същия GitHub Release като Windows версията (pre-release).
 - Версията е в `electron/package.json` и трябва да е същата като в `src-tauri/tauri.conf.json`
-  (има тест за това).
+  (има тест за това). Същата версия е и в `flatpak/bg.p2pmessenger.app.metainfo.xml` (проверява се от тест).
 
 ## Подпис
 
 GPG подписът (`.rpm`, `SHA256SUMS-linux.txt.asc`) и APT/dnf хранилището се включват сами,
 когато собственикът добави секрета `LINUX_GPG_PRIVATE_KEY`. Как се прави ключът, кои секрети
-трябват и защо `.deb` не се подписва вътре: [SIGNING.md](SIGNING.md). Flatpak е друга възможност.
+трябват и защо `.deb` не се подписва вътре: [SIGNING.md](SIGNING.md). Flatpak пакетът не се подписва вътре; ползва се `SHA256SUMS-linux.txt` (и подписът му, когато има ключ).

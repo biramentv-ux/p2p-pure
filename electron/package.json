@@ -14,6 +14,7 @@
   "main": "main.mjs",
   "scripts": {
     "dist": "electron-builder --linux deb rpm AppImage --publish never",
+    "dist:dir": "electron-builder --linux dir --publish never",
     "start": "electron . --no-sandbox"
   },
   "devDependencies": {

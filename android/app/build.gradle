@@ -7,10 +7,12 @@ android {
         applicationId "bg.p2pmessenger.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // CI passes these (-PapkVersionCode=<run number> -PapkVersionName=<version>) so every build
-        // is newer than the one before; a local build keeps 1 / 1.0.
-        versionCode((project.findProperty('apkVersionCode') ?: '1') as int)
-        versionName((project.findProperty('apkVersionName') ?: '1.0') as String)
+        versionCode 10000
+        versionName "1.0.0"
+        // The GitHub APK workflow overrides these (-PapkVersionCode / -PapkVersionName);
+        // F-Droid and local builds keep the values above.
+        if (project.findProperty('apkVersionCode')) versionCode((project.findProperty('apkVersionCode')) as int)
+        if (project.findProperty('apkVersionName')) versionName(project.findProperty('apkVersionName') as String)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

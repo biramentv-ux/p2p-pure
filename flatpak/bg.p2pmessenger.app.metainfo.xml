@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>bg.p2pmessenger.app</id>
+  <launchable type="desktop-id">bg.p2pmessenger.app.desktop</launchable>
+  <name>P2P Messenger</name>
+  <summary>Encrypted peer-to-peer messenger</summary>
+  <summary xml:lang="bg">Шифрован peer-to-peer месинджър</summary>
+  <developer id="io.github.biramentv-ux">
+    <name>DyrakArmy</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <url type="homepage">https://github.com/biramentv-ux/p2p-pure</url>
+  <url type="bugtracker">https://github.com/biramentv-ux/p2p-pure/issues</url>
+  <description>
+    <p>Messages, calls and history stay on the devices. No account, no phone number, no central server: the devices connect to each other directly.</p>
+    <p xml:lang="bg">Съобщенията, разговорите и историята остават на устройствата. Без акаунт, без телефонен номер, без централен сървър: устройствата се свързват директно.</p>
+  </description>
+  <categories>
+    <category>Network</category>
+    <category>InstantMessaging</category>
+  </categories>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+  </content_rating>
+  <provides>
+    <binary>p2p-messenger</binary>
+  </provides>
+  <releases>
+    <release version="0.7.0" date="2026-10-26"/>
+  </releases>
+</component>

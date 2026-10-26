@@ -3,6 +3,7 @@ import { getUnlockMethod } from "./identity";
 import type { UnlockedIdentity, UnlockMethod } from "./identity";
 import { getContact, lockContacts, unlockContacts, type Contact } from "./contacts/contacts";
 import { deriveHistoryKey } from "./history/messageStore";
+import { activateStoredTurn, deactivateTurn } from "./p2p/turnStore";
 import type { PeerLink } from "./p2p/peer";
 import type { SecureSession } from "./p2p/secureSession";
 import { useI18n } from "./i18n";
@@ -15,6 +16,7 @@ import { webrtcLinks } from "./group/groupLinker";
 import { newProposalId } from "./p2p/suiteNegotiation";
 import { ContactsScreen } from "./ui/screens/ContactsScreen";
 import { ShowQrScreen } from "./ui/screens/ShowQrScreen";
+import { TransferReceiveScreen, TransferSendScreen } from "./ui/screens/TransferScreen";
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
 import { LanguageSwitch } from "./ui/components/LanguageSwitch";
 import { useAutoLock } from "./ui/useAutoLock";
@@ -31,6 +33,7 @@ type Screen =
   | { k: "contacts" }
   | { k: "connect"; expected?: Contact; forGroup?: boolean }
   | { k: "group" }
+  | { k: "transfer" }
   | { k: "chat"; contact: Contact; link: PeerLink; session: SecureSession };
 
 type TabScreen = "identity" | "contacts" | "connect";
@@ -63,6 +66,8 @@ function App() {
   // saved encrypted, so it comes back after unlock.
   const groupRef = useRef<GroupSession | null>(null);
   const [, setGroupRestored] = useState(0);
+  // New device without an identity: receiving one from another device (src/transfer).
+  const [receiving, setReceiving] = useState(false);
 
   useEffect(() => {
     getUnlockMethod()
@@ -84,6 +89,7 @@ function App() {
     groupRef.current?.closeAll();
     groupRef.current = null;
     lockContacts();
+    deactivateTurn();
     setScreen({ k: "identity" });
     getUnlockMethod()
       .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
@@ -94,8 +100,10 @@ function App() {
   // (and pre-v5 plaintext contacts migrated) before any screen can read it. If the migration
   // fails the keys are still set and the plaintext rows stay for the next unlock to retry.
   const enter = (identity: UnlockedIdentity) => {
-    unlockContacts(deriveHistoryKey(identity))
-      .catch(() => undefined)
+    Promise.all([
+      activateStoredTurn(deriveHistoryKey(identity)).catch(() => undefined),
+      unlockContacts(deriveHistoryKey(identity)).catch(() => undefined),
+    ])
       .finally(() => setState({ kind: "unlocked", identity }));
   };
 
@@ -136,10 +144,18 @@ function App() {
   }
 
   if (state.kind === "no-identity") {
+    if (receiving) {
+      return (
+        <Frame>
+          <TransferReceiveScreen onDone={enter} onCancel={() => setReceiving(false)} />
+        </Frame>
+      );
+    }
     return (
       <Frame>
         <CreateIdentityScreen
           onIdentityCreated={enter}
+          onHaveOtherDevice={() => setReceiving(true)}
         />
       </Frame>
     );
@@ -200,7 +216,7 @@ function App() {
     );
   }
 
-  const activeTab: TabScreen = screen.k === "connect" ? "connect" : screen.k === "group" ? "contacts" : (screen.k as TabScreen);
+  const activeTab: TabScreen = screen.k === "connect" ? "connect" : screen.k === "group" ? "contacts" : screen.k === "transfer" ? "identity" : (screen.k as TabScreen);
 
   return (
     <Frame
@@ -235,7 +251,25 @@ function App() {
         </nav>
       }
     >
-      {screen.k === "identity" && <ShowQrScreen identity={identity} />}
+      {screen.k === "identity" && <ShowQrScreen identity={identity} onMove={() => setScreen({ k: "transfer" })} />}
+      {screen.k === "transfer" && (
+        <TransferSendScreen
+          identity={identity}
+          onCancel={() => setScreen({ k: "identity" })}
+          takeWriters={() => {
+            // The group is stopped and its queued saves drained BEFORE the wipe (transfer/wipe.ts).
+            const group = groupRef.current;
+            groupRef.current = null;
+            return [group];
+          }}
+          onMoved={() => {
+            // The device was wiped: drop everything in memory and return to the first-run screen.
+            lockContacts();
+            setScreen({ k: "identity" });
+            setState({ kind: "no-identity" });
+          }}
+        />
+      )}
       {screen.k === "contacts" && (
         <ContactsScreen
           onChat={(contact) => setScreen({ k: "connect", expected: contact })}

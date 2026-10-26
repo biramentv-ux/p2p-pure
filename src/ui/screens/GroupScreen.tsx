@@ -4,6 +4,8 @@ import { MAX_GROUP_MEMBERS } from "../../group/groupModel";
 import { MAX_GROUP_PHOTO_BYTES, type GroupSession } from "../../group/groupSession";
 import { MAX_GROUP_FILE_BYTES } from "../../p2p/fileTransfer";
 import { FileBubble, TransferList } from "../components/FileBubble";
+import { PastePreview } from "../components/PastePreview";
+import { usePasteImage } from "../pasteImage";
 import { GifPicker } from "../components/GifPicker";
 import { GIPHY_KEY } from "../giphy";
 import { CIPHER_SUITES, suiteLabel, type CipherSuite } from "../../p2p/cipherSuite";
@@ -46,6 +48,9 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
   const fileInput = useRef<HTMLInputElement>(null);
   const [showGif, setShowGif] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
+  /** A picture pasted with Ctrl+V, waiting for "Send". */
+  const [pasted, setPasted] = useState<File | null>(null);
+  usePasteImage(!!view?.joined, setPasted);
 
   useEffect(() => {
     let alive = true;
@@ -401,6 +406,18 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
               void group.cancelFile(peer, id);
             }}
           />
+          {pasted && (
+            <PastePreview
+              file={pasted}
+              busy={!!sending || others.length === 0}
+              onCancel={() => setPasted(null)}
+              onSend={() => {
+                const file = pasted;
+                setPasted(null);
+                void sendFile(file, file.name);
+              }}
+            />
+          )}
           {showGif && <GifPicker onPick={(blob, gifName) => void sendFile(blob, gifName)} onClose={() => setShowGif(false)} />}
           <input
             ref={fileInput}
