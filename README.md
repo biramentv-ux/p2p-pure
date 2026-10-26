@@ -67,7 +67,7 @@ flowchart LR
 
 ## 🎬 Урок: как Ани и Петър се свързват
 
-<img src="docs/assets/tutorial-far-away.gif" alt="Анимация в 9 стъпки: профил, избор на режим, покана, демо стая, думи за проверка, чат, разговор, група и устройства" width="640">
+<img src="docs/assets/tutorial-far-away.gif" alt="Анимация в 9 стъпки: профил, избор на режим, покана, демо стая, 12 думи за проверка, чат, разговор, група и устройства" width="640">
 
 1. **Профил.** Всеки създава профил на своя телефон с passkey или парола и записва 12-те думи.
 2. **Режим.** Избират „Локален (QR)“, ако са заедно, или „Демо (стая)“, ако са далеч.
@@ -353,7 +353,7 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 
 ## 🎬 Tutorial: how Ani and Petar connect
 
-<img src="docs/assets/tutorial-far-away.gif" alt="Nine-step animation: profile, mode, invitation, demo room, verification words, chat, call, group and devices (labels in Bulgarian)" width="640">
+<img src="docs/assets/tutorial-far-away.gif" alt="Nine-step animation: profile, mode, invitation, demo room, 12 verification words, chat, call, group and devices (labels in Bulgarian)" width="640">
 
 1. **Profile.** Each person creates a profile on their phone with a passkey or a password and writes down the 12 words.
 2. **Mode.** They pick "Local (QR)" when together, or "Demo (room)" when far apart.
