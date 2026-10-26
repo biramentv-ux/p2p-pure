@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_TURN_SETTINGS,
   STUN_SERVERS,
@@ -8,6 +8,7 @@ import {
   setActiveTurn,
   validateTurnSettings,
   validateTurnUrl,
+  isValidIpv6,
   type TurnSettings,
 } from "../../src/p2p/turnConfig";
 import { activateStoredTurn, clearTurnSettings, deactivateTurn, loadTurnSettings, saveTurnSettings } from "../../src/p2p/turnStore";
@@ -72,6 +73,27 @@ describe("validateTurnUrl", () => {
     expect(validateTurnUrl("turn:172.32.0.1")).toMatchObject({ ok: true, warnings: ["PLAIN_TURN"] });
     const plain = validateTurnUrl("turn:relay.example.org");
     expect(plain.ok && plain.warnings).toEqual(["PLAIN_TURN"]);
+  });
+});
+
+describe("IPv6 host structure", () => {
+  it("accepts well-formed addresses", () => {
+    for (const ok of ["::", "::1", "2001:db8::1", "2001:0db8:0000:0000:0000:ff00:0042:8329", "fe80::1:2:3:4", "1::", "::ffff:192.0.2.1", "64:ff9b::192.0.2.33", "1:2:3:4:5:6:7::", "1:2:3:4:5:6:192.0.2.1"]) {
+      expect(isValidIpv6(ok), ok).toBe(true);
+    }
+  });
+
+  it("rejects malformed addresses", () => {
+    for (const bad of ["::::", ":::", "12345::1", "1:2:3", "1:2:3:4:5:6:7:8:9", "1::2::3", "1:2:3:4:5:6:7:8::", "g::1", ":1:2:3:4:5:6:7", "1:2:3:4:5:6:7:", "::1.2.3", "1.2.3.4::", "::192.0.2.1:1", "::999.0.0.1", "fe80::1%eth0", "", "1:2:3:4:5:6:7:192.0.2.1"]) {
+      expect(isValidIpv6(bad), bad).toBe(false);
+    }
+  });
+
+  it("validateTurnUrl uses it for bracketed hosts", () => {
+    for (const bad of ["turn:[::::]", "turn:[12345::1]", "turn:[1:2:3]", "turn:[1::2::3]:3478"]) {
+      expect(validateTurnUrl(bad), bad).toEqual({ ok: false, error: "URL_HOST" });
+    }
+    expect(validateTurnUrl("turns:[2001:db8::1]:5349")).toMatchObject({ ok: true, port: 5349 });
   });
 });
 
@@ -164,6 +186,19 @@ describe("turnStore (encrypted at rest)", () => {
     await clearTurnSettings();
     expect(getActiveTurn()).toBeNull();
     expect(await loadTurnSettings(key)).toBeNull();
+  });
+
+  it("clear drops the in-memory config even if the IndexedDB delete fails", async () => {
+    setActiveTurn(good);
+    const spy = vi.spyOn(indexedDB, "open").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    try {
+      await expect(clearTurnSettings()).rejects.toThrow("blocked");
+      expect(getActiveTurn()).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("is off when nothing was ever saved", async () => {

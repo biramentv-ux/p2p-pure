@@ -62,13 +62,40 @@ const MAX_FIELD = 512;
 const CONTROL = /[\u0000-\u001f\u007f]/;
 const HOSTNAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-const IPV6 = /^[0-9a-f:.]+$/i;
+const HEXTET = /^[0-9a-f]{1,4}$/i;
 
 function parseIpv4(host: string): number[] | null {
   const m = IPV4.exec(host);
   if (!m) return null;
   const parts = m.slice(1).map(Number);
   return parts.every((n) => n >= 0 && n <= 255) ? parts : null;
+}
+
+/**
+ * Full structural IPv6 check (RFC 4291 text form, no zone id): hextets of 1 to 4 hex digits,
+ * at most one "::", exactly 8 groups (fewer only with "::", which stands for at least one
+ * zero group), and an optional dotted IPv4 tail that counts as two groups.
+ */
+export function isValidIpv6(text: string): boolean {
+  if (!text || text.length > 45) return false;
+  const halves = text.split("::");
+  if (halves.length > 2) return false;
+  const groupsOf = (part: string): string[] => (part === "" ? [] : part.split(":"));
+  const all = [...groupsOf(halves[0]), ...(halves.length === 2 ? groupsOf(halves[1]) : [])];
+  let count = 0;
+  for (let i = 0; i < all.length; i++) {
+    const g = all[i];
+    if (g.includes(".")) {
+      // Embedded IPv4 only at the very end of the text ("1.2.3.4::" is not valid).
+      if (i !== all.length - 1 || text.endsWith(":") || !parseIpv4(g)) return false;
+      count += 2;
+    } else if (HEXTET.test(g)) {
+      count += 1;
+    } else {
+      return false; // empty group (":::" or a stray leading/trailing ":"), >4 digits, non-hex
+    }
+  }
+  return halves.length === 2 ? count <= 7 : count === 8;
 }
 
 function isPrivateIpv4([a, b]: number[]): boolean {
@@ -135,7 +162,7 @@ export function validateTurnUrl(input: string): TurnUrlResult {
       if (!after.startsWith(":")) return { ok: false, error: "URL_HOST" };
       portText = after.slice(1);
     }
-    if (!IPV6.test(host.slice(1, -1)) || !host.includes(":")) return { ok: false, error: "URL_HOST" };
+    if (!isValidIpv6(host.slice(1, -1))) return { ok: false, error: "URL_HOST" };
   } else {
     const colon = authority.indexOf(":");
     host = colon === -1 ? authority : authority.slice(0, colon);
