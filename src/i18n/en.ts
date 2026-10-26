@@ -436,6 +436,14 @@ export const EN_DICTIONARY: Record<string, string> = {
   "Внимание: turn: не е обвит в TLS, затова мрежата вижда, че ползваш релей. Предпочети turns:. Съдържанието остава криптирано.": "Warning: turn: is not wrapped in TLS, so the network can see you use a relay. Prefer turns:. The content stays encrypted.",
   "Запази": "Save",
   "Изтрий релея": "Delete relay",
+  "Връзката ще мине само през твоя TURN релей. Другият човек не вижда IP адреса ти. Релеят вижда метаданни (IP адреси, време, размер), но не и съдържанието.":
+    "The connection will go only through your TURN relay. The other person does not see your IP address. The relay sees metadata (IP addresses, timing, sizes) but not the content.",
+  "Твоят TURN релей е достъпен. Ако директна връзка не успее, тя ще мине през релея. Релеят вижда метаданни (IP адреси, време, размер), но не и съдържанието.":
+    "Your TURN relay is reachable. If a direct connection fails, it will go through the relay. The relay sees metadata (IP addresses, timing, sizes) but not the content.",
+  "Връзката не се установи и през TURN релея. Провери адреса, потребителя и паролата му в раздел Идентичност.":
+    "The connection did not work through the TURN relay either. Check its address, username and password in the Identity tab.",
+  "Ако и другото устройство е зад строга мрежа, то също може да има нужда от релей.":
+    "If the other device is on a strict network too, it may also need a relay.",
   "Релеят е изключен за тази сесия, но записът не можа да бъде изтрит. Опитай отново.":
     "The relay is off for this session, but the saved entry could not be deleted. Try again.",
 };

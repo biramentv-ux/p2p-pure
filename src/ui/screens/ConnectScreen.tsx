@@ -13,7 +13,7 @@ import {
   type Invitation,
 } from "../../p2p/invitation";
 import { PeerLink, PeerLinkError, CONNECT_TIMEOUT_MS } from "../../p2p/peer";
-import { describeReachability, summarizeCandidates } from "../../p2p/network";
+import { describeReachability, reachability, summarizeCandidates } from "../../p2p/network";
 import { completeHandshake } from "../../p2p/session";
 import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "../../p2p/secureSession";
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
@@ -156,11 +156,18 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     let message: string;
     if (err instanceof PeerLinkError && mySdp) {
       // Timeouts and closed channels: say what it usually means and what to try next.
-      message = [
-        t("Връзката не се установи навреме. Мрежата може да блокира директната връзка."),
-        t(describeReachability(summarizeCandidates(mySdp))),
-        t("Опитайте с една Wi-Fi мрежа за първото сдвояване."),
-      ].join(" ");
+      const summary = summarizeCandidates(mySdp);
+      message =
+        reachability(summary) === "relay"
+          ? [
+              t("Връзката не се установи и през TURN релея. Провери адреса, потребителя и паролата му в раздел Идентичност."),
+              t("Ако и другото устройство е зад строга мрежа, то също може да има нужда от релей."),
+            ].join(" ")
+          : [
+              t("Връзката не се установи навреме. Мрежата може да блокира директната връзка."),
+              t(describeReachability(summary)),
+              t("Опитайте с една Wi-Fi мрежа за първото сдвояване."),
+            ].join(" ");
     } else {
       message = err instanceof Error ? t(err.message) : t("Неизвестна грешка при свързване.");
     }

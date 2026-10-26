@@ -201,6 +201,46 @@ describe("turnStore (encrypted at rest)", () => {
     }
   });
 
+  it("Save then Delete: the earlier save can never restore a deleted relay", async () => {
+    const saving = saveTurnSettings(key, good); // still encrypting when Delete arrives
+    const deleting = clearTurnSettings();
+    expect(getActiveTurn()).toBeNull();
+    expect(await saving).toBe(false); // cancelled: did not reactivate
+    await deleting;
+    expect(getActiveTurn()).toBeNull();
+    expect(await loadTurnSettings(key)).toBeNull();
+    // Nothing left in the queue can bring it back.
+    await activateStoredTurn(key);
+    expect(getActiveTurn()).toBeNull();
+  });
+
+  it("Delete then Save keeps the newer save (user intent order)", async () => {
+    await saveTurnSettings(key, good);
+    const deleting = clearTurnSettings();
+    const saving = saveTurnSettings(key, { ...good, username: "bob" });
+    await deleting;
+    expect(await saving).toBe(true);
+    expect(getActiveTurn()?.username).toBe("bob");
+    expect((await loadTurnSettings(key))?.username).toBe("bob");
+  });
+
+  it("lock cancels a pending save's activation", async () => {
+    const saving = saveTurnSettings(key, good);
+    deactivateTurn();
+    expect(await saving).toBe(false);
+    expect(getActiveTurn()).toBeNull();
+  });
+
+  it("a failed save does not block later operations", async () => {
+    const spy = vi.spyOn(indexedDB, "open").mockImplementationOnce(() => {
+      throw new Error("blocked once");
+    });
+    await expect(saveTurnSettings(key, good)).rejects.toThrow("blocked once");
+    spy.mockRestore();
+    expect(await saveTurnSettings(key, good)).toBe(true);
+    expect(getActiveTurn()).toEqual(good);
+  });
+
   it("is off when nothing was ever saved", async () => {
     expect(await loadTurnSettings(key)).toBeNull();
     expect(await activateStoredTurn(key)).toBeNull();

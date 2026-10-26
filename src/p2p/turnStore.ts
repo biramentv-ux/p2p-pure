@@ -21,12 +21,43 @@ interface SealedTurn {
   ct: string;
 }
 
-export async function saveTurnSettings(historyKey: Uint8Array, settings: TurnSettings): Promise<void> {
+/*
+ * Every write (save, delete, activate-on-unlock) runs through one promise chain, so a delete
+ * can never be overtaken by a save that started earlier. `epoch` is bumped synchronously by
+ * delete and lock: an operation that was already queued or running under an older epoch may
+ * still finish its disk write, but it no longer switches the relay on in memory.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+let epoch = 0;
+
+function serialize<T>(op: () => Promise<T>): Promise<T> {
+  const run = queue.then(op, op);
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+async function writeRow(historyKey: Uint8Array, settings: TurnSettings): Promise<void> {
   const aes = aesKeyFromPrfSecret(historyKey, SALT);
   const blob = await encryptSeed(new TextEncoder().encode(JSON.stringify(settings)), aes);
   const row: SealedTurn = { v: 1, iv: bytesToBase64Url(blob.nonce), ct: bytesToBase64Url(blob.ciphertext) };
   await withStore(STORE_IDENTITY, "readwrite", (s) => {
     s.put(row, ROW_KEY);
+  });
+}
+
+/**
+ * Saves the settings encrypted and, if nothing cancelled it meanwhile (a delete or a lock),
+ * makes them active for new connections. Returns false when it was cancelled; in that case a
+ * queued delete runs right after and removes the row again.
+ */
+export function saveTurnSettings(historyKey: Uint8Array, settings: TurnSettings): Promise<boolean> {
+  const mine = epoch;
+  return serialize(async () => {
+    if (mine !== epoch) return false; // a delete or lock came in before this save started
+    await writeRow(historyKey, settings);
+    if (mine !== epoch) return false;
+    setActiveTurn(settings);
+    return true;
   });
 }
 
@@ -44,25 +75,33 @@ export async function loadTurnSettings(historyKey: Uint8Array): Promise<TurnSett
 }
 
 /**
- * Deletes the saved relay. The in-memory config is dropped first and unconditionally, so new
- * connections stop using the relay even if the IndexedDB delete then fails; the rejection
- * reaches the caller, which must not report success.
+ * Deletes the saved relay. The in-memory config is dropped at once and any pending save is
+ * cancelled (it can no longer reactivate the relay); the disk delete then runs after it in
+ * the queue. If the delete fails the rejection reaches the caller, which must not report success.
  */
-export async function clearTurnSettings(): Promise<void> {
+export function clearTurnSettings(): Promise<void> {
+  epoch++;
   setActiveTurn(null);
-  await withStore(STORE_IDENTITY, "readwrite", (s) => {
-    s.delete(ROW_KEY);
+  return serialize(async () => {
+    setActiveTurn(null);
+    await withStore(STORE_IDENTITY, "readwrite", (s) => {
+      s.delete(ROW_KEY);
+    });
   });
 }
 
 /** After unlock: decrypt and make the settings active for new connections. */
-export async function activateStoredTurn(historyKey: Uint8Array): Promise<TurnSettings | null> {
-  const settings = await loadTurnSettings(historyKey);
-  setActiveTurn(settings);
-  return settings;
+export function activateStoredTurn(historyKey: Uint8Array): Promise<TurnSettings | null> {
+  const mine = epoch;
+  return serialize(async () => {
+    const settings = await loadTurnSettings(historyKey);
+    if (mine === epoch) setActiveTurn(settings);
+    return settings;
+  });
 }
 
-/** On lock: forget the credential in memory. */
+/** On lock: forget the credential in memory and cancel pending activations. */
 export function deactivateTurn(): void {
+  epoch++;
   setActiveTurn(null);
 }

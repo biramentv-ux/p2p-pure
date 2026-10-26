@@ -24,6 +24,8 @@ export function TurnSettings({ identity }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<TurnWarningCode[]>([]);
   const [status, setStatus] = useState<string | null>(null);
+  // One operation at a time: both buttons are disabled while a save or delete is pending.
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -66,6 +68,7 @@ export function TurnSettings({ identity }: Props) {
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setStatus(null);
     const checked = validateTurnSettings(form);
     if (!checked.ok) {
@@ -75,9 +78,11 @@ export function TurnSettings({ identity }: Props) {
     }
     setError(null);
     setWarnings(checked.warnings);
+    setBusy(true);
     try {
-      await saveTurnSettings(historyKey, checked.settings);
-      setActiveTurn(checked.settings);
+      // The store activates the relay itself, and only if no delete or lock cancelled it.
+      const applied = await saveTurnSettings(historyKey, checked.settings);
+      if (!applied) return;
       setForm(checked.settings);
       setStatus(
         checked.settings.enabled
@@ -86,19 +91,25 @@ export function TurnSettings({ identity }: Props) {
       );
     } catch {
       setError(t("Не успяхме да запазим настройките."));
+    } finally {
+      setBusy(false);
     }
   }
 
   async function onRemove() {
+    if (busy) return;
     setStatus(null);
     setWarnings([]);
     // Stop using the relay for new connections right away, whatever happens on disk.
     setActiveTurn(null);
+    setBusy(true);
     try {
       await clearTurnSettings();
     } catch {
       setError(t("Релеят е изключен за тази сесия, но записът не можа да бъде изтрит. Опитай отново."));
       return;
+    } finally {
+      setBusy(false);
     }
     setForm(DEFAULT_TURN_SETTINGS);
     setError(null);
@@ -179,8 +190,8 @@ export function TurnSettings({ identity }: Props) {
         )}
         {error && <p role="alert">{error}</p>}
         {status && <p role="status">{status}</p>}
-        <button type="submit">{t("Запази")}</button>
-        <button type="button" className="secondary" onClick={() => void onRemove()}>
+        <button type="submit" disabled={busy}>{t("Запази")}</button>
+        <button type="button" className="secondary" disabled={busy} onClick={() => void onRemove()}>
           {t("Изтрий релея")}
         </button>
       </form>
