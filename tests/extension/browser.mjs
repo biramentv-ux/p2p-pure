@@ -67,11 +67,21 @@ async function runWithLanguage(lang) {
     const status = await popup.textContent("#status");
     check(`[${lang}] popup shows a status line`, status.length > 0, status);
 
-    const blocking = await popup.evaluate(async () => {
-      const out = await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } });
-      return out.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id);
-    });
-    check(`[${lang}] popup has no serious or critical accessibility violations`, blocking.length === 0, blocking.join(", "));
+    // The popup follows the browser's colour scheme, so both themes are checked (contrast included).
+    for (const colorScheme of ["light", "dark"]) {
+      await popup.emulateMedia({ colorScheme });
+      // Colour changes are transitioned; check the settled colours, not a frame in between.
+      await popup.waitForFunction(() => document.getAnimations().length === 0);
+      const blocking = await popup.evaluate(async () => {
+        const out = await window.axe.run(document, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } });
+        return out.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id);
+      });
+      check(`[${lang}] popup has no serious or critical accessibility violations (${colorScheme})`, blocking.length === 0, blocking.join(", "));
+    }
+    const targets = await popup.evaluate(() =>
+      [...document.querySelectorAll("button")].map((b) => Math.round(b.getBoundingClientRect().height)),
+    );
+    check(`[${lang}] popup buttons are at least 44px tall`, targets.every((h) => h >= 44), targets.join(", "));
 
     // The tab state is read from the service worker (chrome.tabs), not from the page:
     // the sandbox cannot reach the public host, so the tab shows a network error page.
