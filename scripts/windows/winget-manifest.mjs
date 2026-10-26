@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Writes the winget manifests (schema 1.12.0) for one release of the Windows installer.
+ * Writes the winget manifests (schema 1.10.0) for one release of the Windows installer.
  * No dependencies. Used by .github/workflows/windows-desktop.yml; can also be run by hand:
  *
  *   node scripts/windows/winget-manifest.mjs --version 0.7.0 \
@@ -14,7 +14,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const PACKAGE_ID = "DyrakArmy.P2PMessenger";
-export const MANIFEST_VERSION = "1.12.0";
+// 1.10.0, not the newest 1.12.0: winget 1.11 (still common, and on the CI runner) cannot read 1.12 manifests.
+export const MANIFEST_VERSION = "1.10.0";
 const REPO = "https://github.com/biramentv-ux/p2p-pure";
 
 /** Every scalar is written as a JSON string, which is valid YAML and needs no escaping rules. */

@@ -139,8 +139,11 @@ jobs:
             exit 0
           }
           Write-Output "::notice title=winget-version::$(winget --version)"
-          winget validate --manifest "${{ steps.winget.outputs.dir }}"
-          if ($LASTEXITCODE -ne 0) { Write-Output "::error title=winget-validate::validation failed ($LASTEXITCODE)"; exit 1 }
+          $result = winget validate --manifest "${{ steps.winget.outputs.dir }}" 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          $text = ($result -replace "`r?`n", " | ").Trim()
+          if ($code -ne 0) { Write-Output "::error title=winget-validate::code $code : $text"; exit 1 }
+          Write-Output "::notice title=winget-validate-output::$text"
           Write-Output "::notice title=winget-validate::manifests are valid"
 
       - uses: actions/upload-artifact@v4
