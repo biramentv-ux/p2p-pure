@@ -1,0 +1,90 @@
+{
+  "name": "p2p-messenger",
+  "productName": "P2P Messenger",
+  "version": "0.7.0",
+  "description": "Encrypted peer-to-peer messenger. Messages, calls and history stay on the devices; no account, no phone number.",
+  "author": {
+    "name": "DyrakArmy",
+    "email": "270799024+biramentv-ux@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/biramentv-ux/p2p-pure",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "dist": "electron-builder --linux deb rpm AppImage --publish never",
+    "start": "electron . --no-sandbox"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "bg.p2pmessenger.desktop",
+    "productName": "P2P Messenger",
+    "executableName": "p2p-messenger",
+    "artifactName": "P2P-Messenger-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.mjs",
+      "appFiles.mjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "app-dist"
+      }
+    ],
+    "asar": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableCookieEncryption": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "rpm",
+        "AppImage"
+      ],
+      "category": "Network;InstantMessaging;Chat",
+      "icon": "../public/icons/icon-512.png",
+      "synopsis": "Encrypted peer-to-peer messenger",
+      "maintainer": "DyrakArmy <270799024+biramentv-ux@users.noreply.github.com>",
+      "syncDesktopName": true,
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "p2p-messenger",
+          "Keywords": "messenger;chat;p2p;encrypted;"
+        }
+      }
+    },
+    "deb": {
+      "packageName": "p2p-messenger",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2 | libasound2t64",
+        "libgbm1",
+        "libdrm2",
+        "libxkbcommon0"
+      ]
+    },
+    "publish": null
+  },
+  "desktopName": "p2p-messenger.desktop"
+}

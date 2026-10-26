@@ -47,6 +47,9 @@ jobs:
           }
           if ($bad) { exit 1 }
 
+      - name: Linux install script (shellcheck)
+        run: shellcheck -S warning scripts/linux/install.sh
+
       - name: Unit and worker tests
         run: npm test
 

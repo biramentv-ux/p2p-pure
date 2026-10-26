@@ -1,0 +1,196 @@
+# Linux desktop packages (Electron): .deb, .rpm and AppImage. Built on a clean Ubuntu runner,
+# so the result does not depend on the owner's machine. Unsigned for now (see docs/LINUX.md).
+# Why Electron and not Tauri as on Windows: the WebKitGTK of Debian and Ubuntu has no WebRTC,
+# and the direct links between devices need it. Run from the Actions tab, or push a tag
+# "desktop-v*" to also attach the files to the GitHub release (shared with Windows).
+name: Linux desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Attach to this release (e.g. desktop-v0.7.0); empty = build only'
+        required: false
+        default: ''
+  push:
+    tags: ["desktop-v*"]
+  # Changes to the Linux package are built and tested before they are merged.
+  pull_request:
+    paths:
+      - "electron/**"
+      - "scripts/linux/**"
+      - "tests/desktop/electron-linux.mjs"
+      - ".github/workflows/linux-desktop.yml"
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name) || '' }}
+
+jobs:
+  build:
+    # Ubuntu 24.04 restricts unprivileged user namespaces: the installed .deb must still start
+    # with the real Chromium sandbox, so this is the platform to test on.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            electron/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix electron ci
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Shell script check
+        run: shellcheck -S warning scripts/linux/install.sh
+
+      - name: Build the web app and the packages
+        run: |
+          npm run build:desktop
+          npm --prefix electron run dist
+
+      - name: Collect files and checksums
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./electron/package.json').version")"
+          if [ -n "$RELEASE_TAG" ]; then
+            case "$RELEASE_TAG" in desktop-v*) ;; *) echo "::error::release tag must start with desktop-v"; exit 1 ;; esac
+            [ "${RELEASE_TAG#desktop-v}" = "$version" ] || { echo "::error::tag ${RELEASE_TAG#desktop-v} does not match electron/package.json version $version"; exit 1; }
+          fi
+          mkdir -p out
+          cp electron/release/P2P-Messenger-"$version"-amd64.deb electron/release/P2P-Messenger-"$version"-x86_64.rpm electron/release/P2P-Messenger-"$version"-x86_64.AppImage out/
+          cp scripts/linux/install.sh out/install.sh
+          (cd out && sha256sum P2P-Messenger-* install.sh > SHA256SUMS-linux.txt && cat SHA256SUMS-linux.txt)
+          ls -la out
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Package metadata
+        run: |
+          dpkg-deb -I out/*.deb | sed -n 1,20p
+          rpm -qp --requires out/*.rpm
+          # The app must not ask for more than it needs: no setuid files except the Chromium sandbox.
+          dpkg-deb -c out/*.deb | awk '$1 ~ /^-r.s/ {print}' | tee /tmp/suid.txt
+          test ! -s /tmp/suid.txt
+
+      - name: Install the .deb and test the installed app (real Chromium sandbox)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb ./out/P2P-Messenger-"$VERSION"-amd64.deb
+          ls -la "/opt/P2P Messenger/chrome-sandbox"
+          APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test \
+            xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs
+
+      - name: Install, remove and reinstall with install.sh (checksums, local files)
+        run: |
+          set -euo pipefail
+          sudo apt-get remove -y -qq p2p-messenger
+          bash out/install.sh --from-dir out
+          dpkg-query -W -f='${Status} ${Version}\n' p2p-messenger | tee /dev/stderr | grep -q "install ok installed $VERSION"
+          bash out/install.sh --uninstall
+          ! dpkg-query -W -f='${Status}' p2p-messenger 2>/dev/null | grep -q "install ok installed"
+          # A file that was changed after the checksums were made must be refused.
+          mkdir tampered && cp out/* tampered/ && echo x >> tampered/P2P-Messenger-"$VERSION"-amd64.deb
+          if bash out/install.sh --from-dir tampered; then echo "::error::a changed file was installed"; exit 1; fi
+          # AppImage path, per user, no root.
+          bash out/install.sh --from-dir out --appimage
+          test -x "$HOME/.local/bin/p2p-messenger"
+          bash out/install.sh --uninstall --dry-run >/dev/null
+
+      # The AppImage cannot be installed setuid. On Ubuntu 24.04 the kernel blocks the user-namespace
+      # sandbox for programs without an AppArmor profile, so it may not start there at all. That is a
+      # property of the platform, reported here and written down in docs/LINUX.md, not hidden.
+      - name: AppImage test (Ubuntu 24.04 may refuse its sandbox)
+        run: |
+          APPIMAGE_EXTRACT_AND_RUN=1 APP_BIN="$PWD/out/P2P-Messenger-$VERSION-x86_64.AppImage" OUT_DIR=desktop-test-appimage \
+            xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs \
+            && echo "::notice title=appimage::the AppImage starts and passes the same checks" \
+            || echo "::warning title=appimage::the AppImage did not pass here (userns restricted: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)); use the .deb on Ubuntu 24.04"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: p2p-messenger-linux-tests
+          path: |
+            desktop-test
+            desktop-test-appimage
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: p2p-messenger-linux-x64
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
+
+  # The .rpm on a Fedora system: its dependencies must resolve with dnf, and the installed
+  # app must start (root in a container, so the Chromium sandbox is switched off here only).
+  rpm-fedora:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: p2p-messenger-linux-x64
+          path: out
+      - name: Install with dnf
+        run: |
+          dnf install -y nodejs npm xorg-x11-server-Xvfb which
+          dnf install -y ./out/*.rpm
+          rpm -qi p2p-messenger | head -8
+      - name: Test the installed app
+        run: |
+          npm install --no-save --no-package-lock playwright-core@1.56.0
+          NO_SANDBOX=1 APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test-rpm \
+            xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: p2p-messenger-linux-rpm-test
+          path: desktop-test-rpm
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    if: inputs.release_tag != '' || startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: [build, rpm-fedora]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: p2p-messenger-linux-x64
+          path: out
+      - name: Attach to the release (created by whichever desktop workflow comes first)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --target "${{ github.sha }}" --title "P2P Messenger $RELEASE_TAG" --notes-file docs/DESKTOP-RELEASE.md --prerelease \
+              || gh release view "$RELEASE_TAG" >/dev/null   # the Windows workflow created it a moment earlier
+          fi
+          gh release upload "$RELEASE_TAG" out/* --clobber
+      - name: Install from the release with install.sh
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          bash out/install.sh --version "${RELEASE_TAG#desktop-v}"
+          dpkg-query -W -f='${Version}\n' p2p-messenger
+          bash out/install.sh --uninstall

@@ -9,7 +9,7 @@
 
 [![Tests](https://img.shields.io/badge/unit_tests-428_passing-1f6fc4?style=for-the-badge)](#-тестове)
 [![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-13213a?style=for-the-badge)](#-тестове)
-[![Platforms](https://img.shields.io/badge/web_·_Windows_·_Android_·_iOS-PWA_+_Tauri_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
+[![Platforms](https://img.shields.io/badge/web_·_Windows_·_Linux_·_Android_·_iOS-PWA_+_Tauri_+_Electron_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
 [![Languages](https://img.shields.io/badge/languages-BG_·_EN-d41b7f?style=for-the-badge)](#-език)
 
 ### 🌍 Language / Език
@@ -27,7 +27,7 @@
 > Съобщенията се шифроват на устройството и се пращат **директно** между хората през WebRTC.
 > Няма централен сървър, който пази съобщения, акаунти или телефонни номера.
 
-*Състояние към 26 октомври 2026: работеща PWA за уеб и телефон, програма за Windows (инсталатор, portable и winget), Capacitor проект за Android и iOS, разширение за Chrome, двуезичен интерфейс и тестове на всички нива. Native билдовете за Android и iOS не са тествани на физически устройства.*
+*Състояние към 26 октомври 2026: работеща PWA за уеб и телефон, програми за Windows (инсталатор, portable и winget) и Linux (.deb, .rpm, AppImage), Capacitor проект за Android и iOS, разширение за Chrome, двуезичен интерфейс и тестове на всички нива. Native билдовете за Android и iOS не са тествани на физически устройства.*
 
 ## ✨ Какво може
 
@@ -44,6 +44,7 @@
 | 📞 | **Аудио и видео разговори** | По същата директна връзка, медията е DTLS-SRTP. |
 | 👥 | **Групи до 9 души** *(обновено)* | Админ, име и снимка на групата. Файлове, снимки, видео до 50 MB и GIF от GIPHY. Новият член не вижда старата история; махането става и когато махнатият е офлайн. Всичко се пази шифровано. |
 | 🪟 | **Windows** *(ново)* | Инсталатор без админ права, portable zip и `winget`. Цялото приложение е вътре. |
+| 🐧 | **Linux** *(ново)* | `.deb`, `.rpm`, AppImage и `install.sh` с проверка на сумите. Цялото приложение е вътре. |
 | 🎨 | **Нов дизайн** *(ново)* | „Запечатана поща“: небесно синьо и електрик пурпурно-розово, IBM Plex с кирилица, светъл и тъмен режим, AA контраст. |
 | 🌍 | **Два езика** | Български (по подразбиране) и English. |
 | ⚡ | **Разширение за Chrome** | `Ctrl+Shift+M` отваря месинджъра. |
@@ -76,7 +77,7 @@ flowchart LR
 6. **Чат.** Пишат си, пращат снимки и локация.
 7. **Разговор.** Звънят си с аудио или видео.
 8. **Група.** Ани създава група до 9 души, слага ѝ име и снимка и кани хора.
-9. **Навсякъде.** Работи в браузъра на телефона, на компютъра и като програма за Windows.
+9. **Навсякъде.** Работи в браузъра на телефона, на компютъра и като програма за Windows и Linux.
 
 > ⚠️ Връзката е директна, без посредник. Някои мобилни мрежи блокират директните връзки. Ако не се свърже, опитайте с една Wi‑Fi мрежа за първото сдвояване.
 
@@ -87,6 +88,7 @@ flowchart LR
 | **Онлайн версията** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Най-бързо, на телефон или компютър | Само браузър. Винаги онлайн, обновява се при всяка промяна в `main`. |
 | **Сайтът** `https://dyrakarmy.online` | Същото, на собствения домейн | Онлайн, когато компютърът на собственика работи. |
 | **Windows** | Компютър с Windows 10/11 | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
+| **Linux** | Компютър с Linux (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `.deb`, `.rpm`, `AppImage` или `install.sh` |
 | **Локално копие** | Разработка, или ако сайтът не работи | Git и Node.js, виж по-долу. |
 
 ## 💻 Локално стартиране, стъпка по стъпка
@@ -210,6 +212,16 @@ npx cap open android     # отваря Android Studio; или ios за Xcode
 
 > В програмата за Windows отключването с passkey след рестарт може да не работи (WebView2 не връща PRF тайната). Тогава ползвай парола. CI проверява и двата пътя.
 
+## 🐧 Linux
+
+Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) или `AppImage`, или пусни `install.sh`: той избира пакета, **проверява контролната сума** и инсталира.
+
+```bash
+bash install.sh              # или: bash install.sh --appimage  (само за теб, без root)
+```
+
+Пакетът още не е подписан. Linux версията носи свой Chromium (Electron), защото WebKitGTK на Debian и Ubuntu няма WebRTC. Passkey няма: приложението се отключва с парола. На Ubuntu 24.04 ползвай `.deb`, не AppImage. Подробности: [docs/LINUX.md](docs/LINUX.md).
+
 ## 🧩 Разширение за Chrome
 
 1. `npm run extension:pack` → `dist/extension/p2p-messenger-quick-launch-1.0.0.zip`.
@@ -241,11 +253,12 @@ src/
   ui/               екрани и компоненти
   post.css          темата „Запечатана поща“ (светла и тъмна)
 src-tauri/          програмата за Windows (Tauri 2)
+electron/           програмата за Linux (Electron: .deb, .rpm, AppImage)
 extension/          разширение за Chrome (MV3)
 worker/             Cloudflare Worker: покани, демо стаи (Durable Object), Telegram
-scripts/            телефон (phone.mjs), Windows, winget, мобилни файлове
-tests/              unit (Vitest), e2e и a11y (Playwright + Chromium), Windows (WebView2)
-docs/               ръководства: Windows, демо сигнализация, групи, Telegram бот
+scripts/            телефон (phone.mjs), Windows, winget, Linux (install.sh), мобилни файлове
+tests/              unit (Vitest), e2e и a11y (Playwright + Chromium), Windows (WebView2), Linux (Electron)
+docs/               ръководства: Windows, Linux, демо сигнализация, групи, Telegram бот
 ```
 
 ## 🧪 Тестове
@@ -300,7 +313,7 @@ docs/               ръководства: Windows, демо сигнализа
 > Messages are encrypted on the device and sent **directly** between people over WebRTC.
 > There is no central server that stores messages, accounts or phone numbers.
 
-*Status as of 26 October 2026: a working PWA for web and phone, a Windows app (installer, portable and winget), a Capacitor project for Android and iOS, a Chrome extension, a bilingual interface and tests at every level. The Android and iOS builds have not been tested on physical devices.*
+*Status as of 26 October 2026: a working PWA for web and phone, apps for Windows (installer, portable and winget) and Linux (.deb, .rpm, AppImage), a Capacitor project for Android and iOS, a Chrome extension, a bilingual interface and tests at every level. The Android and iOS builds have not been tested on physical devices.*
 
 ## ✨ What it does
 
@@ -317,6 +330,7 @@ docs/               ръководства: Windows, демо сигнализа
 | 📞 | **Audio and video calls** | Over the same direct connection; media is DTLS-SRTP. |
 | 👥 | **Groups of up to 9** *(updated)* | Admin, group name and photo. Files, photos, videos up to 50 MB and GIFs from GIPHY. A new member does not see the old history; removal works while the removed member is offline. Everything is stored encrypted. |
 | 🪟 | **Windows** *(new)* | Installer without admin rights, portable zip and `winget`. The whole app is inside. |
+| 🐧 | **Linux** *(new)* | `.deb`, `.rpm`, AppImage and `install.sh` that verifies checksums. The whole app is inside. |
 | 🎨 | **New design** *(new)* | "Sealed Post": sky blue and electric magenta, IBM Plex with Cyrillic, light and dark mode, AA contrast. |
 | 🌍 | **Two languages** | Bulgarian (default) and English. |
 | ⚡ | **Chrome extension** | `Ctrl+Shift+M` opens the messenger. |
@@ -349,7 +363,7 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 6. **Chat.** They write, send photos and location.
 7. **Call.** They call with audio or video.
 8. **Group.** Ani creates a group of up to 9 people, gives it a name and a photo, and invites people.
-9. **Everywhere.** It runs in the phone browser, on a computer and as a Windows app.
+9. **Everywhere.** It runs in the phone browser, on a computer and as a Windows and Linux app.
 
 > ⚠️ The connection is direct, with no relay. Some mobile networks block direct connections. If it does not connect, use one Wi‑Fi network for the first pairing.
 
@@ -360,6 +374,7 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 | **The online version** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Fastest, on phone or computer | Just a browser. Always online, updated on every change to `main`. |
 | **The site** `https://dyrakarmy.online` | The same, on the own domain | Online while the owner's computer runs. |
 | **Windows** | A Windows 10/11 computer | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
+| **Linux** | A Linux computer (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `.deb`, `.rpm`, `AppImage` or `install.sh` |
 | **A local copy** | Development, or when the site is down | Git and Node.js, see below. |
 
 ## 💻 Running locally, step by step
@@ -483,6 +498,16 @@ The package is not signed yet: on first start choose **More info → Run anyway*
 
 > In the Windows app, unlocking with a passkey after a restart may not work (WebView2 does not return the PRF secret). Use a password then. CI tests both paths.
 
+## 🐧 Linux
+
+Download the `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) or `AppImage` from [Releases](https://github.com/biramentv-ux/p2p-pure/releases), or run `install.sh`: it picks the package, **verifies the checksum** and installs.
+
+```bash
+bash install.sh              # or: bash install.sh --appimage  (just for you, no root)
+```
+
+The package is not signed yet. The Linux app ships its own Chromium (Electron), because the WebKitGTK of Debian and Ubuntu has no WebRTC. There are no passkeys: the app unlocks with a password. On Ubuntu 24.04 use the `.deb`, not the AppImage. Details: [docs/LINUX.md](docs/LINUX.md).
+
 ## 🧩 Chrome extension
 
 1. `npm run extension:pack` → `dist/extension/p2p-messenger-quick-launch-1.0.0.zip`.
@@ -514,11 +539,12 @@ src/
   ui/               screens and components
   post.css          the "Sealed Post" theme (light and dark)
 src-tauri/          the Windows app (Tauri 2)
+electron/           the Linux app (Electron: .deb, .rpm, AppImage)
 extension/          Chrome extension (MV3)
 worker/             Cloudflare Worker: invitations, demo rooms (Durable Object), Telegram
-scripts/            phone (phone.mjs), Windows, winget, mobile files
-tests/              unit (Vitest), e2e and a11y (Playwright + Chromium), Windows (WebView2)
-docs/               guides: Windows, demo signalling, groups, Telegram bot
+scripts/            phone (phone.mjs), Windows, winget, Linux (install.sh), mobile files
+tests/              unit (Vitest), e2e and a11y (Playwright + Chromium), Windows (WebView2), Linux (Electron)
+docs/               guides: Windows, Linux, demo signalling, groups, Telegram bot
 ```
 
 ## 🧪 Tests
