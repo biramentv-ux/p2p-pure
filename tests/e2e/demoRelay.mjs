@@ -64,7 +64,7 @@ function frame(opcode, payload) {
  * Starts the relay on a free local port. `vite` is the running Vite dev server, used to load
  * the Worker's own modules. Returns the base URL and the list of relayed text frames.
  */
-export async function startDemoRelay(vite) {
+export async function startDemoRelay(vite, port = 0) {
   const { RoomRelay, ROOM_JOINED_FRAME } = await vite.ssrLoadModule("/worker/room.ts");
   const { newInviteCode, normalizeInviteCode } = await vite.ssrLoadModule("/worker/logic.ts");
   void ROOM_JOINED_FRAME;
@@ -138,10 +138,10 @@ export async function startDemoRelay(vite) {
     socket.on("error", () => relay.leave(peer));
   });
 
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address();
+  await new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
+  const bound = server.address().port;
   return {
-    url: `http://127.0.0.1:${port}`,
+    url: `http://127.0.0.1:${bound}`,
     frames,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
