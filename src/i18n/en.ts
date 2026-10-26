@@ -48,6 +48,12 @@ export const EN_DICTIONARY: Record<string, string> = {
   "Отключи": "Unlock",
   "Отключване…": "Unlocking…",
   "Добре дошъл отново": "Welcome back",
+  "Windows Hello не успя. Отключи с паролата.": "Windows Hello failed. Unlock with the password.",
+  "Включи Windows Hello (лице, пръстов отпечатък или PIN) за следващите отключвания":
+    "Turn on Windows Hello (face, fingerprint or PIN) for the next unlocks",
+  "Отключи с Windows Hello": "Unlock with Windows Hello",
+  "Отключи с Windows Hello, за да продължиш.": "Unlock with Windows Hello to continue.",
+  "Използвай паролата": "Use the password",
   "Отключи с passkey, за да продължиш.": "Unlock with your passkey to continue.",
 
   // Own QR code

@@ -55,6 +55,12 @@ jobs:
       - name: Build installer (NSIS, per-user, no admin)
         run: npx tauri build --bundles nsis
 
+      # After the build (needs dist/): compiles the Windows Hello module against the real
+      # windows crate and runs its input checks.
+      - name: Rust unit tests (Windows Hello command)
+        working-directory: src-tauri
+        run: cargo test --lib --locked
+
       - name: Collect installer and portable zip
         shell: pwsh
         run: |

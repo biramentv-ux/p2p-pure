@@ -26,6 +26,7 @@ import { publicKeyToDidKey } from "./didKey";
 import { createPasskey, getPasskey, credentialIdToBase64Url, base64UrlToCredentialId, isWebAuthnSupported } from "./webauthn";
 import { aesKeyFromPrfSecret, aesKeyFromPassword, encryptSeed, decryptSeed } from "./atRestCrypto";
 import { saveIdentityRecord, loadIdentityRecord, clearIdentityRecord } from "./storage";
+import { windowsHelloAvailable } from "../platform/windowsHello";
 import {
   IdentityError,
   type IdentityRecord,
@@ -204,7 +205,11 @@ export async function unlockIdentity(password?: string): Promise<UnlockedIdentit
 /** Which secret protects the local seed, so the UI knows whether to ask for a password. */
 export async function getUnlockMethod(): Promise<UnlockMethod | null> {
   const record = await loadIdentityRecord();
-  return record?.unlockMethod ?? null;
+  if (!record) return null;
+  // Hello is offered only when this record has a Hello copy AND Hello works right now
+  // (Tauri on Windows). Otherwise the stored method (password) is shown as before.
+  if (record.windowsHello && (await windowsHelloAvailable())) return "windows-hello";
+  return record.unlockMethod;
 }
 
 export async function hasExistingIdentity(): Promise<boolean> {

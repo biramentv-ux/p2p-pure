@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-windows-hello-status"
+description = "Enables the windows_hello_status command without any pre-configured scope."
+commands.allow = ["windows_hello_status"]
+
+[[permission]]
+identifier = "deny-windows-hello-status"
+description = "Denies the windows_hello_status command without any pre-configured scope."
+commands.deny = ["windows_hello_status"]
