@@ -23,6 +23,11 @@ const results = [];
 function check(name, ok, detail = "") {
   results.push({ name, ok, detail });
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  - " + detail : ""}`);
+  // Run logs and artifacts are not always readable from outside; annotations are.
+  if (process.env.GITHUB_ACTIONS) {
+    const esc = (t) => String(t).slice(0, 900).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+    console.log(`::${ok ? "notice" : "error"} title=${esc(name)}::${esc(detail || (ok ? "ok" : "failed"))}`);
+  }
 }
 const adb = (...args) => execFileSync(ADB, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
