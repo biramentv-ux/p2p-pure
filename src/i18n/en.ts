@@ -388,4 +388,5 @@ export const EN_DICTIONARY: Record<string, string> = {
   "Повреден файл.": "Damaged file.",
   "Файлът не беше изпратен.": "The file was not sent.",
   "Файлът е твърде голям за пазене.": "The file is too large to keep.",
+  "Участникът е махнат. Офлайн участниците ще получат новия ключ, когато се свържат.": "The member is removed. Members who are offline get the new key when they connect.",
 };

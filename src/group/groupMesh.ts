@@ -217,6 +217,11 @@ export class GroupMesh {
     return intro !== undefined && intro.exp > now;
   }
 
+  /** Admin: someone invited who has not joined yet. */
+  isInvitee(did: DidKey): boolean {
+    return this.invitees.has(did);
+  }
+
   /** The name the group knows a peer by: from the signed state, or from the admin's introduction. */
   peerName(did: DidKey): string | undefined {
     return this.state?.members.find((m) => m.did === did)?.name ?? this.intros.get(did)?.name;
@@ -250,18 +255,34 @@ export class GroupMesh {
     await this.sendTo(this.adminDid(), approval);
   }
 
-  /** Admin: removes a member and rotates the key for the rest. */
-  async drop(did: DidKey): Promise<void> {
+  /**
+   * Admin: removes a member and rotates the key for the rest. Nobody has to be online: the
+   * removed member gets nothing new, and a remaining member who is offline receives the new
+   * snapshot and key when it links to the admin again (welcomeBack). Returns the members who
+   * could not be told right now.
+   */
+  async drop(did: DidKey): Promise<DidKey[]> {
     this.requireAdmin();
     const { snapshot, keyFor } = this.chat!.dropMember(did);
     const removedLink = this.links.get(did);
-    for (const [member, wire] of keyFor) {
-      await this.sendTo(member, snapshot);
-      await this.sendTo(member, wire);
-    }
-    if (removedLink) await removedLink(encodeGroupWire(snapshot));
     this.links.delete(did);
+    const later: DidKey[] = [];
+    for (const [member, wire] of keyFor) {
+      if (!this.links.has(member)) {
+        later.push(member);
+        continue;
+      }
+      try {
+        await this.sendTo(member, snapshot);
+        await this.sendTo(member, wire);
+      } catch {
+        later.push(member);
+      }
+    }
+    // Courtesy only: if the removed member is online it learns at once. Its key is useless anyway.
+    if (removedLink) await Promise.resolve(removedLink(encodeGroupWire(snapshot))).catch(() => undefined);
     this.events.membership(this.chat!.snapshot);
+    return later;
   }
 
   /** Handles one decrypted plaintext from the link to `from`. Errors are reported, not thrown. */
@@ -307,7 +328,10 @@ export class GroupMesh {
         if (from !== this.adminDid() || !verifyStateSignature(wire)) return;
         if (this.chat) {
           const before = this.chat.snapshot.suite;
+          const was = this.chat.snapshot.members.map((m) => m.did);
           this.chat.receiveSnapshot(wire);
+          // A removed member's old introduction must not keep it trusted as a candidate.
+          for (const did of was) if (!isMember(this.chat.snapshot, did)) this.intros.delete(did);
           if (!isMember(wire.state, this.myDid)) {
             this.chat = null;
             this.intros.clear();
