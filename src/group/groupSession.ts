@@ -163,6 +163,11 @@ export class GroupSession {
     const events: MeshEvents = {
       message: (from, text) => this.addMessage(from, text, from === this.myDid),
       membership: () => {
+        // Someone was removed: close the direct link to them, so nothing more goes either way.
+        // Invitees and introduced candidates are not members yet and keep their links.
+        for (const did of [...this.links.keys()]) {
+          if (!this.mesh.isKnownPeer(did) && !this.mesh.isInvitee(did)) this.drop(did);
+        }
         this.refresh();
         this.maybeRequestPhoto();
       },
@@ -372,10 +377,11 @@ export class GroupSession {
   }
 
   async remove(did: string): Promise<void> {
-    await this.mesh.drop(did);
+    const later = await this.mesh.drop(did);
     this.drop(did);
     this.persist();
-    this.notice("Участникът е махнат. Новият ключ е раздаден на останалите.");
+    if (later.length === 0) this.notice("Участникът е махнат. Новият ключ е раздаден на останалите.");
+    else this.notice("Участникът е махнат. Офлайн участниците ще получат новия ключ, когато се свържат.");
   }
 
   async sendText(text: string): Promise<void> {
