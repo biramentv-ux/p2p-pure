@@ -108,14 +108,20 @@ if [ -z "$FROM_DIR" ]; then
   BASE_URL="https://github.com/$REPO/releases/download/desktop-v$VERSION"
 else
   [ -d "$FROM_DIR" ] || die "Няма такава папка: $FROM_DIR"
+  KIND="$(pick_kind)"
   if [ -z "$VERSION" ]; then
-    f="$(ls "$FROM_DIR"/P2P-Messenger-*-amd64.deb 2>/dev/null | head -1 || true)"
-    [ -n "$f" ] || die "В $FROM_DIR няма P2P-Messenger-*-amd64.deb."
-    VERSION="$(basename "$f" | sed 's/^P2P-Messenger-\(.*\)-amd64\.deb$/\1/')"
+    case "$KIND" in
+      deb) glob="P2P-Messenger-*-$ARCH_DEB.deb" ;;
+      rpm) glob="P2P-Messenger-*-$ARCH_RPM.rpm" ;;
+      appimage) glob="P2P-Messenger-*-$ARCH_RPM.AppImage" ;;
+    esac
+    f="$(ls "$FROM_DIR"/$glob 2>/dev/null | head -1 || true)"
+    [ -n "$f" ] || die "В $FROM_DIR няма файл $glob."
+    VERSION="$(basename "$f" | sed -e 's/^P2P-Messenger-//' -e "s/-$ARCH_DEB\.deb\$//" -e "s/-$ARCH_RPM\.rpm\$//" -e "s/-$ARCH_RPM\.AppImage\$//")"
   fi
 fi
 
-KIND="$(pick_kind)"
+KIND="${KIND:-$(pick_kind)}"
 case "$KIND" in
   deb) FILE="P2P-Messenger-$VERSION-$ARCH_DEB.deb" ;;
   rpm) FILE="P2P-Messenger-$VERSION-$ARCH_RPM.rpm" ;;
