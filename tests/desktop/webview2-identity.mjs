@@ -33,6 +33,8 @@ const APP_EXE = process.env.APP_EXE;
 const LOCAL_DIST = process.env.LOCAL_DIST;
 const CHROME_PATH = process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const IS_CI = Boolean(process.env.GITHUB_ACTIONS);
+// "config": APP_EXE is a build whose window config already opens the port (additionalBrowserArgs).
+const DEVTOOLS_VIA = process.env.DEVTOOLS_VIA;
 
 if (!APP_EXE && !LOCAL_DIST) {
   console.error("Set APP_EXE (installed Windows app) or LOCAL_DIST (built web bundle).");
@@ -122,25 +124,29 @@ async function killLeftoverWebView2() {
 const run = (cmd, args) => new Promise((ok) => execFile(cmd, args, { timeout: 20_000 }, (e, out) => ok(e ? null : out)));
 const DEBUG_ARG = `--remote-debugging-port=${PORT}`;
 const POLICY_KEY = "HKCU\\Software\\Policies\\Microsoft\\Edge\\WebView2\\AdditionalBrowserArguments";
-let debugVia = null; // how the DevTools port was opened: "env" or "registry"
+let debugVia = null; // how the DevTools port was opened (see spawnWindowsApp)
 let policySet = false;
 
 /**
- * Starts the app with the WebView2 DevTools port open. Two documented ways exist: the
- * WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS variable, and the per-app registry value under
- * Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments (read only when
- * no variable is set). The first one that works is kept for the restarts.
+ * Starts the app with the WebView2 DevTools port open. WebView2 documents three ways that
+ * need no change to the app: the WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS variable, the host
+ * switch --edge-webview-switches, and the per-app registry value under
+ * Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments (read only when no
+ * variable is set). The first one that works is kept for the restarts.
  */
 async function spawnWindowsApp(via) {
   const env = { ...process.env };
   delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS;
+  const args = [];
   if (via === "env") env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = DEBUG_ARG;
+  if (via === "switch") args.push(`--edge-webview-switches=${DEBUG_ARG}`);
+  if (via === "config") return spawn(APP_EXE, [], { env, stdio: "ignore" });
   if (via === "registry" && !policySet) {
     const name = APP_EXE.split(/[\\/]/).pop();
-    await run("reg", ["add", POLICY_KEY, "/v", name, "/t", "REG_SZ", "/d", DEBUG_ARG, "/f"]);
+    for (const value of [name, "*"]) await run("reg", ["add", POLICY_KEY, "/v", value, "/t", "REG_SZ", "/d", DEBUG_ARG, "/f"]);
     policySet = true;
   }
-  return spawn(APP_EXE, [], { env, stdio: "ignore" });
+  return spawn(APP_EXE, args, { env, stdio: "ignore" });
 }
 
 async function launchApp() {
@@ -148,24 +154,38 @@ async function launchApp() {
   await killLeftoverWebView2();
   let child, exited, version;
   if (APP_EXE) {
-    const ways = debugVia ? [debugVia] : ["env", "registry"];
+    const ways = debugVia ? [debugVia] : DEVTOOLS_VIA ? [DEVTOOLS_VIA] : ["env", "switch", "registry"];
     for (const via of ways) {
       child = await spawnWindowsApp(via);
       exited = new Promise((r) => child.once("exit", (code) => r(code)));
       try {
         version = await Promise.race([
-          waitFor(cdpUp, 40_000, `the WebView2 DevTools endpoint (${via})`),
+          waitFor(cdpUp, 25_000, `the WebView2 DevTools endpoint (${via})`),
           exited.then((code) => { throw new Error(`app exited during start (code ${code})`); }),
         ]);
         debugVia = via;
         break;
       } catch (err) {
         const procs = await webviewProcesses();
-        annotate("warning", `webview2-debug-${via}`, `${err.message}. ${procs ? procs.slice(0, 2500) : "no msedgewebview2.exe browser process"}`);
+        annotate(
+          "warning",
+          `webview2-debug-${via}`,
+          `${err.message}. host pid ${child.pid}. ${procs ? procs.slice(0, 2000) : "no msedgewebview2.exe browser process"}`,
+        );
+        if (via === "registry") {
+          const policies = [
+            await run("reg", ["query", "HKCU\\Software\\Policies\\Microsoft\\Edge", "/s"]),
+            await run("reg", ["query", "HKLM\\Software\\Policies\\Microsoft\\Edge", "/s"]),
+          ].map((o) => (o ?? "(none)").trim().replace(/\s+/g, " ").slice(0, 1200));
+          annotate("warning", "webview2-policies", `HKCU: ${policies[0]} || HKLM: ${policies[1]}`);
+        }
         await run("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
         await exited;
         await killLeftoverWebView2();
-        if (via === ways[ways.length - 1]) throw err;
+        if (via === ways[ways.length - 1]) {
+          // None of the ways opened the port: the installed app cannot be driven at all.
+          throw Object.assign(new Error(`WebView2 DevTools port did not open (${ways.join(", ")})`), { noDevtools: true });
+        }
       }
     }
   } else {
@@ -430,7 +450,8 @@ try {
   annotate(
     "notice",
     "webview2-env",
-    `devtools=${debugVia ?? "local"} origin=${e.origin} secureContext=${e.isSecureContext} navigator.credentials=${e.navigatorCredentials} ` +
+    `app=${DEVTOOLS_VIA === "config" ? "test build with additionalBrowserArgs" : APP_EXE ? "installed" : "local"} ` +
+      `devtools=${debugVia ?? "local"} origin=${e.origin} secureContext=${e.isSecureContext} navigator.credentials=${e.navigatorCredentials} ` +
       `PublicKeyCredential=${e.publicKeyCredential} platformAuthenticator(Windows Hello)=${e.platformAuthenticator} ` +
       `clientCapabilities.prf=${prfCap ?? "n/a"} indexedDB=${e.indexedDB} lang=${e.language} browser=${facts.browser}`,
   );
@@ -630,6 +651,14 @@ try {
   if (policySet) await run("reg", ["delete", POLICY_KEY, "/f"]);
 }
 
+if (fatalError?.noDevtools && !debugVia && !DEVTOOLS_VIA) {
+  // Not an app failure: the next workflow step rebuilds the app with the port in its config.
+  if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, "devtools=unavailable\n", { flag: "a" });
+  annotate("warning", "webview2-devtools", `${fatalError.message}; the identity test runs on a build with additionalBrowserArgs instead`);
+  process.exit(0);
+}
+
+facts.devtools = debugVia ?? "local";
 facts.pageErrors = allPageErrors;
 facts.consoleErrors = allConsoleErrors;
 facts.checks = checks;
