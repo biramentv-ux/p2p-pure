@@ -36,6 +36,8 @@ const passes = [];
 
 /** Runs axe on the current page and records the result under a label. */
 async function scan(page, label) {
+  // Screens fade in; checking half-way through would measure a half-transparent text colour.
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"), null, { timeout: 5000 }).catch(() => {});
   await page.addScriptTag({ content: AXE_SOURCE });
   const result = await page.evaluate(async (tags) => {
     const out = await window.axe.run(document, { runOnly: { type: "tag", values: tags } });

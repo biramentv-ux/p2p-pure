@@ -131,6 +131,7 @@ try {
 
   for (const scheme of ["dark", "light"]) {
     for (const page of [alice.page, bob.page]) await page.emulateMedia({ colorScheme: scheme });
+    await alice.page.waitForTimeout(500); // let colour transitions finish
     await shot(alice.page, `${scheme}-1-chat`);
     await alice.page.getByRole("button", { name: "Аудио разговор" }).click().catch(() => {});
     await alice.page.waitForTimeout(800);
