@@ -36,7 +36,9 @@
 | 🪪 | **Идентичност без регистрация** | Passkey на устройството → `did:key` (`z6Mk…`). Без имейл, телефон или SMS. |
 | 🔑 | **Възстановяване с 12 думи** | BIP39. Записваш ги веднъж и ги ползваш на нов телефон. |
 | 📷 | **Контакт с QR код или кратък код** | Кратък код от 10 символа, валиден 10 минути и за еднократна употреба. |
-| 🔢 | **Проверка на събеседника** | Двамата виждат един и същи код от 6 думи. Сравнявате го лично или по видео. |
+| 🔢 | **Проверка на събеседника** | Двамата виждат един и същи код от 6 думи, изчислен от публичните X25519 ключове на двамата (версия v2). Сравнявате го лично или по видео. |
+| 🛰️ | **Два режима на сигнализация** | Локален режим (по подразбиране): QR или текст, без мрежови заявки. Демо режим: WebSocket стая в сигналния Worker, за по-лесно начало. |
+| 👥 | **Групов чат (бета)** | До 9 участника. Създателят е админ: добавя, премахва, сменя името, снимката и криптографския метод. Всеки участник е свързан с всеки друг. |
 | 💬 | **Шифровани чатове** | Double Ratchet подход. Историята се пази в IndexedDB, шифрована с AES-GCM. |
 | 🖼️ | **Снимки, локация, изтриване** | Изтриване на чат от двете страни. Локацията се праща само при твое натискане. |
 | 📞 | **Аудио и видео разговори** | WebRTC, медията е DTLS-SRTP. |
@@ -53,6 +55,15 @@ flowchart LR
 ```
 
 Сървърът (Worker) вижда само кратки покани и не може да прочете нито една. Съобщенията, снимките и разговорите не минават през него.
+
+**Сигнализацията е отделена от WebRTC.** `src/signaling/` дава общ интерфейс `ISignalingProvider`. Двата режима са два провайдъра:
+
+- **Локален (офлайн)** — `OfflineSignalingProvider`. Поканата е подписан низ, който се показва като QR или текст. Няма мрежови заявки.
+- **Демо (WebSocket)** — `WebSocketSignalingProvider`. Единият устройство отваря стая и показва 10-символен код; другият се присъединява с кода. Worker-ът пренася кадрите между двамата и не ги чете. Подписаната покана се проверява на клиента.
+
+Ядрото на приложението работи без Worker-а. Демо режимът е допълнителен канал.
+
+> **В момента:** превключвателят Демо/Локален в интерфейса още не е готов, а Worker-ът трябва да се публикува с новата миграция за Durable Object (`SignalRoom`).
 
 ## 🎬 Урок за деца: как двама се свързват от разстояние
 
@@ -75,6 +86,9 @@ flowchart LR
 - **Един сървър с ограничена роля.** Cloudflare Worker-ът пази временни покани и обработва webhook-а на Telegram бота.
 - **Изтриването на чат** стига до другия човек само ако той е онлайн. Няма сървър, който да пази историята.
 - **Публичният адрес `dyrakarmy.online`** се обслужва през Cloudflare Tunnel от компютъра на собственика. Достъпността му зависи от този компютър.
+- **Групите са само в паметта.** При презареждане на страницата групата се губи, а съобщенията от групата не се записват в историята.
+- **Снимката на групата** се сверява по хеш; самият файл още не се предава.
+- **Безопасният код v2** е различен от v1. И двете устройства трябва да са на една версия, за да сравнят кодовете.
 
 ## 🛠️ Инсталация и стартиране
 
@@ -128,14 +142,16 @@ src/
   i18n/             двуезичен слой: ядро, контекст, речник (bg/en)
   identity/         passkey, did:key, BIP39
   p2p/              WebRTC канал, сесия, снимки, управляващи съобщения
-  call/             сигнализация и контролер за разговори
+  signaling/        провайдъри за сигнализация: локален (QR) и демо (WebSocket)
+  group/            групов чат: правила, подписани снимки, mesh връзки
+  call/             контролер за разговори
   history/          шифрована история (IndexedDB)
   contacts/         контакти и потвърждение
   platform/mobile/  Capacitor мост и passkey през Android Credential Manager
   ui/               екрани и компоненти
   App.css, index.css  дизайн система (токени, светла и тъмна тема)
 extension/          Chrome разширение (MV3): popup, service worker, locales bg/en
-worker/             Cloudflare Worker: покани, Telegram webhook, cron
+worker/             Cloudflare Worker: покани, стаи за демо сигнализация (Durable Object), Telegram webhook, cron
 native-overlays/    Java код за Android и настройки
 scripts/            синхронизация на мобилните файлове, Windows скриптове, пакетиране на разширението
 tests/              unit (Vitest), mock Worker, e2e (Playwright + Chromium), a11y (axe-core)
@@ -198,7 +214,9 @@ Workflow-ът `Java CI with Gradle` (`.github/workflows/gradle.yml`) се изп
 | 🪪 | **Identity without sign-up** | A passkey on the device → `did:key` (`z6Mk…`). No email, phone or SMS. |
 | 🔑 | **Recovery with 12 words** | BIP39. Write them down once and use them on a new phone. |
 | 📷 | **Contact by QR code or short code** | A 10-character code, valid for 10 minutes and single-use. |
-| 🔢 | **Verify the other person** | Both sides see the same 6-word code. Compare it in person or on video. |
+| 🔢 | **Verify the other person** | Both sides see the same 6-word code, computed from both sides' public X25519 keys (version v2). Compare it in person or on video. |
+| 🛰️ | **Two signalling modes** | Local mode (default): QR or text, no network requests. Demo mode: a WebSocket room on the signalling Worker, for an easier start. |
+| 👥 | **Group chat (beta)** | Up to 9 members. The creator is admin: adds and removes members, sets the name, the photo and the encryption method. Every member is linked to every other member. |
 | 💬 | **Encrypted chats** | Double Ratchet approach. History is kept in IndexedDB, encrypted with AES-GCM. |
 | 🖼️ | **Photos, location, deletion** | Delete a chat on both sides. Location is sent only when you tap to send it. |
 | 📞 | **Audio and video calls** | WebRTC; media is protected with DTLS-SRTP. |
@@ -215,6 +233,15 @@ flowchart LR
 ```
 
 The server (Worker) only sees short invitations and cannot read any of them. Messages, photos and calls never pass through it.
+
+**Signalling is separate from WebRTC.** `src/signaling/` provides one interface, `ISignalingProvider`. The two modes are two providers:
+
+- **Local (offline)** — `OfflineSignalingProvider`. The invitation is a signed string, shown as a QR code or text. No network requests.
+- **Demo (WebSocket)** — `WebSocketSignalingProvider`. One device opens a room and shows a 10-character code; the other joins with that code. The Worker forwards frames between the two and never reads them. The signed invitation is verified on the client.
+
+The core app works without the Worker. Demo mode is an optional extra channel.
+
+> **Status:** the Demo/Local switch in the interface is not ready yet, and the Worker must be deployed with the new Durable Object migration (`SignalRoom`).
 
 ## 🎬 Kid-friendly tutorial: connecting from a distance
 
@@ -237,6 +264,9 @@ Ani and Petar are far apart, each with their own phone. Here is how they connect
 - **One server with a narrow role.** The Cloudflare Worker keeps temporary invitations and handles the Telegram bot webhook.
 - **Deleting a chat** reaches the other person only if they are online. No server keeps the history.
 - **The public address `dyrakarmy.online`** is served through a Cloudflare Tunnel from the owner's computer, so its availability depends on that computer.
+- **Groups live in memory only.** Reloading the page loses the group, and group messages are not saved to history.
+- **The group photo** is checked by hash; the file itself is not transferred yet.
+- **Safety code v2** differs from v1. Both devices must run the same version to compare codes.
 
 ## 🛠️ Installation and running
 
@@ -290,14 +320,16 @@ src/
   i18n/             two-language layer: core, context, dictionary (bg/en)
   identity/         passkey, did:key, BIP39
   p2p/              WebRTC channel, session, photos, control messages
-  call/             signalling and call controller
+  signaling/        signalling providers: local (QR) and demo (WebSocket)
+  group/            group chat: rules, signed snapshots, mesh links
+  call/             call controller
   history/          encrypted history (IndexedDB)
   contacts/         contacts and verification
   platform/mobile/  Capacitor bridge and Android Credential Manager passkeys
   ui/               screens and components
   App.css, index.css  design system (tokens, light and dark themes)
 extension/          Chrome extension (MV3): popup, service worker, bg/en locales
-worker/             Cloudflare Worker: invitations, Telegram webhook, cron
+worker/             Cloudflare Worker: invitations, demo signalling rooms (Durable Object), Telegram webhook, cron
 native-overlays/    Android Java code and settings
 scripts/            mobile file sync, Windows scripts, extension packaging
 tests/              unit (Vitest), mock Worker, e2e (Playwright + Chromium), a11y (axe-core)
