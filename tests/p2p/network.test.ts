@@ -40,3 +40,42 @@ describe("candidate summary", () => {
     expect(describeReachability(summarizeCandidates(""))).toContain("вероятно няма да успее");
   });
 });
+
+describe("relay candidates (user's own TURN)", () => {
+  const relay = c("198.51.100.20", "relay");
+
+  it("recognises typ relay and relay-only SDPs", () => {
+    const only = summarizeCandidates(relay);
+    expect(only).toMatchObject({ relay: true, relayOnly: true, total: 1, publicIpv4: false });
+    const mixed = summarizeCandidates(c("192.168.1.5", "host") + relay);
+    expect(mixed).toMatchObject({ relay: true, relayOnly: false });
+    expect(summarizeCandidates(c("85.14.3.9", "srflx"))).toMatchObject({ relay: false, relayOnly: false });
+  });
+
+  it("a relay candidate makes the invite reachable, not poor", () => {
+    expect(reachability(summarizeCandidates(relay))).toBe("relay");
+    expect(reachability(summarizeCandidates(c("192.168.1.5", "host") + relay))).toBe("relay");
+    expect(reachability(summarizeCandidates(c("2a01::1", "host") + relay))).toBe("relay");
+  });
+
+  it("explains relay-only and relay fallback, never 'probably fails'", () => {
+    const only = describeReachability(summarizeCandidates(relay));
+    expect(only).toContain("само през твоя TURN релей");
+    expect(only).toContain("не вижда IP адреса ти");
+    const fallback = describeReachability(summarizeCandidates(c("192.168.1.5", "host") + relay));
+    expect(fallback).toContain("релей е достъпен");
+    for (const text of [only, fallback]) {
+      expect(text).not.toContain("вероятно няма да успее");
+      expect(text).toContain("не и съдържанието");
+    }
+  });
+
+  it("both relay texts have English translations", async () => {
+    const { translate } = await import("../../src/i18n");
+    for (const sdp of [relay, c("192.168.1.5", "host") + relay]) {
+      const bg = describeReachability(summarizeCandidates(sdp));
+      expect(translate("en", bg)).not.toBe(bg);
+      expect(translate("en", bg)).toContain("TURN relay");
+    }
+  });
+});
