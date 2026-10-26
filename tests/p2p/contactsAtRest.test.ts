@@ -3,6 +3,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { DB_NAME, DB_VERSION, STORE_CONTACTS, STORE_CONTACTS_SEALED, openDatabase, withStore } from "../../src/db/database";
 import {
   ContactsLockedError,
+  deleteContact,
   getContact,
   listContacts,
   lockContacts,
@@ -128,5 +129,25 @@ describe("contacts at rest", () => {
     expect(await unlockContacts(crypto.getRandomValues(new Uint8Array(32)))).toBe(1);
     expect(await rawRows(STORE_CONTACTS)).toHaveLength(1);
     expect(await listContacts()).toHaveLength(1);
+  });
+
+  it("keeps a legacy row that could be sealed but never read back (missing verified/addedAt)", async () => {
+    await makeV4([contact(DID, NAME, 1)]);
+    await withStore(STORE_CONTACTS, "readwrite", (s) => {
+      s.put({ did: "did:key:zHalf", publicKey: new Uint8Array(32), name: "Половин" });
+      s.put({ did: "did:key:zBadTime", publicKey: new Uint8Array(32), name: "Час", verified: false, addedAt: "вчера" });
+    });
+    expect(await unlockContacts(crypto.getRandomValues(new Uint8Array(32)))).toBe(1);
+    expect(await rawRows(STORE_CONTACTS)).toHaveLength(2);
+  });
+
+  it("a second unlock racing the first never brings back a contact deleted in between", async () => {
+    await makeV4([contact(DID, NAME, 1)]);
+    const key = crypto.getRandomValues(new Uint8Array(32));
+    const [a, b] = await Promise.all([unlockContacts(key), unlockContacts(key)]);
+    expect(a + b).toBe(1); // only one of them moved the row
+    await deleteContact(DID);
+    expect(await unlockContacts(key)).toBe(0);
+    expect(await listContacts()).toHaveLength(0);
   });
 });

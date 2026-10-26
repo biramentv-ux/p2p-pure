@@ -145,7 +145,16 @@ async function unseal(k: Keys, row: SealedRow): Promise<Contact | null> {
 
 function isLegacy(v: unknown): v is Contact {
   const o = v as Partial<Contact> | null;
-  return !!o && typeof o.did === "string" && ArrayBuffer.isView(o.publicKey) && typeof o.name === "string";
+  // Every field fromJson() needs after decryption, or the sealed copy could never be read back.
+  return (
+    !!o &&
+    typeof o.did === "string" &&
+    ArrayBuffer.isView(o.publicKey) &&
+    typeof o.name === "string" &&
+    typeof o.verified === "boolean" &&
+    typeof o.addedAt === "number" &&
+    (o.verifiedAt === undefined || typeof o.verifiedAt === "number")
+  );
 }
 
 /**
@@ -157,22 +166,31 @@ function isLegacy(v: unknown): v is Contact {
 async function migrateLegacy(k: Keys): Promise<number> {
   const legacy = (await withStore<unknown[]>(STORE_CONTACTS, "readonly", (s) => s.getAll())) ?? [];
   if (legacy.length === 0) return 0;
-  const sealed: SealedRow[] = [];
-  const done: string[] = [];
+  const moves: { did: string; row: SealedRow }[] = [];
   for (const v of legacy) {
     if (!isLegacy(v)) continue; // left in place: never delete what we could not move
-    sealed.push(await seal(k, { ...v, publicKey: Uint8Array.from(v.publicKey) }));
-    done.push(v.did);
+    moves.push({ did: v.did, row: await seal(k, { ...v, publicKey: Uint8Array.from(v.publicKey) }) });
   }
-  if (sealed.length === 0) return 0;
+  if (moves.length === 0) return 0;
+  let moved = 0;
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction([STORE_CONTACTS, STORE_CONTACTS_SEALED], "readwrite");
       const out = tx.objectStore(STORE_CONTACTS_SEALED);
       const old = tx.objectStore(STORE_CONTACTS);
-      for (const row of sealed) out.put(row);
-      for (const did of done) old.delete(did);
+      // Another tab may have migrated (and the user since deleted or edited) a contact after
+      // our snapshot was read: only a plaintext row that is still there is moved, so a stale
+      // snapshot can never bring back or overwrite a contact.
+      for (const m of moves) {
+        const req = old.get(m.did);
+        req.onsuccess = () => {
+          if (!isLegacy(req.result)) return;
+          out.put(m.row);
+          old.delete(m.did);
+          moved++;
+        };
+      }
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
@@ -180,7 +198,7 @@ async function migrateLegacy(k: Keys): Promise<number> {
   } finally {
     db.close();
   }
-  return sealed.length;
+  return moved;
 }
 
 /** Call after unlock (before any contact screen). Derives the keys and migrates old rows. */
