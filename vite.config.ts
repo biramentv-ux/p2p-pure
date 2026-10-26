@@ -63,7 +63,12 @@ export const SECURITY_HEADERS: Record<string, string> = {
 
 // https://vite.dev/config/
 // `--mode desktop` (Tauri): no service worker or web manifest; the app ships inside the installer.
+// BASE_PATH: where the site is served. "/" by default; "/p2p-pure/" for GitHub Pages
+// (.github/workflows/pages.yml). It must start and end with "/".
+const BASE = process.env.BASE_PATH ?? '/'
+
 export default defineConfig(({ mode }) => ({
+  base: BASE,
   // `.trycloudflare.com`: the temporary https address of `npm run phone` (scripts/phone.mjs).
   server: { headers: SECURITY_HEADERS, allowedHosts: ['.trycloudflare.com'] },
   preview: { headers: SECURITY_HEADERS, allowedHosts: ['.trycloudflare.com'] },
@@ -77,10 +82,11 @@ export default defineConfig(({ mode }) => ({
         name: 'P2P Secure Messenger',
         short_name: 'P2P Msgr',
         description: 'Decentralized, end-to-end encrypted P2P messenger. No servers, no cloud.',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#1f6fc4',
+        background_color: '#f1f5fa',
         display: 'standalone',
-        start_url: '/',
+        start_url: BASE,
+        scope: BASE,
         icons: [
           {
             src: 'icons/icon-192.png',

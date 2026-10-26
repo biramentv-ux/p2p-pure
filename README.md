@@ -83,7 +83,8 @@ flowchart LR
 
 | Начин | За кого | Какво трябва |
 |---|---|---|
-| **Публичният сайт** `https://dyrakarmy.online` | Най-бързо, на телефон или компютър | Браузър. Сайтът е онлайн, когато компютърът на собственика работи (виж [Публикуване](#-публикуване-и-ci)). |
+| **Онлайн версията** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Най-бързо, на телефон или компютър | Само браузър. Винаги онлайн, обновява се при всяка промяна в `main`. |
+| **Сайтът** `https://dyrakarmy.online` | Същото, на собствения домейн | Онлайн, когато компютърът на собственика работи. |
 | **Windows** | Компютър с Windows 10/11 | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
 | **Локално копие** | Разработка, или ако сайтът не работи | Git и Node.js, виж по-долу. |
 
@@ -155,9 +156,9 @@ npm run preview    # http://localhost:4173
 
 ## 📱 Стартиране директно от телефон
 
-### Вариант А: от публичния сайт (без компютър)
+### Вариант А: от онлайн версията (без компютър)
 
-1. Отвори `https://dyrakarmy.online` в Chrome (Android) или Safari (iPhone).
+1. Отвори **https://biramentv-ux.github.io/p2p-pure/** в Chrome (Android) или Safari (iPhone).
 2. Добави го като приложение:
    - **Android, Chrome:** меню ⋮ → **Add to Home screen / Инсталиране на приложението**.
    - **iPhone, Safari:** бутон „Сподели“ → **Add to Home Screen / Към началния екран**.
@@ -255,6 +256,7 @@ docs/               ръководства: Windows, демо сигнализа
 | `npm run test:e2e` | Двама души в браузър: QR, шест думи, шифрован обмен, replay защита |
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
 | `npm run test:demo` | Демо стая през локален relay (8 проверки) |
+| `npm run test:pages` | Билдът за GitHub Pages под подпът `/p2p-pure/` (6 проверки) |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) на всички екрани, на двата езика |
 | `npm run test:call` | Аудио и видео разговор |
 | `npm run test:extension-browser` | Разширението в Chromium |
@@ -265,12 +267,15 @@ docs/               ръководства: Windows, демо сигнализа
 |---|---|---|
 | `web.yml` | push и PR към `main` | Сканиране за тайни, lint, unit тестове, билд, разширение, `npm audit` |
 | `gradle.yml` | push и PR към `main` | Android билд с Capacitor |
+| `pages.yml` | push към `main` | Публикува онлайн версията в GitHub Pages |
 | `windows-desktop.yml` | ръчно или таг `desktop-v*` | Инсталатор, portable, тест в WebView2, winget, Release |
 | `worker-deploy.yml` | промяна в `worker/` или ръчно | Тестове и публикуване на сигналния Worker в Cloudflare |
 
 **Сигналният Worker** (кратки кодове и демо стаи) се публикува от GitHub, след като добавиш секретите `CLOUDFLARE_API_TOKEN` и `CLOUDFLARE_ACCOUNT_ID`. Стъпките: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-**Публичният сайт** `dyrakarmy.online` се обслужва от компютъра на собственика през Cloudflare Tunnel: `scripts/windows/deploy.ps1` обновява билда, а тунелът го прави достъпен. Смяна на токена на тунела: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
+**Онлайн версията** в GitHub Pages се публикува автоматично от `main` (еднократно: **Settings → Pages → Source: GitHub Actions**). Профилът (passkey) е обвързан с адреса, затова профил от `github.io` и от `dyrakarmy.online` са отделни; пренасят се с 12-те думи.
+
+**Сайтът** `dyrakarmy.online` се обслужва от компютъра на собственика през Cloudflare Tunnel: `scripts/windows/deploy.ps1` обновява билда, а тунелът го прави достъпен. Смяна на токена на тунела: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
 
 ## 🌍 Език
 
@@ -349,7 +354,8 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 
 | Way | For whom | What you need |
 |---|---|---|
-| **The public site** `https://dyrakarmy.online` | Fastest, on phone or computer | A browser. The site is online while the owner's computer runs (see [Release](#-release-and-ci)). |
+| **The online version** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Fastest, on phone or computer | Just a browser. Always online, updated on every change to `main`. |
+| **The site** `https://dyrakarmy.online` | The same, on the own domain | Online while the owner's computer runs. |
 | **Windows** | A Windows 10/11 computer | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
 | **A local copy** | Development, or when the site is down | Git and Node.js, see below. |
 
@@ -421,9 +427,9 @@ Open the app in **two separate browser profiles** (for example a normal and a pr
 
 ## 📱 Running it straight from a phone
 
-### Option A: from the public site (no computer)
+### Option A: from the online version (no computer)
 
-1. Open `https://dyrakarmy.online` in Chrome (Android) or Safari (iPhone).
+1. Open **https://biramentv-ux.github.io/p2p-pure/** in Chrome (Android) or Safari (iPhone).
 2. Add it as an app:
    - **Android, Chrome:** menu ⋮ → **Add to Home screen / Install app**.
    - **iPhone, Safari:** the Share button → **Add to Home Screen**.
@@ -521,6 +527,7 @@ docs/               guides: Windows, demo signalling, groups, Telegram bot
 | `npm run test:e2e` | Two people in a browser: QR, six words, encrypted exchange, replay protection |
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
 | `npm run test:demo` | Demo room through a local relay (8 checks) |
+| `npm run test:pages` | The GitHub Pages build under the `/p2p-pure/` sub-path (6 checks) |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) on every screen, in both languages |
 | `npm run test:call` | Audio and video call |
 | `npm run test:extension-browser` | The extension in Chromium |
@@ -531,12 +538,15 @@ docs/               guides: Windows, demo signalling, groups, Telegram bot
 |---|---|---|
 | `web.yml` | push and PR to `main` | Secret scan, lint, unit tests, build, extension, `npm audit` |
 | `gradle.yml` | push and PR to `main` | Android build with Capacitor |
+| `pages.yml` | push to `main` | Publishes the online version to GitHub Pages |
 | `windows-desktop.yml` | manual or a `desktop-v*` tag | Installer, portable, WebView2 test, winget, Release |
 | `worker-deploy.yml` | a change in `worker/`, or manual | Tests and deploys the signalling Worker to Cloudflare |
 
 **The signalling Worker** (short codes and demo rooms) is deployed from GitHub once you add the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. Steps: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-**The public site** `dyrakarmy.online` is served from the owner's computer through a Cloudflare Tunnel: `scripts/windows/deploy.ps1` updates the build, and the tunnel makes it reachable. Rotating the tunnel token: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
+**The online version** on GitHub Pages is published automatically from `main` (one-time: **Settings → Pages → Source: GitHub Actions**). A passkey belongs to its address, so profiles on `github.io` and on `dyrakarmy.online` are separate; move one with the 12 words.
+
+**The site** `dyrakarmy.online` is served from the owner's computer through a Cloudflare Tunnel: `scripts/windows/deploy.ps1` updates the build, and the tunnel makes it reachable. Rotating the tunnel token: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
 
 ## 🌍 Language
 
