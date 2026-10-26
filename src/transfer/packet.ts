@@ -51,7 +51,9 @@ export type TransferErrorCode =
   | "SAS_MISMATCH"
   | "BAD_BUNDLE"
   | "IDENTITY_MISMATCH"
-  | "TIMEOUT";
+  | "TIMEOUT"
+  | "CLOSED"
+  | "SEND_FAILED";
 
 export class TransferError extends Error {
   readonly code: TransferErrorCode;

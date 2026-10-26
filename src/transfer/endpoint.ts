@@ -20,6 +20,8 @@ import { base64UrlToBytes, bytesToBase64Url } from "../p2p/encoding";
 export interface TransferChannel {
   send(text: string): void;
   onMessage(handler: (text: string) => void): () => void;
+  /** Called once when the channel closes or fails, also after it opened. */
+  onClose?(handler: (reason: string) => void): () => void;
   close(): void;
 }
 
@@ -58,6 +60,8 @@ export class TransferEndpoint {
   private released = false;
   private chain: Promise<void> = Promise.resolve();
   private off: () => void;
+  private offClose: () => void = () => undefined;
+  private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly now: () => number;
 
   private readonly opts: EndpointOptions;
@@ -69,6 +73,51 @@ export class TransferEndpoint {
       // Frames are handled strictly one after the other, in arrival order.
       this.chain = this.chain.then(() => this.receive(text));
     });
+    // A channel that dies after it opened must end the transfer visibly, not leave it waiting.
+    if (opts.channel.onClose) {
+      this.offClose = opts.channel.onClose(() => {
+        // Frames that arrived before the close (e.g. the final `stored`) are handled first.
+        this.chain = this.chain.then(() => this.onChannelClosed());
+      });
+    }
+    // Nothing waits past the transfer's expiry.
+    const delay = Math.max(0, opts.keys.expiresAt - this.now());
+    this.timer = setTimeout(() => this.onDeadline(), delay + 1);
+  }
+
+  private onChannelClosed(): void {
+    // Our own dispose() closes the channel too: by then the state is final.
+    if (this.finished()) return;
+    // The new device already holds the bundle: it may still store it (the ack will fail
+    // and the screen says so), so the bundle is not thrown away here.
+    if (this.state === "received") return;
+    this.fail(
+      new TransferError(
+        this.released
+          ? "Връзката прекъсна след изпращането. Провери новото устройство; това устройство не е изтрито."
+          : "Връзката с другото устройство прекъсна.",
+        "CLOSED",
+      ),
+      false,
+    );
+  }
+
+  private finished(): boolean {
+    return this.state === "stored" || this.state === "failed" || this.state === "aborted";
+  }
+
+  private onDeadline(): void {
+    this.timer = undefined;
+    if (this.finished() || this.state === "received") return;
+    this.fail(
+      new TransferError(
+        this.released
+          ? "Новото устройство не потвърди навреме. Провери го; това устройство не е изтрито."
+          : "Времето за прехвърляне изтече.",
+        "EXPIRED",
+      ),
+      true,
+    );
   }
 
   get words(): string[] {
@@ -101,6 +150,9 @@ export class TransferEndpoint {
 
   private dispose(): void {
     this.off();
+    this.offClose();
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
     // Give the abort frame a moment to leave before the channel goes away.
     setTimeout(() => this.opts.channel.close(), 50);
   }
@@ -121,7 +173,7 @@ export class TransferEndpoint {
     try {
       await this.write({ t: "hello" });
     } catch {
-      this.fail(new TransferError("Каналът е затворен.", "TIMEOUT"), false);
+      this.fail(new TransferError("Каналът е затворен.", "CLOSED"), false);
     }
   }
 
@@ -138,8 +190,19 @@ export class TransferEndpoint {
     }
     this.localOk = true;
     this.set(this.role === "sender" ? "waiting-peer" : "waiting-bundle");
-    if (this.role === "receiver") await this.write({ t: "sas-ok" });
-    await this.maybeRelease();
+    // Called from a button, outside receive()'s error handling: any failure (send, reading the
+    // contacts, a bundle too large) ends the transfer through fail() instead of being lost.
+    try {
+      if (this.role === "receiver") await this.write({ t: "sas-ok" });
+      await this.maybeRelease();
+    } catch (err) {
+      this.fail(this.asTransferError(err), true);
+    }
+  }
+
+  private asTransferError(err: unknown): TransferError {
+    if (err instanceof TransferError) return err;
+    return new TransferError("Прехвърлянето не успя. Опитай отново.", "SEND_FAILED");
   }
 
   /** Receiver: tell the sender the identity is safely stored on this device. */
@@ -170,11 +233,16 @@ export class TransferEndpoint {
       return;
     }
     if (!this.opts.getBundle) throw new TransferError("Няма данни за изпращане.", "BAD_STATE");
+    // Build and check the bundle BEFORE marking it released: a bundle that is too large or a
+    // contact book that cannot be read fails here, and nothing has left this device.
+    const bundle = encodeBundle(await this.opts.getBundle());
     this.released = true;
     this.set("sending");
-    const bundle = encodeBundle(await this.opts.getBundle());
-    await this.write({ t: "bundle", d: bytesToBase64Url(bundle) });
-    bundle.fill(0);
+    try {
+      await this.write({ t: "bundle", d: bytesToBase64Url(bundle) });
+    } finally {
+      bundle.fill(0);
+    }
   }
 
   private async receive(text: string): Promise<void> {

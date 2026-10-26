@@ -98,4 +98,10 @@ export const EN_TRANSFER: Record<string, string> = {
   "Това не е отговор.": "This is not a reply.",
   "Това не е покана.": "This is not an invitation.",
   "Твърде много контакти за прехвърляне.": "Too many contacts to transfer.",
+  "Връзката с другото устройство прекъсна.": "The connection to the other device was lost.",
+  "Връзката прекъсна след изпращането. Провери новото устройство; това устройство не е изтрито.":
+    "The connection was lost after sending. Check the new device; this device has not been deleted.",
+  "Новото устройство не потвърди навреме. Провери го; това устройство не е изтрито.":
+    "The new device did not confirm in time. Check it; this device has not been deleted.",
+  "Прехвърлянето не успя. Опитай отново.": "The transfer failed. Try again.",
 };
