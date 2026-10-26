@@ -8,9 +8,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getUnlockMethod, IdentityError, isWebAuthnSupported } from "../../identity";
 import type { UnlockedIdentity } from "../../identity";
-import { importSeedAsIdentity, unlockSeed } from "../../identity/seedTransfer";
-import { deriveHistoryKey } from "../../history/messageStore";
-import { listContacts, saveContact, unlockContacts } from "../../contacts/contacts";
+import { unlockSeed } from "../../identity/seedTransfer";
+import { listContacts } from "../../contacts/contacts";
 import { copyWithAutoClear } from "../clipboard";
 import { useI18n } from "../../i18n";
 import { QrCode } from "../components/QrCode";
@@ -19,7 +18,8 @@ import { CONNECT_TIMEOUT_MS, type PeerLink } from "../../p2p/peer";
 import { TransferEndpoint, type TransferState } from "../../transfer/endpoint";
 import { TransferError } from "../../transfer/packet";
 import { acceptAnswerText, answerOffer, beginSend, runEndpoint, type SenderOffer } from "../../transfer/link";
-import { wipeThisDevice } from "../../transfer/wipe";
+import { stopWritersAndWipe, type BackgroundWriter } from "../../transfer/wipe";
+import { completeReceive, newReceiveProgress } from "../../transfer/receive";
 
 const MIN_PASSWORD_LENGTH = 12;
 /** The receiver waits longer: the sender has to scan its answer first. */
@@ -81,9 +81,14 @@ interface SendProps {
   /** Called after this device has been wiped: the app returns to the "no identity" state. */
   onMoved: () => void;
   onCancel: () => void;
+  /**
+   * Hands over everything that writes to the database in the background (the group session),
+   * so it is stopped and drained before the wipe. The caller must forget these objects.
+   */
+  takeWriters: () => Array<BackgroundWriter | null | undefined>;
 }
 
-export function TransferSendScreen({ identity, onMoved, onCancel }: SendProps) {
+export function TransferSendScreen({ identity, onMoved, onCancel, takeWriters }: SendProps) {
   const { t } = useI18n();
   const [view, setView] = useState<SendView>({ k: "intro" });
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -190,7 +195,7 @@ export function TransferSendScreen({ identity, onMoved, onCancel }: SendProps) {
 
   async function wipe() {
     try {
-      await wipeThisDevice();
+      await stopWritersAndWipe(takeWriters());
       onMoved();
     } catch (err) {
       setError(explain(err, t));
@@ -321,7 +326,9 @@ type RecvView =
   | { k: "busy"; label: string }
   | { k: "answer"; text: string; hex: string }
   | { k: "protocol" }
-  | { k: "unlock" };
+  | { k: "unlock" }
+  /** Stored here, but the old device did not get the confirmation. */
+  | { k: "unacked"; identity: UnlockedIdentity };
 
 interface RecvProps {
   onDone: (identity: UnlockedIdentity) => void;
@@ -341,6 +348,7 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
   const endpointRef = useRef<TransferEndpoint | null>(null);
   const busyRef = useRef(false);
   const doneRef = useRef(false);
+  const progressRef = useRef(newReceiveProgress());
   const webAuthnOk = isWebAuthnSupported();
 
   useEffect(
@@ -376,6 +384,12 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
         setState(s);
         if (s === "received") setView({ k: "unlock" });
         else if (s === "failed" || s === "aborted") {
+          const stored = progressRef.current.identity;
+          if (stored) {
+            // Already written here: never send the user back to the start with an identity on disk.
+            setView({ k: "unacked", identity: stored });
+            return;
+          }
           const e = endpoint.error;
           endpointRef.current = null;
           linkRef.current?.close();
@@ -412,19 +426,23 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
     setStoring(true);
     setError(null);
     try {
-      const identity = await importSeedAsIdentity(
-        bundle.seed,
+      const result = await completeReceive(
+        bundle,
+        progressRef.current,
+        (did) => endpoint.reportStored(did),
         usePassword ? password : undefined,
         usePassword ? { skipPasskey: true } : {},
       );
-      await unlockContacts(deriveHistoryKey(identity));
-      for (const c of bundle.contacts) await saveContact(c);
-      bundle.seed.fill(0);
-      await endpoint.reportStored(identity.did);
       doneRef.current = true;
-      onDone(identity);
+      if (result.acknowledged) onDone(result.identity);
+      else setView({ k: "unacked", identity: result.identity });
     } catch (err) {
       setStoring(false);
+      if (progressRef.current.identity) {
+        // The identity is stored; only the contacts failed. A retry writes them again (idempotent).
+        setError(explain(err, t));
+        return;
+      }
       if (err instanceof IdentityError && err.code === "PRF_UNSUPPORTED") {
         setError(t("Този passkey не поддържа PRF. Задай парола за това устройство."));
         return;
@@ -437,6 +455,27 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
       // Passkey dialog closed or storing failed: the data is still here, the user may retry.
       setError(explain(err, t));
     }
+  }
+
+  if (view.k === "unacked") {
+    const identity = view.identity;
+    return (
+      <div className="screen">
+        <h1>{t("Идентичността е запазена тук")}</h1>
+        <p role="alert">
+          {t("Старото устройство не получи потвърждение, затова няма да предложи изтриване. Не го изтривай, докато не провериш, че новото устройство работи; после го изтрий ръчно.")}
+        </p>
+        <button
+          onClick={() => {
+            doneRef.current = true;
+            linkRef.current?.close();
+            onDone(identity);
+          }}
+        >
+          {t("Продължи")}
+        </button>
+      </div>
+    );
   }
 
   if (view.k === "busy") {

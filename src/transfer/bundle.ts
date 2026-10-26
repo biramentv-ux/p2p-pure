@@ -17,7 +17,13 @@ export const SEED_LEN = 64;
 export const MAX_CONTACTS = 400;
 const MAX_NAME_CHARS = 200;
 const PAD_BLOCK = 1024;
-const MAX_BUNDLE_BYTES = 192 * 1024;
+/**
+ * The bundle is base64url-encoded inside the JSON frame, and the encrypted frame is
+ * base64url-encoded again (session.ts): about 16/9 growth plus a few dozen bytes. 140 KiB
+ * gives a frame of ~249 KiB, below MAX_FRAME_CHARS and the ~256 KiB a data channel message
+ * may safely carry. tests/transfer/protocol.test.ts checks a bundle at this size end to end.
+ */
+export const MAX_BUNDLE_BYTES = 140 * 1024;
 
 export interface TransferBundle {
   seed: Uint8Array;

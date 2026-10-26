@@ -252,10 +252,14 @@ function App() {
         <TransferSendScreen
           identity={identity}
           onCancel={() => setScreen({ k: "identity" })}
+          takeWriters={() => {
+            // The group is stopped and its queued saves drained BEFORE the wipe (transfer/wipe.ts).
+            const group = groupRef.current;
+            groupRef.current = null;
+            return [group];
+          }}
           onMoved={() => {
             // The device was wiped: drop everything in memory and return to the first-run screen.
-            groupRef.current?.closeAll();
-            groupRef.current = null;
             lockContacts();
             setScreen({ k: "identity" });
             setState({ kind: "no-identity" });
