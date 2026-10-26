@@ -52,7 +52,18 @@ jobs:
             echo "deployed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          npx --yes wrangler@4.20.0 deploy
+          set +e
+          npx --yes wrangler@4.20.0 deploy 2>&1 | tee deploy.log
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" -ne 0 ]; then
+            # Annotations are readable from the API even when logs are not: send the wrangler
+            # error lines there (wrangler never prints the API token).
+            grep -E "ERROR|✘|error|Authentication|permission|code: [0-9]+" deploy.log | tail -15 | while IFS= read -r line; do
+              echo "::error title=wrangler::${line:0:400}"
+            done
+            exit "$code"
+          fi
           echo "deployed=true" >> "$GITHUB_OUTPUT"
 
       - name: Check the public endpoints
