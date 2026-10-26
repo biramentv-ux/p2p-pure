@@ -4,13 +4,13 @@
  *
  *   node tests/mobile/android-emulator.mjs
  *
- * Talks to the app WebView over Chrome DevTools via `adb forward` (WebView debugging is
+ * Talks to the app WebView through Playwright's Android support (adb) (WebView debugging is
  * on only in debug builds: Capacitor defaults android.webContentsDebuggingEnabled to
  * BuildConfig.DEBUG). Env: ADB (default "adb"), APP_ID, OUT_DIR (default "emulator-artifacts").
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { chromium } from "playwright-core";
+import { _android as android } from "playwright-core";
 
 const ADB = process.env.ADB ?? "adb";
 const APP_ID = process.env.APP_ID ?? "bg.p2pmessenger.app";
@@ -74,19 +74,21 @@ async function forward() {
   throw new Error(running ? "WebView devtools socket not found (is this a debug build?)" : `${APP_ID} is not running after launch`);
 }
 
+/**
+ * Attaches to the app's WebView with Playwright's Android support. A plain connectOverCDP
+ * does not work here: an Android WebView rejects the browser-level commands Playwright sends
+ * (Browser.setDownloadBehavior, "Browser context management is not supported").
+ */
 async function connect(errors) {
-  await forward();
-  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
-  let page;
-  for (let i = 0; i < 30 && !page; i++) {
-    page = browser.contexts().flatMap((c) => c.pages()).find((p) => !p.url().startsWith("devtools:"));
-    if (!page) await sleep(1000);
-  }
-  if (!page) throw new Error("no WebView page");
+  await forward(); // waits until the app runs and its WebView devtools socket exists
+  const [device] = await android.devices();
+  if (!device) throw new Error("no Android device visible to adb");
+  const webview = await device.webView({ pkg: APP_ID }, { timeout: 60000 });
+  const page = await webview.page();
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => m.type() === "error" && errors.push(`console.error: ${m.text()}`));
   await page.waitForLoadState("domcontentloaded");
-  return { browser, page };
+  return { browser: { close: () => device.close() }, page };
 }
 
 /** The app follows the system language (English on a fresh emulator); the test uses Bulgarian names. */
