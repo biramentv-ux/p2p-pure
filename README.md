@@ -58,7 +58,7 @@ flowchart LR
   W -. "само препраща" .-> B
 ```
 
-Сървърът (Cloudflare Worker) вижда само кратки подписани покани. Не може да ги подправи и не вижда съобщенията, снимките или разговорите. Локалният режим (QR) не ползва сървър изобщо.
+Сървърът (Cloudflare Worker) вижда само кратки подписани покани. Не може да ги подправи и не вижда съобщенията, снимките или разговорите. Worker-ът не записва логове (наблюдаемостта е изключена, няма `console` в кода). Самата платформа Cloudflare обаче вижда IP адреси и адреси на заявките, както всеки хостинг; подробности в [SECURITY.md](SECURITY.md). Локалният режим (QR) не ползва сървър изобщо.
 
 Сигнализацията е отделена от WebRTC (`src/signaling/`, интерфейс `ISignalingProvider`):
 
@@ -233,7 +233,7 @@ bash install.sh              # или: bash install.sh --appimage  (само з�
 ## ⚠️ Ограничения, които приемаме
 
 - **Само публични STUN сървъри.** Без TURN релей, затова строги NAT или корпоративни firewall-и може да блокират връзката.
-- **Един сървър с тясна роля.** Worker-ът пази временни покани и препраща кадрите на демо стаите. Не вижда съобщения.
+- **Един сървър с тясна роля.** Worker-ът пази временни покани (до 10 минути, изтриват се при първо взимане) и препраща кадрите на демо стаите без да ги записва. Не пише логове, а IP адресът за ограничението на заявките се хешира. Cloudflare като платформа вижда IP адреси и адреси на заявките ([SECURITY.md](SECURITY.md)). Не вижда съобщения.
 - **Изтриването на чат** стига до другия само ако е онлайн.
 - **Групите:** поканата на чакащ кандидат не се запазва при презареждане; член, премахнат докато е офлайн, научава при следващото свързване.
 - **Шестте думи (v2)** са 66 бита. Подготвя се версия с по-силна проверка.
@@ -344,7 +344,7 @@ flowchart LR
   W -. "forwards only" .-> B
 ```
 
-The server (a Cloudflare Worker) only sees short signed invitations. It cannot forge them and never sees messages, photos or calls. Local mode (QR) uses no server at all.
+The server (a Cloudflare Worker) only sees short signed invitations. It cannot forge them and never sees messages, photos or calls. The Worker writes no logs (observability is off, no `console` calls in the code). The Cloudflare platform itself, like any host, still sees IP addresses and request URLs; details in [SECURITY.md](SECURITY.md). Local mode (QR) uses no server at all.
 
 Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvider`):
 
@@ -519,7 +519,7 @@ The extension collects no data; it only opens the app.
 ## ⚠️ Trade-offs we accept
 
 - **Public STUN servers only.** No TURN relay, so strict NATs or corporate firewalls may block the connection.
-- **One server with a narrow role.** The Worker keeps temporary invitations and forwards demo-room frames. It never sees messages.
+- **One server with a narrow role.** The Worker keeps temporary invitations (up to 10 minutes, deleted on first fetch) and forwards demo-room frames without storing them. It writes no logs, and the IP used for rate limiting is hashed. Cloudflare as a platform sees IP addresses and request URLs ([SECURITY.md](SECURITY.md)). It never sees messages.
 - **Deleting a chat** reaches the other person only if they are online.
 - **Groups:** a pending candidate's invitation is not kept across a reload; a member removed while offline learns about it on the next connection.
 - **The six words (v2)** carry 66 bits. A stronger check is being prepared.

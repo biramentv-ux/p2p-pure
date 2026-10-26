@@ -11,9 +11,13 @@
   "main": "index.ts",
   "compatibility_date": "2025-03-07",
   "compatibility_flags": ["nodejs_compat"],
+  // Privacy choice: Workers Logs and invocation logs are OFF. With them on, Cloudflare would
+  // store every request URL for days, and the URL carries invitation and room codes
+  // (/invite/:code, /ws/rooms/:code). No logpush or tail consumers are configured, and the
+  // code has no console.* calls. Do not turn this on without updating SECURITY.md.
   "observability": {
-    "enabled": true,
-    "head_sampling_rate": 1,
+    "enabled": false,
+    "logs": { "enabled": false, "invocation_logs": false },
   },
   "routes": [
     { "pattern": "tg.dyrakarmy.online", "custom_domain": true },
