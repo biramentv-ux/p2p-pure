@@ -22,6 +22,7 @@ export function peerChannel(link: PeerLink): TransferChannel {
   return {
     send: (text) => link.send(text),
     onMessage: (h) => link.onMessage(h),
+    onClose: (h) => link.onClose(h),
     close: () => link.close(),
   };
 }

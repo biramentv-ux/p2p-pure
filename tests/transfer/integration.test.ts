@@ -59,8 +59,23 @@ vi.mock("../../src/p2p/peer", () => {
       for (const t of this.pending.splice(0)) h(t);
       return () => this.handlers.delete(h);
     }
+    closeHandlers = new Set<(r: string) => void>();
+    onClose(h: (r: string) => void) {
+      this.closeHandlers.add(h);
+      return () => this.closeHandlers.delete(h);
+    }
+    fireClose() {
+      const hs = [...this.closeHandlers];
+      this.closeHandlers.clear();
+      for (const h of hs) h("closed");
+    }
     close() {
+      if (this.closed) return;
       this.closed = true;
+      this.fireClose();
+      // The far end notices too, as a real data channel would.
+      const peer = this.peer;
+      if (peer && !peer.closed) queueMicrotask(() => peer.close());
     }
   }
   return { PeerLink: FakeLink, CONNECT_TIMEOUT_MS: 30_000, PeerLinkError: class extends Error {} };

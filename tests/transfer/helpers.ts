@@ -14,12 +14,16 @@ export interface FakeChannel extends TransferChannel {
   sent: string[];
   closed: boolean;
   deliver(text: string): void;
+  /** The link dies (network gone, peer closed): both ends get their close handlers. */
+  kill(): void;
+  fireClose(): void;
 }
 
 /** Two connected in-memory channels. Messages arrive asynchronously, in order. */
 export function channelPair(tap?: Tap): { a: FakeChannel; b: FakeChannel } {
   const make = (name: "a" | "b"): FakeChannel => {
     const handlers = new Set<(t: string) => void>();
+    const closeHandlers = new Set<(r: string) => void>();
     const ch: FakeChannel = {
       sent: [],
       closed: false,
@@ -34,8 +38,22 @@ export function channelPair(tap?: Tap): { a: FakeChannel; b: FakeChannel } {
         handlers.add(h);
         return () => handlers.delete(h);
       },
+      onClose(h) {
+        closeHandlers.add(h);
+        return () => closeHandlers.delete(h);
+      },
       close() {
         ch.closed = true;
+        ch.fireClose();
+      },
+      fireClose() {
+        const hs = [...closeHandlers];
+        closeHandlers.clear();
+        for (const h of hs) h("closed");
+      },
+      kill() {
+        pair.a.fireClose();
+        pair.b.fireClose();
       },
       deliver(text) {
         for (const h of [...handlers]) h(text);
@@ -91,7 +109,16 @@ export function waitFor(ep: TransferEndpoint, ...states: TransferState[]): Promi
   });
 }
 
-export function setup(opts: { tap?: Tap; keys?: ReturnType<typeof makeKeys>; now?: () => number; contacts?: Contact[]; ownDid?: string } = {}) {
+export function setup(
+  opts: {
+    tap?: Tap;
+    keys?: ReturnType<typeof makeKeys>;
+    now?: () => number;
+    contacts?: Contact[];
+    ownDid?: string;
+    getBundle?: () => Promise<{ seed: Uint8Array; contacts: Contact[] }>;
+  } = {},
+) {
   const keys = opts.keys ?? makeKeys();
   const ch = channelPair(opts.tap);
   const contacts = opts.contacts ?? sampleContacts();
@@ -101,7 +128,7 @@ export function setup(opts: { tap?: Tap; keys?: ReturnType<typeof makeKeys>; now
     channel: ch.a,
     now: opts.now,
     ownDid,
-    getBundle: async () => ({ seed: SEED.slice(), contacts }),
+    getBundle: opts.getBundle ?? (async () => ({ seed: SEED.slice(), contacts })),
   });
   const receiver = new TransferEndpoint({ keys: keys.receiver, channel: ch.b, now: opts.now });
   return { keys, ch, sender, receiver, contacts, ownDid };

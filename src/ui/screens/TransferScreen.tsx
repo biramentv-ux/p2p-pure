@@ -59,6 +59,18 @@ function HexFallback({ hex }: { hex: string }) {
   );
 }
 
+/**
+ * Runs the SAS answer and shows any error instead of dropping the promise. The endpoint itself
+ * routes send and bundle failures through its failed state; this only catches what is left
+ * (a press in the wrong state).
+ */
+function confirmWith(setError: (m: string) => void, t: (s: string) => string) {
+  return (ep: TransferEndpoint | null, match: boolean) => {
+    if (!ep) return;
+    ep.confirmSas(match).catch((err: unknown) => setError(explain(err, t)));
+  };
+}
+
 function explain(err: unknown, t: (s: string) => string): string {
   if (err instanceof TransferError || err instanceof IdentityError || err instanceof Error) return t(err.message);
   return t("Неизвестна грешка при прехвърлянето.");
@@ -94,6 +106,7 @@ export function TransferSendScreen({ identity, onMoved, onCancel, takeWriters }:
   const [needsPassword, setNeedsPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const confirm = confirmWith(setError, t);
   const [state, setState] = useState<TransferState>("connecting");
   const [confirmWipe, setConfirmWipe] = useState(false);
   const seedRef = useRef<Uint8Array | null>(null);
@@ -249,8 +262,8 @@ export function TransferSendScreen({ identity, onMoved, onCancel, takeWriters }:
             <Words words={words} />
             {state === "compare" ? (
               <>
-                <button onClick={() => void ep?.confirmSas(true)}>{t("Думите съвпадат")}</button>
-                <button className="secondary" onClick={() => void ep?.confirmSas(false)}>
+                <button onClick={() => confirm(ep, true)}>{t("Думите съвпадат")}</button>
+                <button className="secondary" onClick={() => confirm(ep, false)}>
                   {t("Не съвпадат")}
                 </button>
               </>
@@ -261,6 +274,7 @@ export function TransferSendScreen({ identity, onMoved, onCancel, takeWriters }:
         )}
         {state === "connecting" && <p>{t("Свързвам…")}</p>}
         {state === "sending" && <p>{t("Изпращам. Не затваряй приложението…")}</p>}
+        {error && <p role="alert">{error}</p>}
         <button className="secondary" onClick={() => ep?.abort()}>
           {t("Прекрати")}
         </button>
@@ -339,6 +353,7 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
   const { t } = useI18n();
   const [view, setView] = useState<RecvView>({ k: "intro" });
   const [error, setError] = useState<string | null>(null);
+  const confirm = confirmWith(setError, t);
   const [state, setState] = useState<TransferState>("connecting");
   const [words, setWords] = useState<string[]>([]);
   const [password, setPassword] = useState("");
@@ -523,8 +538,8 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
             <Words words={words} />
             {state === "compare" ? (
               <>
-                <button onClick={() => void ep?.confirmSas(true)}>{t("Думите съвпадат")}</button>
-                <button className="secondary" onClick={() => void ep?.confirmSas(false)}>
+                <button onClick={() => confirm(ep, true)}>{t("Думите съвпадат")}</button>
+                <button className="secondary" onClick={() => confirm(ep, false)}>
                   {t("Не съвпадат")}
                 </button>
               </>
@@ -534,6 +549,7 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
           </>
         )}
         {state === "connecting" && <p>{t("Свързвам…")}</p>}
+        {error && <p role="alert">{error}</p>}
         <button className="secondary" onClick={() => ep?.abort()}>
           {t("Прекрати")}
         </button>
