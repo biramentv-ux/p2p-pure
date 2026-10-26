@@ -28,7 +28,8 @@ const enc = new TextEncoder();
 const DOMAIN = enc.encode("p2p-messenger/device-transfer/v1");
 const AAD_DOMAIN = enc.encode("p2p-messenger/device-transfer/frame/v1");
 export const SAS_WORD_COUNT = 6;
-const MAX_FRAME_CHARS = 300 * 1024;
+/** Largest frame accepted: the largest bundle (bundle.ts, MAX_BUNDLE_BYTES) after both base64 layers fits. */
+export const MAX_FRAME_CHARS = 256 * 1024;
 
 export interface TransferKeys {
   role: TransferRole;

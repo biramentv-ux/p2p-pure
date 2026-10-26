@@ -61,6 +61,9 @@ export const EN_TRANSFER: Record<string, string> = {
   "Код като hex": "Code as hex",
   "Неизвестна грешка при прехвърлянето.": "Unknown error during the transfer.",
   "Прехвърлянето е прекратено.": "The transfer was cancelled.",
+  "Идентичността е запазена тук": "The identity is stored here",
+  "Старото устройство не получи потвърждение, затова няма да предложи изтриване. Не го изтривай, докато не провериш, че новото устройство работи; после го изтрий ръчно.":
+    "The old device did not get the confirmation, so it will not offer to delete itself. Do not delete it until you have checked that the new device works; then delete it by hand.",
 
   // Errors from src/transfer (shown through t(error.message))
   "Времето за прехвърляне изтече.": "The transfer time ran out.",
