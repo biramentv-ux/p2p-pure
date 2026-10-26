@@ -65,7 +65,11 @@ jobs:
 
       - name: Generate SBOMs
         # Lockfile-based, nothing from the repo is executed (no npm install / build scripts).
-        run: node scripts/release/sbom.mjs --root src --out release-sbom --version "$TAG"
+        # SOURCE_DATE_EPOCH = the tag's commit time: SBOM timestamps are byte-stable.
+        run: |
+          SOURCE_DATE_EPOCH="$(git -C src log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          node scripts/release/sbom.mjs --root src --out release-sbom --version "$TAG"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

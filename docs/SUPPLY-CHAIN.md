@@ -6,7 +6,7 @@
 |---|---|
 | `p2p-pure-<таг>-web.cdx.json` | SBOM (CycloneDX 1.5) на уеб приложението: производствените npm зависимости |
 | `p2p-pure-<таг>-electron.cdx.json` | SBOM на Electron (Linux) обвивката, всички зависимости от `electron/package-lock.json` |
-| `p2p-pure-<таг>-rust.cdx.json` | SBOM на Tauri (Windows) обвивката, от `src-tauri/Cargo.lock` |
+| `p2p-pure-<таг>-rust.cdx.json` | SBOM на Tauri (Windows) обвивката, от `src-tauri/Cargo.lock`, за целта `x86_64-pc-windows-msvc` (включва Windows Hello зависимостите `windows*`) |
 | `SHA256SUMS-sbom.txt` | SHA-256 на трите SBOM файла |
 | `SHA256SUMS-sbom.txt.sigstore.json` | подпис (Sigstore bundle) върху `SHA256SUMS-sbom.txt` |
 
@@ -95,8 +95,9 @@ node scripts/release/sbom.mjs --out release-sbom --version dev --sums
 ```
 
 Инструментите са с фиксирани версии: `@cyclonedx/cyclonedx-npm` 6.0.1,
-`cargo-cyclonedx` 0.5.9, cosign v3.1.4. SBOM файловете са без часови печат и случаен
-сериен номер, така че от същите lock файлове се получават същите байтове.
+`cargo-cyclonedx` 0.5.9, cosign v3.1.4. npm SBOM файловете са без часови печат и случаен
+сериен номер; Rust SBOM взима часовия печат от `SOURCE_DATE_EPOCH` (времето на commit-а).
+Така от същите lock файлове се получават същите байтове.
 Генерира се от lock файловете, без изпълнение на код от зависимостите.
 
 ## Ограничения

@@ -35,7 +35,7 @@ export function formatSha256Sums(entries) {
  * Check that a parsed JSON document is a usable CycloneDX BOM and return a short summary.
  * Throws with a readable message otherwise, so the release fails before signing junk.
  */
-export function summarizeBom(bom, { minComponents = 1 } = {}) {
+export function summarizeBom(bom, { minComponents = 1, required = [] } = {}) {
   if (!bom || typeof bom !== 'object') throw new Error('BOM is not a JSON object')
   if (bom.bomFormat !== 'CycloneDX') throw new Error(`bomFormat is "${bom.bomFormat}", expected CycloneDX`)
   if (typeof bom.specVersion !== 'string' || !/^1\.\d+$/.test(bom.specVersion)) {
@@ -48,6 +48,9 @@ export function summarizeBom(bom, { minComponents = 1 } = {}) {
   for (const c of components) {
     if (!c || typeof c.name !== 'string' || !c.name) throw new Error('component without a name')
   }
+  const names = new Set(components.map((c) => c.name))
+  const missing = required.filter((n) => !names.has(n))
+  if (missing.length) throw new Error(`BOM is missing required components: ${missing.join(', ')}`)
   return {
     specVersion: bom.specVersion,
     components: components.length,
