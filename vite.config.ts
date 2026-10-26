@@ -26,7 +26,8 @@ function contentSecurityPolicy(): Plugin {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: blob:",
           "font-src 'self' data:",
-          `connect-src 'self' ${inviteOrigin}`,
+          // Demo signalling also uses a WebSocket to the same host (wss:// or ws://).
+          `connect-src 'self' ${inviteOrigin} ${inviteOrigin.replace(/^http/, 'ws')}`,
           "worker-src 'self'",
           "manifest-src 'self'",
           "media-src 'self' blob:",

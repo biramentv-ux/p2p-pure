@@ -31,7 +31,8 @@
     "test:extension-browser": "node tests/extension/browser.mjs",
     "extension:pack": "node scripts/extension/pack.mjs",
     "test:a11y": "node tests/e2e/a11y.mjs",
-    "test:crypto-suite": "node tests/e2e/crypto-suite.mjs"
+    "test:crypto-suite": "node tests/e2e/crypto-suite.mjs",
+    "test:demo": "node tests/e2e/demo-signaling.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

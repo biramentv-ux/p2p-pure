@@ -27,6 +27,12 @@ import {
 import { safetyWords, formatSafetyCode } from "../../../src/p2p/safety";
 import { identityX25519Public } from "../../../src/identity/x25519";
 import QRCode from "qrcode";
+import { WebSocketSignalingProvider } from "../../../src/signaling/websocketProvider";
+import { toSignalingPayload } from "../../../src/signaling/invitationPayload";
+
+let demoHostProvider: WebSocketSignalingProvider | null = null;
+let demoGuestProvider: WebSocketSignalingProvider | null = null;
+let demoAnswer: Promise<string> | null = null;
 
 const identity: Ed25519KeyPair = deriveIdentityKeyPair(mnemonicToSeed(generateMnemonic12()));
 const did = publicKeyToDidKey(identity.publicKey);
@@ -152,8 +158,42 @@ const api = {
     return decodeQrFromPixels(img.data, img.width, img.height) === payload;
   },
 
+  /** Demo: opens a room on the relay, then sends the signed offer once the guest has joined. */
+  async demoHost(apiBase: string): Promise<string> {
+    const offerPayload = await api.makeOffer();
+    demoHostProvider = new WebSocketSignalingProvider(apiBase);
+    demoAnswer = new Promise<string>((resolve) =>
+      demoHostProvider!.onAnswerReceived((p) => resolve(p.invitation ?? "")),
+    );
+    const code = await demoHostProvider.openRoom();
+    // The offer goes out once the guest has joined; the caller gets the code now.
+    void demoHostProvider
+      .waitForPeer()
+      .then(() => demoHostProvider!.sendOffer(toSignalingPayload(offerInv!, offerPayload)));
+    return code;
+  },
+
+  /** Demo: receives the answer through the room and completes the handshake. */
+  async demoHostFinish(): Promise<string> {
+    return api.acceptAnswer(await demoAnswer!);
+  },
+
+  /** Demo: joins the room, receives the offer, and sends the answer back through the room. */
+  async demoGuest(apiBase: string, code: string): Promise<string> {
+    demoGuestProvider = new WebSocketSignalingProvider(apiBase);
+    const offerReceived = new Promise<string>((resolve) =>
+      demoGuestProvider!.onOfferReceived((p) => resolve(p.invitation ?? "")),
+    );
+    await demoGuestProvider.joinRoom(code);
+    const { payload } = await api.makeAnswer(await offerReceived);
+    await demoGuestProvider.sendAnswer(toSignalingPayload(await decodeInvitation(payload), payload));
+    return api.awaitResponderHandshake();
+  },
+
   close(): void {
     link?.close();
+    demoHostProvider?.disconnect();
+    demoGuestProvider?.disconnect();
   },
 } as Record<string, any>;
 
