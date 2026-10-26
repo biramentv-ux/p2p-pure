@@ -3,15 +3,18 @@
  * `messages` stores; upgrades from version 1 keep the existing `identity` data.
  * Version 3 adds `groups` and `groupMessages` (both hold only AES-GCM ciphertext,
  * see src/group/groupStore.ts); older stores are kept as they are.
+ * Version 4 adds `files`: received and sent files up to 25 MB, each one AES-GCM encrypted
+ * with the history key (src/history/fileStore.ts).
  */
 export const DB_NAME = "p2p-messenger";
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 export const STORE_IDENTITY = "identity";
 export const STORE_CONTACTS = "contacts";
 export const STORE_MESSAGES = "messages";
 export const STORE_GROUPS = "groups";
 export const STORE_GROUP_MESSAGES = "groupMessages";
+export const STORE_FILES = "files";
 
 export function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -34,6 +37,10 @@ export function openDatabase(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_GROUP_MESSAGES)) {
         const groupMessages = db.createObjectStore(STORE_GROUP_MESSAGES, { keyPath: "id" });
         groupMessages.createIndex("bySlot", "slot", { unique: false });
+      }
+      if (!db.objectStoreNames.contains(STORE_FILES)) {
+        const files = db.createObjectStore(STORE_FILES, { keyPath: "id" });
+        files.createIndex("byOwner", "owner", { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);

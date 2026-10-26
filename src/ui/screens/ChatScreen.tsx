@@ -6,7 +6,11 @@ import {
   loadHistory,
   validLocation,
   type ChatMessage,
+  type FileCard,
 } from "../../history/messageStore";
+import { canStore, deleteFilesFor, saveFile } from "../../history/fileStore";
+import { FileTransfers, MAX_FILE_BYTES, type FileMeta } from "../../p2p/fileTransfer";
+import { FileBubble, TransferList, type ActiveTransfer } from "../components/FileBubble";
 import { decodeControl, encodeControl, isControlMessage, type ControlMessage } from "../../p2p/control";
 import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
@@ -64,6 +68,33 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const [showCrypto, setShowCrypto] = useState(false);
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  // Files: transfers on this link, the ones in progress, and object URLs made in this session.
+  const filesRef = useRef<FileTransfers | null>(null);
+  const [active, setActive] = useState<ActiveTransfer[]>([]);
+  const [preparing, setPreparing] = useState<string | null>(null);
+  const urlsRef = useRef(new Map<string, string>());
+
+  function upsertActive(item: ActiveTransfer) {
+    setActive((prev) => [...prev.filter((a) => a.id !== item.id), item]);
+  }
+  function dropActive(id: string) {
+    setActive((prev) => prev.filter((a) => a.id !== id));
+  }
+  /** Keeps a file (up to 25 MB) encrypted on the device and returns its card for the history. */
+  async function keepFile(meta: FileMeta, blob: Blob): Promise<FileCard> {
+    const url = URL.createObjectURL(blob);
+    urlsRef.current.set(meta.id, url);
+    let stored = canStore(meta.size);
+    if (stored) {
+      try {
+        await saveFile(historyKey, contact.did, meta.id, blob);
+      } catch {
+        stored = false;
+      }
+    }
+    return { id: meta.id, name: meta.name, size: meta.size, mime: meta.mime, stored };
+  }
 
   // Sends and receives are chained so counters and chain keys advance in order.
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -127,6 +158,48 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     callRef.current = controller;
     setCall(controller.state);
 
+    const files = new FileTransfers(
+      {
+        sendControl: (plaintext) =>
+          enqueue(async () => {
+            link.send(await session.seal(plaintext));
+          }),
+        sendBinary: (bytes) => link.sendBinary(bytes),
+      },
+      {
+        offered: (m) => alive && upsertActive({ id: m.id, name: m.name, size: m.size, direction: "in", phase: "offer", done: 0 }),
+        outgoing: (m) => {
+          if (!alive) return;
+          setPreparing(null);
+          upsertActive({ id: m.id, name: m.name, size: m.size, direction: "out", phase: "waiting", done: 0 });
+        },
+        progress: (id, done) =>
+          alive && setActive((prev) => prev.map((a) => (a.id === id ? { ...a, phase: "moving", done } : a))),
+        received: (meta, blob) => {
+          void (async () => {
+            const card = await keepFile(meta, blob);
+            const msg: ChatMessage = { text: "", file: card, direction: "in", timestamp: Date.now() };
+            await appendMessage(historyKey, contact.did, msg);
+            if (!alive) return;
+            dropActive(meta.id);
+            setMessages((prev) => [...prev, msg]);
+          })();
+        },
+        sent: () => undefined,
+        failed: (id, reason) => {
+          if (!alive) return;
+          dropActive(id);
+          if (reason !== "Отказано.") setNotice(tRef.current(reason));
+        },
+      },
+      MAX_FILE_BYTES,
+    );
+    filesRef.current = files;
+    const urls = urlsRef.current;
+    const offBinary = link.onBinary((bytes) => {
+      files.handleBinary(bytes);
+    });
+
     const off = link.onMessage((text) => {
       if (!isEncryptedMessage(text)) return;
       void enqueue(async () => {
@@ -148,6 +221,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             if (control.t === "wipe") {
               receiverRef.current.discardInProgress();
               await deleteHistory(contact.did);
+              await deleteFilesFor(contact.did);
               if (alive) {
                 setTransfer(null);
                 setMessages([]);
@@ -160,6 +234,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             if (alive) setMessages((prev) => [...prev, located]);
             return;
           }
+          if (filesRef.current?.handleControl(plaintext)) return;
           const result = receiverRef.current.feed(plaintext);
           if (result.kind === "discarded") return;
           if (result.kind === "progress") {
@@ -192,6 +267,11 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     return () => {
       alive = false;
       off();
+      offBinary();
+      files.close();
+      filesRef.current = null;
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
       clearInterval(timer);
       const c = callRef.current;
       callRef.current = null;
@@ -290,7 +370,9 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         delivered = false;
       }
       receiverRef.current.discardInProgress();
+      for (const a of active) void filesRef.current?.cancel(a.id);
       await deleteHistory(contact.did);
+      await deleteFilesFor(contact.did);
       setMessages([]);
       setTransfer(null);
       setNotice(
@@ -299,6 +381,30 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           : t("Чатът е изтрит тук. Другият човек не беше на линия, затова няма да се изтрие при него."),
       );
     });
+  }
+
+  /** Sends any file up to 100 MB. The other side sees a card and decides whether to take it. */
+  async function onPickFile(file: File | undefined) {
+    const files = filesRef.current;
+    if (!file || !files) return;
+    setNotice(null);
+    if (file.size > MAX_FILE_BYTES) {
+      setNotice(t("Файлът е по-голям от {mb} MB.", { mb: Math.round(MAX_FILE_BYTES / 1048576) }));
+      return;
+    }
+    setPreparing(file.name);
+    try {
+      const sending = files.send(file, file.name);
+      // The offer is out once the file is hashed; from then on the list shows its progress.
+      const meta = await sending.finally(() => setPreparing(null));
+      const card = await keepFile(meta, new Blob([file], { type: meta.mime }));
+      const msg: ChatMessage = { text: "", file: card, direction: "out", timestamp: Date.now() };
+      await appendMessage(historyKey, contact.did, msg);
+      dropActive(meta.id);
+      setMessages((prev) => [...prev, msg]);
+    } catch (err) {
+      setNotice(t(err instanceof Error ? err.message : "Файлът не беше изпратен."));
+    }
   }
 
   async function onPickPhoto(file: File | undefined) {
@@ -453,7 +559,9 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       <ol className="messages" tabIndex={0} aria-label={t("Съобщения")}>
         {messages.map((m, i) => (
           <li key={`${m.timestamp}-${i}`} className={m.direction === "out" ? "msg out" : "msg in"}>
-            {m.location ? (
+            {m.file ? (
+              <FileBubble card={m.file} url={urlsRef.current.get(m.file.id)} owner={contact.did} historyKey={historyKey} />
+            ) : m.location ? (
               <LocationBubble fix={m.location} />
             ) : m.image ? (
               <img className="msg-image" src={m.image} alt={t("Снимка")} />
@@ -475,6 +583,29 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         </p>
       )}
 
+      {preparing && (
+        <p className="chat-notice" role="status">
+          {t("Подготвям „{name}“…", { name: preparing })}
+        </p>
+      )}
+      <TransferList
+        items={active}
+        onAccept={(id) => void filesRef.current?.accept(id)}
+        onCancel={(id) => {
+          dropActive(id);
+          void filesRef.current?.cancel(id);
+        }}
+      />
+
+      <input
+        ref={fileInput}
+        type="file"
+        hidden
+        onChange={(e) => {
+          void onPickFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
       <input
         ref={cameraInput}
         type="file"
@@ -524,6 +655,15 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           aria-label={t("Избери снимка от галерията")}
         >
           {t("Галерия")}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!connected || !!preparing}
+          onClick={() => fileInput.current?.click()}
+          aria-label={t("Изпрати файл или видео до 100 MB")}
+        >
+          {t("Файл")}
         </button>
         <input
           value={draft}

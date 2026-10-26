@@ -198,7 +198,7 @@ describe("group store: history at rest", () => {
 });
 
 describe("database upgrade", () => {
-  it("version 3 adds the group stores and keeps the data of version 2", async () => {
+  it("upgrading from version 2 adds the group and file stores and keeps the old data", async () => {
     // A version 2 database, as the previous release left it.
     await new Promise<void>((resolve, reject) => {
       const req = indexedDB.open(DB_NAME, 2);
@@ -218,7 +218,7 @@ describe("database upgrade", () => {
     });
     const db = await openDatabase();
     expect(db.version).toBe(DB_VERSION);
-    expect([...db.objectStoreNames].sort()).toEqual(["contacts", "groupMessages", "groups", "identity", "messages"]);
+    expect([...db.objectStoreNames].sort()).toEqual(["contacts", "files", "groupMessages", "groups", "identity", "messages"]);
     db.close();
     const old = await withStore<unknown>("messages", "readonly", (s) => s.get("old"));
     expect(old).toBeTruthy();

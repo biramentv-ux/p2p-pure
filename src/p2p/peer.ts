@@ -27,11 +27,14 @@ export class PeerLinkError extends Error {
 }
 
 type MessageHandler = (text: string) => void;
+type BinaryHandler = (bytes: Uint8Array) => void;
 
 export class PeerLink {
   readonly pc: RTCPeerConnection;
   private channel: RTCDataChannel | null = null;
   private handlers = new Set<MessageHandler>();
+  /** Binary messages carry file chunks (p2p/fileTransfer.ts); they are already encrypted. */
+  private binaryHandlers = new Set<BinaryHandler>();
   /** Messages that arrive before any handler is attached are kept, not dropped. */
   private pending: string[] = [];
   private openPromise: Promise<void>;
@@ -104,6 +107,20 @@ export class PeerLink {
     this.channel.send(text);
   }
 
+  /** Sends a binary message (an encrypted file chunk), then waits until the buffer drains. */
+  async sendBinary(bytes: Uint8Array): Promise<void> {
+    if (!this.channel || this.channel.readyState !== "open") {
+      throw new PeerLinkError("Data channel is not open.");
+    }
+    this.channel.send(bytes as Uint8Array<ArrayBuffer>);
+    await this.waitForDrain();
+  }
+
+  onBinary(handler: BinaryHandler): () => void {
+    this.binaryHandlers.add(handler);
+    return () => this.binaryHandlers.delete(handler);
+  }
+
   /** Resolves when the outgoing buffer has drained enough to send more. */
   async waitForDrain(): Promise<void> {
     const ch = this.channel;
@@ -140,9 +157,15 @@ export class PeerLink {
 
   private attachChannel(channel: RTCDataChannel): void {
     this.channel = channel;
+    channel.binaryType = "arraybuffer";
     channel.onopen = () => this.resolveOpen();
     channel.onclose = () => this.rejectOpen(new PeerLinkError("Data channel closed."));
     channel.onmessage = (ev) => {
+      if (ev.data instanceof ArrayBuffer) {
+        const bytes = new Uint8Array(ev.data);
+        for (const h of [...this.binaryHandlers]) h(bytes);
+        return;
+      }
       if (typeof ev.data !== "string") return;
       if (this.handlers.size === 0) {
         this.pending.push(ev.data);
