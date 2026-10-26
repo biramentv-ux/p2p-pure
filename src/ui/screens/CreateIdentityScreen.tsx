@@ -21,12 +21,16 @@ export function CreateIdentityScreen({ onIdentityCreated }: CreateIdentityScreen
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // The passkey step failed (cancelled, timed out, no Windows Hello): a password is offered.
+  const [passkeyFailed, setPasskeyFailed] = useState(false);
+  const webAuthnOk = isWebAuthnSupported();
 
   async function run(passwordFallback?: string) {
     setStage("creating");
     setError(null);
     try {
-      const result = await createIdentity(passwordFallback);
+      // Once a password is chosen it protects the seed; no second passkey prompt is needed.
+      const result = await createIdentity(passwordFallback, { skipPasskey: passwordFallback !== undefined });
       setMnemonic(result.mnemonic);
       setIdentity(result.identity);
       setStage("show-mnemonic");
@@ -35,6 +39,14 @@ export function CreateIdentityScreen({ onIdentityCreated }: CreateIdentityScreen
         // This authenticator can't do PRF: ask for a password instead.
         setError(t("Този passkey не поддържа PRF. Задай парола за това устройство."));
         setStage("password");
+        return;
+      }
+      if (passwordFallback === undefined && webAuthnOk && !(err instanceof IdentityError && err.code === "ALREADY_EXISTS")) {
+        // No passkey came back (dialog closed, timeout, no authenticator on this device).
+        // Without this the user could only retry the passkey and never get in.
+        setPasskeyFailed(true);
+        setError(t("Не успяхме да създадем passkey. Опитай отново или продължи с парола."));
+        setStage("intro");
         return;
       }
       setError(
@@ -56,8 +68,6 @@ export function CreateIdentityScreen({ onIdentityCreated }: CreateIdentityScreen
     }
     void run(password);
   }
-
-  const webAuthnOk = isWebAuthnSupported();
 
   if (stage === "show-mnemonic") {
     return (
@@ -140,6 +150,17 @@ export function CreateIdentityScreen({ onIdentityCreated }: CreateIdentityScreen
       >
         {stage === "creating" ? t("Създаване…") : t("Създай идентичност")}
       </button>
+      {passkeyFailed && stage === "intro" && (
+        <button
+          className="secondary"
+          onClick={() => {
+            setError(null);
+            setStage("password");
+          }}
+        >
+          {t("Продължи с парола")}
+        </button>
+      )}
     </div>
   );
 }

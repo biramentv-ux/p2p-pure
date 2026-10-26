@@ -48,8 +48,18 @@ export interface CreateIdentityResult {
  * first pass we accept an optional password up front and only use it if
  * PRF is unavailable.
  */
+export interface CreateIdentityOptions {
+  /**
+   * Protect the seed with the password only, without asking for a passkey. Used when the
+   * passkey step failed or was cancelled (e.g. no Windows Hello in the desktop app), and
+   * when a password was already chosen, so the user is not prompted for a second passkey.
+   */
+  skipPasskey?: boolean;
+}
+
 export async function createIdentity(
   passwordFallback?: string,
+  options: CreateIdentityOptions = {},
 ): Promise<CreateIdentityResult> {
   const existing = await loadIdentityRecord();
   if (existing) {
@@ -61,7 +71,7 @@ export async function createIdentity(
   const keyPair = deriveIdentityKeyPair(seed);
   const did = publicKeyToDidKey(keyPair.publicKey);
 
-  const { record } = await encryptAndPersistSeed(seed, did, keyPair.publicKey, passwordFallback);
+  const { record } = await encryptAndPersistSeed(seed, did, keyPair.publicKey, passwordFallback, options);
 
   return {
     identity: { did, keyPair },
@@ -104,13 +114,17 @@ async function encryptAndPersistSeed(
   did: string,
   publicKey: Uint8Array,
   passwordFallback?: string,
+  options: CreateIdentityOptions = {},
 ): Promise<{ record: IdentityRecord }> {
   const kdfSalt = crypto.getRandomValues(new Uint8Array(16));
   let unlockMethod: IdentityRecord["unlockMethod"];
   let credentialId: string | undefined;
   let aesKey: Uint8Array;
 
-  if (isWebAuthnSupported()) {
+  if (options.skipPasskey && passwordFallback) {
+    aesKey = await aesKeyFromPassword(passwordFallback, kdfSalt);
+    unlockMethod = "password";
+  } else if (isWebAuthnSupported()) {
     const created = await createPasskey(did);
     if (created.prfSecret) {
       aesKey = aesKeyFromPrfSecret(created.prfSecret, kdfSalt);
