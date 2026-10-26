@@ -1,0 +1,71 @@
+# Publishes the signalling Worker (short codes, Telegram relay, demo rooms) to Cloudflare.
+# Runs on GitHub, so it does not depend on the owner's computer.
+#
+# Needs two repository secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN   token from the "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID  the account id shown on the Workers overview page
+# Without them the job only runs the Worker tests and says what is missing.
+# The Worker's own secrets (TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET) stay in Cloudflare
+# and are not touched by a deploy.
+name: Signalling Worker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["worker/**", ".github/workflows/worker-deploy.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Worker tests
+        run: npx vitest run tests/worker
+
+      - name: Deploy to Cloudflare
+        id: deploy
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning title=worker-deploy::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not set; tests ran, nothing was deployed (see docs/DEMO-SIGNALING.md)."
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npx --yes wrangler@4.20.0 deploy
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check the public endpoints
+        if: steps.deploy.outputs.deployed == 'true'
+        run: |
+          base="https://tg.dyrakarmy.online"
+          for i in 1 2 3 4 5 6; do
+            body=$(curl -s -m 15 -X POST "$base/ws/rooms" -H 'content-type: application/json' -d '{}' || true)
+            if echo "$body" | grep -q '"code"'; then
+              echo "::notice title=demo-room::POST /ws/rooms answers: $body"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error title=demo-room::POST /ws/rooms did not return a room code. Last answer: $body"
+          exit 1
