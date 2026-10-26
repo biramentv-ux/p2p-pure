@@ -58,16 +58,6 @@ The Worker runs on Cloudflare, and Cloudflare terminates TLS. As the platform op
 
 In the Telegram path, Telegram sees the sender and recipient chats, the invitation text and the bot messages. The bot is not an encrypted channel.
 
-## Optional TURN relay (user-configured)
-
-Off by default. The app ships no TURN server and no credentials. A person can enter their own `turn:` / `turns:` URL, username and credential in the Identity tab (Settings: own TURN relay); `src/p2p/turnConfig.ts` validates it (only `turn:`/`turns:`, no credentials inside the URL, a warning for private-range hosts and for plain `turn:`).
-
-- **What a relay sees:** traffic metadata only: both endpoints' IP addresses, timing and packet sizes. Not content: the data channel is DTLS, and the messages inside are encrypted again end to end (Double Ratchet), so the relay operator cannot read them. A relay you do not run is a third party that learns who talks to whom and when; use your own or one you trust.
-- **Relay only (optional):** sets `iceTransportPolicy: "relay"` and leaves STUN out, so neither the other person nor STUN servers see this device's IP. Cost: slower, and the relay sees every connection. Without it, a relay is used only when direct paths fail, but the relay candidate is part of the invitation (it contains the relay's address, which the other person then learns).
-- **At rest:** the whole record (URL, username, credential, flags) is AES-256-GCM encrypted with a key derived from the history key (`src/p2p/turnStore.ts`, using `atRestCrypto.ts`), so nothing readable is stored while locked. After unlock it sits in memory and is dropped on lock. The credential is a TURN password in the ICE configuration, so page scripts in the same origin could read it while unlocked, like any other in-memory secret; the CSP (`script-src 'self'`) is the mitigation.
-- **CSP:** unchanged. WebRTC ICE/TURN traffic is not governed by `connect-src` (which covers fetch, XHR, WebSocket, EventSource and beacons).
-- **Not changed:** the Worker and Telegram paths still see only what is listed above. TURN credentials are never sent to them.
-
 ## Reporting
 
 Report vulnerabilities privately to the repository owner (GitHub Security Advisories).
