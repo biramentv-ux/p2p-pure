@@ -61,13 +61,14 @@ export const SECURITY_HEADERS: Record<string, string> = {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+// `--mode desktop` (Tauri): no service worker or web manifest; the app ships inside the installer.
+export default defineConfig(({ mode }) => ({
   server: { headers: SECURITY_HEADERS },
   preview: { headers: SECURITY_HEADERS },
   plugins: [
     react(),
     contentSecurityPolicy(),
-    VitePWA({
+    ...(mode === 'desktop' ? [] : [VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png'],
       manifest: {
@@ -102,7 +103,7 @@ export default defineConfig({
         // traffic (WebRTC data channels bypass the service worker anyway).
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
       },
-    }),
+    })]),
   ],
   test: {
     environment: 'jsdom',
@@ -114,4 +115,4 @@ export default defineConfig({
       include: ['src/identity/**/*.ts'],
     },
   },
-})
+}))

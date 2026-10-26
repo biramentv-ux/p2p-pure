@@ -1,0 +1,23 @@
+[package]
+name = "p2p-messenger"
+version = "0.7.0"
+description = "P2P Secure Messenger: end-to-end encrypted, peer-to-peer, no servers for messages"
+edition = "2021"
+publish = false
+
+[lib]
+name = "p2p_messenger_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
