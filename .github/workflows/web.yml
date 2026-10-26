@@ -53,7 +53,8 @@ jobs:
         run: shellcheck -S warning scripts/linux/install.sh
 
       - name: Unit and worker tests
-        run: npm test
+        # The github-actions reporter turns each failing test into an annotation (logs are not always readable).
+        run: npm test -- --reporter=default --reporter=github-actions
 
       - name: Build (type check + PWA)
         run: npm run build
