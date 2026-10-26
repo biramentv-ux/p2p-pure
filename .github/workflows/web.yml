@@ -53,7 +53,22 @@ jobs:
         run: shellcheck -S warning scripts/linux/install.sh
 
       - name: Unit and worker tests
-        run: npm test
+        # The github-actions reporter turns each failing test into an annotation (logs are not always readable).
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --reporter=default --reporter=github-actions 2>&1 | tee vitest.log
+
+      - name: Show why the tests failed
+        if: failure()
+        shell: bash
+        run: |
+          # Errors outside a test (unhandled rejections, a crashed worker) get no annotation of their own.
+          sed 's/\x1b\[[0-9;]*m//g' vitest.log > plain.log
+          { grep -nE -A25 "FAIL |Unhandled" plain.log || true; grep -nE "Tests +[0-9]|Test Files" plain.log || true; } | head -120 > why.txt
+          # One annotation (a step shows at most 10): newlines encoded as %0A.
+          msg="$(sed 's/%/%25/g' why.txt | awk '{printf "%s%%0A", $0}')"
+          echo "::error title=vitest::${msg}"
 
       - name: Build (type check + PWA)
         run: npm run build
