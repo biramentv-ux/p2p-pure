@@ -7,7 +7,7 @@
 **Личен, децентрализиран, шифрован от край до край.**
 **A private, decentralised, end-to-end encrypted messenger.**
 
-[![Tests](https://img.shields.io/badge/unit_tests-401_passing-1f6fc4?style=for-the-badge)](#-тестове)
+[![Tests](https://img.shields.io/badge/unit_tests-428_passing-1f6fc4?style=for-the-badge)](#-тестове)
 [![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-13213a?style=for-the-badge)](#-тестове)
 [![Platforms](https://img.shields.io/badge/web_·_Windows_·_Android_·_iOS-PWA_+_Tauri_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
 [![Languages](https://img.shields.io/badge/languages-BG_·_EN-d41b7f?style=for-the-badge)](#-език)
@@ -39,9 +39,10 @@
 | 🛰️ | **Демо стая** *(ново)* | Превключвател „Локален (QR) / Демо (стая)“. В демо режим единият отваря стая и праща кода, другият влиза с него. |
 | 🔢 | **Шест думи за проверка** | Двамата виждат едни и същи 6 думи, изчислени от публичните X25519 ключове (v2). Ако съвпадат, никой не стои по средата. |
 | 💬 | **Шифровани чатове** | Double Ratchet. Историята се пази в IndexedDB, шифрована с AES-GCM. |
+| 📎 | **Файлове до 100 MB** *(ново)* | Всякакви файлове и видео, директно между устройствата. Получателят приема или отказва; файлове до 25 MB остават шифровани в историята. |
 | 🖼️ | **Снимки, локация, изтриване** | Изтриване на чата и при двамата. Локацията се праща само при твое натискане. |
 | 📞 | **Аудио и видео разговори** | По същата директна връзка, медията е DTLS-SRTP. |
-| 👥 | **Групи до 9 души** *(обновено)* | Админ, име и снимка на групата, смяна на ключа при премахване. Състоянието и историята се пазят шифровани. Новите членове се свързват автоматично през админа. |
+| 👥 | **Групи до 9 души** *(обновено)* | Админ, име и снимка на групата. Файлове, снимки, видео до 50 MB и GIF от GIPHY. Новият член не вижда старата история; махането става и когато махнатият е офлайн. Всичко се пази шифровано. |
 | 🪟 | **Windows** *(ново)* | Инсталатор без админ права, portable zip и `winget`. Цялото приложение е вътре. |
 | 🎨 | **Нов дизайн** *(ново)* | „Запечатана поща“: небесно синьо и електрик пурпурно-розово, IBM Plex с кирилица, светъл и тъмен режим, AA контраст. |
 | 🌍 | **Два езика** | Български (по подразбиране) и English. |
@@ -251,12 +252,13 @@ docs/               ръководства: Windows, демо сигнализа
 
 | Команда | Какво проверява |
 |---|---|
-| `npm test` | Unit тестове: 46 файла, 401 теста |
+| `npm test` | Unit тестове: 50 файла, 428 теста |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Двама души в браузър: QR, шест думи, шифрован обмен, replay защита |
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
 | `npm run test:demo` | Демо стая през локален relay (8 проверки) |
 | `npm run test:pages` | Билдът за GitHub Pages под подпът `/p2p-pure/` (6 проверки) |
+| `npm run test:files` | Файлове между двама: GIF, 100 MB байт по байт, лимит, отказ, HTML като изтегляне (14 проверки) |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) на всички екрани, на двата езика |
 | `npm run test:call` | Аудио и видео разговор |
 | `npm run test:extension-browser` | Разширението в Chromium |
@@ -310,9 +312,10 @@ docs/               ръководства: Windows, демо сигнализа
 | 🛰️ | **Demo room** *(new)* | A "Local (QR) / Demo (room)" switch. In demo mode one person opens a room and sends the code; the other joins with it. |
 | 🔢 | **Six words to verify** | Both sides see the same 6 words, computed from both public X25519 keys (v2). If they match, nobody sits in between. |
 | 💬 | **Encrypted chats** | Double Ratchet. History is kept in IndexedDB, encrypted with AES-GCM. |
+| 📎 | **Files up to 100 MB** *(new)* | Any file or video, straight between devices. The recipient accepts or declines; files up to 25 MB stay encrypted in the history. |
 | 🖼️ | **Photos, location, deletion** | Delete a chat on both sides. Location is sent only when you tap to send it. |
 | 📞 | **Audio and video calls** | Over the same direct connection; media is DTLS-SRTP. |
-| 👥 | **Groups of up to 9** *(updated)* | Admin, group name and photo, key change when someone is removed. State and history are stored encrypted. New members link up automatically through the admin. |
+| 👥 | **Groups of up to 9** *(updated)* | Admin, group name and photo. Files, photos, videos up to 50 MB and GIFs from GIPHY. A new member does not see the old history; removal works while the removed member is offline. Everything is stored encrypted. |
 | 🪟 | **Windows** *(new)* | Installer without admin rights, portable zip and `winget`. The whole app is inside. |
 | 🎨 | **New design** *(new)* | "Sealed Post": sky blue and electric magenta, IBM Plex with Cyrillic, light and dark mode, AA contrast. |
 | 🌍 | **Two languages** | Bulgarian (default) and English. |
@@ -522,12 +525,13 @@ docs/               guides: Windows, demo signalling, groups, Telegram bot
 
 | Command | What it checks |
 |---|---|
-| `npm test` | Unit tests: 46 files, 401 tests |
+| `npm test` | Unit tests: 50 files, 428 tests |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Two people in a browser: QR, six words, encrypted exchange, replay protection |
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
 | `npm run test:demo` | Demo room through a local relay (8 checks) |
 | `npm run test:pages` | The GitHub Pages build under the `/p2p-pure/` sub-path (6 checks) |
+| `npm run test:files` | Files between two people: GIF, 100 MB byte for byte, limit, decline, HTML as a download (14 checks) |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) on every screen, in both languages |
 | `npm run test:call` | Audio and video call |
 | `npm run test:extension-browser` | The extension in Chromium |

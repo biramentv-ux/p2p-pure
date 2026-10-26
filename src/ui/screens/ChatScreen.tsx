@@ -8,7 +8,7 @@ import {
   type ChatMessage,
   type FileCard,
 } from "../../history/messageStore";
-import { canStore, deleteFilesFor, saveFile } from "../../history/fileStore";
+import { canStore, deleteFilesFor, loadFile, saveFile } from "../../history/fileStore";
 import { FileTransfers, MAX_FILE_BYTES, type FileMeta } from "../../p2p/fileTransfer";
 import { FileBubble, TransferList, type ActiveTransfer } from "../components/FileBubble";
 import { decodeControl, encodeControl, isControlMessage, type ControlMessage } from "../../p2p/control";
@@ -560,7 +560,11 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         {messages.map((m, i) => (
           <li key={`${m.timestamp}-${i}`} className={m.direction === "out" ? "msg out" : "msg in"}>
             {m.file ? (
-              <FileBubble card={m.file} url={urlsRef.current.get(m.file.id)} owner={contact.did} historyKey={historyKey} />
+              <FileBubble
+                card={m.file}
+                url={urlsRef.current.get(m.file.id)}
+                load={() => loadFile(historyKey, contact.did, m.file!.id)}
+              />
             ) : m.location ? (
               <LocationBubble fix={m.location} />
             ) : m.image ? (
@@ -661,7 +665,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           className="secondary"
           disabled={!connected || !!preparing}
           onClick={() => fileInput.current?.click()}
-          aria-label={t("Изпрати файл или видео до 100 MB")}
+          aria-label={t("Прикачи файл или видео до 100 MB")}
         >
           {t("Файл")}
         </button>

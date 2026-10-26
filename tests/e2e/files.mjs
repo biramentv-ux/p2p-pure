@@ -126,7 +126,7 @@ const MB = 1024 * 1024;
 /** Picks a file through the "Файл" button (the hidden input next to it). */
 async function pick(page, path) {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Изпрати файл или видео до 100 MB" }).click();
+  await page.getByRole("button", { name: "Прикачи файл или видео до 100 MB" }).click();
   await (await chooser).setFiles(path);
 }
 

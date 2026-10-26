@@ -25,10 +25,12 @@ function contentSecurityPolicy(): Plugin {
           "default-src 'self'",
           "script-src 'self'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob:",
+          // GIPHY previews in the GIF picker (only the person searching loads them).
+          "img-src 'self' data: blob: https://media.giphy.com https://*.giphy.com",
           "font-src 'self' data:",
           // Demo signalling also uses a WebSocket to the same host (wss:// or ws://).
-          `connect-src 'self' ${inviteOrigin} ${inviteOrigin.replace(/^http/, 'ws')}`,
+          // GIPHY search and the chosen GIF's download, from the sender's device only.
+          `connect-src 'self' ${inviteOrigin} ${inviteOrigin.replace(/^http/, 'ws')} https://api.giphy.com https://*.giphy.com`,
           "worker-src 'self'",
           "manifest-src 'self'",
           "media-src 'self' blob:",

@@ -589,3 +589,60 @@ textarea {
   margin-top: 0.3rem;
   accent-color: var(--ember);
 }
+
+/* ---------- GIF picker ---------- */
+.gif-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.gif-head {
+  display: flex;
+  gap: 0.5rem;
+}
+.gif-head input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.gif-note,
+.gif-attribution {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.gif-attribution {
+  font-family: var(--mono);
+  text-align: right;
+}
+.gif-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.4rem;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.gif-grid button {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: var(--ink-3);
+  overflow: hidden;
+  cursor: pointer;
+}
+.gif-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.group-history-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.group-attach {
+  margin-top: 0.4rem;
+}
