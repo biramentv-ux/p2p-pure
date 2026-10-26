@@ -1,6 +1,7 @@
 # Windows desktop package (Tauri 2). Builds on a clean Windows runner, so the result does
-# not depend on the owner's machine. Unsigned for now: Windows SmartScreen will warn once
-# (see docs/WINDOWS.md). Run it from the Actions tab, or push a tag "desktop-v*" to also
+# not depend on the owner's machine. Signed only when the secrets WINDOWS_CERT_PFX_BASE64 and
+# WINDOWS_CERT_PASSWORD exist (docs/SIGNING.md); without them it is unsigned and
+# Windows SmartScreen will warn once (see docs/WINDOWS.md). Run it from the Actions tab, or push a tag "desktop-v*" to also
 # attach the files to a GitHub release.
 name: Windows desktop
 
@@ -52,8 +53,69 @@ jobs:
       - name: Unit tests
         run: npx vitest run
 
+      # Inert until the owner adds the secrets. With them, Tauri calls scripts/windows/sign.ps1
+      # (bundle.windows.signCommand) for the app exe and for the installer.
+      - name: Prepare code signing (only with WINDOWS_CERT_PFX_BASE64)
+        id: codesign
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERT_PFX_BASE64 -or -not $env:WINDOWS_CERT_PASSWORD) {
+            Write-Output "::notice title=windows-signing::WINDOWS_CERT_PFX_BASE64 / WINDOWS_CERT_PASSWORD not set; the installer is not signed"
+            "signed=false" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String(($env:WINDOWS_CERT_PFX_BASE64 -replace '\s', '')))
+          # Fail early on a wrong password or a certificate without a private key.
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfx, $env:WINDOWS_CERT_PASSWORD)
+          if (-not $cert.HasPrivateKey) { Write-Output "::error::the PFX has no private key"; exit 1 }
+          Write-Output "::notice title=windows-signing::signing as '$($cert.Subject)', valid until $($cert.NotAfter.ToString('yyyy-MM-dd'))"
+          # Tauri splits signCommand on spaces; the runner workspace path has none.
+          $script = Join-Path $env:GITHUB_WORKSPACE "scripts/windows/sign.ps1"
+          $overlay = Join-Path $env:RUNNER_TEMP "tauri-sign.json"
+          @{ bundle = @{ windows = @{ signCommand = "pwsh -NoProfile -ExecutionPolicy Bypass -File $script %1" } } } |
+            ConvertTo-Json -Depth 5 | Out-File -Encoding utf8 $overlay
+          "WINDOWS_CERT_PFX_PATH=$pfx" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "signed=true" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+          "overlay=$overlay" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
       - name: Build installer (NSIS, per-user, no admin)
-        run: npx tauri build --bundles nsis
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ steps.codesign.outputs.signed == 'true' && secrets.WINDOWS_CERT_PASSWORD || '' }}
+          SIGN_OVERLAY: ${{ steps.codesign.outputs.overlay }}
+        run: |
+          if ($env:SIGN_OVERLAY) { npx tauri build --bundles nsis --config $env:SIGN_OVERLAY }
+          else { npx tauri build --bundles nsis }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # The portable zip ships target/release/p2p-messenger.exe: make sure it is signed too, then
+      # verify both files with signtool before any checksum or winget hash is taken.
+      - name: Verify signatures (only when signed)
+        if: steps.codesign.outputs.signed == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path src-tauri/target/release/p2p-messenger.exe).Path
+          $setup = (Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName
+          if ((Get-AuthenticodeSignature $exe).Status -ne 'Valid') { & pwsh -NoProfile -File scripts/windows/sign.ps1 $exe; if ($LASTEXITCODE -ne 0) { exit 1 } }
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          foreach ($f in @($exe, $setup)) {
+            & $signtool verify /pa /all $f
+            if ($LASTEXITCODE -ne 0) { Write-Output "::error::signtool verify failed: $f"; exit 1 }
+            $sig = Get-AuthenticodeSignature $f
+            Write-Output "::notice title=signed::$(Split-Path $f -Leaf): $($sig.Status), $($sig.SignerCertificate.Subject), timestamp: $([bool]$sig.TimeStamperCertificate)"
+          }
+
+      - name: Remove the signing certificate from the runner
+        if: always()
+        shell: pwsh
+        run: Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP "codesign.pfx")
 
       # After the build (needs dist/): compiles the Windows Hello module against the real
       # windows crate and runs its input checks.

@@ -18,6 +18,8 @@
 | `P2P-Messenger-<версия>-x86_64.AppImage` | Всяка друга система, без инсталиране | Един файл, само за теб, без root. |
 | `install.sh` | Всички | Сваля, проверява и инсталира сам правилния пакет. |
 | `SHA256SUMS-linux.txt` | Проверка | Контролни суми на всички файлове по-горе. |
+| `SHA256SUMS-linux.txt.asc` | Проверка | GPG подпис на сумите (само в подписани издания). |
+| `p2p-messenger-signing-key.asc`, `p2p-messenger-archive-keyring.gpg` | Проверка, apt | Публичният ключ за подпис (само в подписани издания). |
 
 ## Инсталиране с един скрипт (препоръчано)
 
@@ -35,8 +37,59 @@ bash install.sh
 също е в `SHA256SUMS-linux.txt`.
 
 Полезни параметри: `--version 0.7.0`, `--appimage` (само за теб, без root), `--dry-run`
-(само показва), `--uninstall` (премахва; данните остават), `--from-dir ПАПКА` (файловете
-вече са свалени).
+(само показва), `--uninstall` (премахва; данните и хранилището), `--from-dir ПАПКА` (файловете
+вече са свалени), `--add-repo` (добавя хранилището за обновления, виж по-долу).
+
+В **подписано** издание `install.sh` носи вътре отпечатъка на ключа и проверява и GPG
+подписа на `SHA256SUMS-linux.txt` с `gpg`. Липсващ, подменен или чужд подпис спира
+инсталирането. Ако на системата няма `gpg`, остава проверката на сумата (както досега) с
+предупреждение. В неподписано издание всичко е както преди.
+
+## Обновления през apt / dnf (подписано хранилище)
+
+Активно е, след като собственикът добави ключа за подпис (виж [SIGNING.md](SIGNING.md)).
+Хранилището е на GitHub Pages, до уеб приложението: `https://biramentv-ux.github.io/p2p-pure/linux/`.
+Държи само последната версия; по-старите са в Releases.
+
+Най-лесно, с проверка на ключа срещу отпечатъка в `install.sh`:
+
+```bash
+bash install.sh --add-repo
+```
+
+На ръка, **Debian / Ubuntu** (ключът е само за това хранилище — `signed-by`, не `apt-key`):
+
+```bash
+curl -fsSL https://biramentv-ux.github.io/p2p-pure/linux/p2p-messenger-archive-keyring.gpg \
+  | sudo tee /usr/share/keyrings/p2p-messenger-archive-keyring.gpg >/dev/null
+gpg --show-keys /usr/share/keyrings/p2p-messenger-archive-keyring.gpg   # сравни отпечатъка!
+sudo tee /etc/apt/sources.list.d/p2p-messenger.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://biramentv-ux.github.io/p2p-pure/linux/apt
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/p2p-messenger-archive-keyring.gpg
+EOF
+sudo apt update && sudo apt install p2p-messenger
+```
+
+Старият едноредов формат (Debian 11, Ubuntu 20.04):
+`deb [arch=amd64 signed-by=/usr/share/keyrings/p2p-messenger-archive-keyring.gpg] https://biramentv-ux.github.io/p2p-pure/linux/apt stable main`
+
+**Fedora / RHEL** (`gpgcheck` проверява всеки `.rpm`, `repo_gpgcheck` — метаданните):
+
+```bash
+sudo dnf config-manager addrepo --from-repofile=https://biramentv-ux.github.io/p2p-pure/linux/rpm/p2p-messenger.repo
+# по-стар dnf: sudo curl -fsSLo /etc/yum.repos.d/p2p-messenger.repo <същия адрес>
+sudo dnf install p2p-messenger      # при първото пускане dnf показва отпечатъка: сравни го
+```
+
+**openSUSE:** `sudo zypper addrepo https://biramentv-ux.github.io/p2p-pure/linux/rpm/p2p-messenger.repo && sudo zypper install p2p-messenger`
+
+После обновленията идват с `sudo apt upgrade` / `sudo dnf upgrade`. Премахване на
+хранилището: `bash install.sh --uninstall` (или изтрий файловете в `/etc/apt/sources.list.d/`,
+`/usr/share/keyrings/`, `/etc/yum.repos.d/` с име `p2p-messenger`).
 
 ## Инсталиране на ръка
 
@@ -51,8 +104,8 @@ chmod +x P2P-Messenger-0.7.0-x86_64.AppImage && ./P2P-Messenger-0.7.0-x86_64.App
 ```
 
 Програмата се отваря от менюто като „P2P Messenger“ или с командата `p2p-messenger`.
-Пакетите още не са подписани, затова `apt` и `dnf` не показват издател. Контролните суми
-са единствената проверка, че файлът е същият като този от CI.
+В подписано издание провери и подписа: `gpg --verify SHA256SUMS-linux.txt.asc` (подробно в
+[SIGNING.md](SIGNING.md)). В неподписано контролните суми са единствената проверка.
 
 ## Ubuntu 24.04 и AppImage
 
@@ -121,7 +174,8 @@ npm run test:linux           # проверката по-горе върху п�
 - Версията е в `electron/package.json` и трябва да е същата като в `src-tauri/tauri.conf.json`
   (има тест за това).
 
-## Подпис (по-късно)
+## Подпис
 
-Когато има ключ: подписване на `.deb`/`.rpm` и на `SHA256SUMS-linux.txt` (GPG), а после
-собствено APT хранилище, за да идват обновленията през `apt upgrade`. Flatpak е друга възможност.
+GPG подписът (`.rpm`, `SHA256SUMS-linux.txt.asc`) и APT/dnf хранилището се включват сами,
+когато собственикът добави секрета `LINUX_GPG_PRIVATE_KEY`. Как се прави ключът, кои секрети
+трябват и защо `.deb` не се подписва вътре: [SIGNING.md](SIGNING.md). Flatpak е друга възможност.
