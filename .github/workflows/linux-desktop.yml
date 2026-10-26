@@ -92,6 +92,22 @@ jobs:
           APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test \
             xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs
 
+      # Same installed .deb on a real Wayland compositor (headless Weston, no X server for the app).
+      - name: Test the installed app on Wayland (headless Weston)
+        run: |
+          sudo apt-get install -y -qq weston
+          env -u DISPLAY APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test-wayland WAYLAND=1 \
+            node tests/desktop/electron-linux.mjs
+
+      # Camera and QR scanner with Chromium's fake camera (flags only on the test command line, none in
+      # the app). The video is made by ffmpeg from the invitation QR the app shows. This tests the
+      # permission handler, getUserMedia and the QR decoder, not real camera hardware.
+      - name: Test camera permission and QR scanner (fake camera)
+        run: |
+          sudo apt-get install -y -qq ffmpeg
+          APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test-camera FAKE_CAMERA=auto \
+            xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs
+
       - name: Install, remove and reinstall with install.sh (checksums, local files)
         run: |
           set -euo pipefail
@@ -125,6 +141,8 @@ jobs:
           path: |
             desktop-test
             desktop-test-appimage
+            desktop-test-wayland
+            desktop-test-camera
           if-no-files-found: ignore
           retention-days: 14
 
