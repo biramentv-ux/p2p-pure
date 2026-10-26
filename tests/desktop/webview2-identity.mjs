@@ -6,7 +6,9 @@
  *   1. passkey with PRF  -> create identity, lock (reload), unlock with the passkey,
  *                           restart the app, identity still there, unlock again;
  *   2. passkey without PRF -> the app must fall back to a device password: create,
- *                           wrong password rejected, unlock, restart, unlock again.
+ *                           wrong password rejected, unlock, restart, unlock again;
+ *   3. passkey refused (like a cancelled Windows Hello prompt) -> the app must offer a
+ *                           password and create the identity with it.
  *
  * Facts (origin, secure context, WebAuthn availability, unlock method, persistence) are
  * printed as GitHub annotations, because run logs are not always readable from outside.
@@ -100,8 +102,26 @@ async function waitFor(fn, timeoutMs, what) {
   }
 }
 
+/** WebView2 browser processes and their command lines (Windows), for diagnostics. */
+function webviewProcesses() {
+  if (!APP_EXE) return Promise.resolve("");
+  const ps =
+    "Get-CimInstance Win32_Process -Filter \"name='msedgewebview2.exe'\" | " +
+    "Where-Object { $_.CommandLine -notmatch '--type=' } | ForEach-Object { \"$($_.ProcessId): $($_.CommandLine)\" }";
+  return new Promise((ok) =>
+    execFile("powershell", ["-NoProfile", "-Command", ps], { timeout: 20_000 }, (_e, out) => ok(String(out ?? "").trim())),
+  );
+}
+
+/** A WebView2 browser left from an earlier start would be reused, and it ignores new arguments. */
+async function killLeftoverWebView2() {
+  if (!APP_EXE) return;
+  await new Promise((r) => execFile("taskkill", ["/IM", "msedgewebview2.exe", "/T", "/F"], () => r()));
+}
+
 async function launchApp() {
   if (await cdpUp()) throw new Error(`port ${PORT} is already in use before launch`);
+  await killLeftoverWebView2();
   let child;
   if (APP_EXE) {
     child = spawn(APP_EXE, [], {
@@ -118,10 +138,17 @@ async function launchApp() {
     ], { stdio: "ignore" });
   }
   const exited = new Promise((r) => child.once("exit", (code) => r(code)));
-  const version = await Promise.race([
-    waitFor(cdpUp, 60_000, "the WebView2 DevTools endpoint"),
-    exited.then((code) => { throw new Error(`app exited during start (code ${code})`); }),
-  ]);
+  let version;
+  try {
+    version = await Promise.race([
+      waitFor(cdpUp, 60_000, "the WebView2 DevTools endpoint"),
+      exited.then((code) => { throw new Error(`app exited during start (code ${code})`); }),
+    ]);
+  } catch (err) {
+    const procs = await webviewProcesses();
+    annotate("warning", "webview2-processes", procs ? procs.slice(0, 3000) : "no msedgewebview2.exe browser process");
+    throw err;
+  }
   const browser = await chromium.connectOverCDP(CDP);
   const page = await waitFor(async () => {
     for (const ctx of browser.contexts()) {
@@ -238,7 +265,8 @@ async function wipeIdentity(page) {
   await page.reload();
 }
 
-async function addAuthenticator(cdp, hasPrf) {
+/** userVerified=false: the authenticator refuses, like a cancelled Windows Hello prompt. */
+async function addAuthenticator(cdp, hasPrf, userVerified = true) {
   await cdp.send("WebAuthn.enable", { enableUI: false });
   const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
     options: {
@@ -247,7 +275,7 @@ async function addAuthenticator(cdp, hasPrf) {
       transport: "internal",
       hasResidentKey: true,
       hasUserVerification: true,
-      isUserVerified: true,
+      isUserVerified: userVerified,
       automaticPresenceSimulation: true,
       hasPrf,
     },
@@ -257,7 +285,7 @@ async function addAuthenticator(cdp, hasPrf) {
 
 /** Create button -> mnemonic (passkey) or password form (no PRF), or an error on the intro screen. */
 async function clickCreate(page) {
-  await page.locator("main > .screen > button").click();
+  await page.locator("main > .screen > button").first().click();
   return waitState(page, ["mnemonic", "create-password", "create"], 45_000).then(async (s) => {
     if (s !== "create") return s;
     // Still on the intro: either busy or an error was shown.
@@ -266,7 +294,7 @@ async function clickCreate(page) {
       const st = await screenState(page);
       if (st !== "create") return st;
       const alert = await alertText(page);
-      const busy = await page.locator("main > .screen > button").isDisabled();
+      const busy = await page.locator("main > .screen > button").first().isDisabled();
       if (alert && !busy) return `error: ${alert}`;
       await page.waitForTimeout(300);
     }
@@ -277,7 +305,7 @@ async function clickCreate(page) {
 async function confirmMnemonic(page) {
   const words = await page.locator("ol.mnemonic-grid li").count();
   await page.locator('main > .screen input[type="checkbox"]').check();
-  await page.locator("main > .screen > button").click();
+  await page.locator("main > .screen > button").first().click();
   await waitState(page, "main");
   const did = (await page.locator(".did-text").innerText()).trim();
   return { words, did };
@@ -290,13 +318,13 @@ async function unlockWithPassword(page, password) {
 
 /** Clicks the passkey unlock button and waits for the main screen or a shown error. */
 async function unlockWithPasskey(page) {
-  await page.locator("main > .screen > button").click();
+  await page.locator("main > .screen > button").first().click();
   return waitFor(async () => {
     const st = await screenState(page).catch(() => "evaluating");
     if (st === "main") return { did: (await page.locator(".did-text").innerText()).trim() };
     if (st !== "unlock-passkey") return null;
     const alert = await alertText(page);
-    const busy = await page.locator("main > .screen > button").isDisabled().catch(() => true);
+    const busy = await page.locator("main > .screen > button").first().isDisabled().catch(() => true);
     return alert && !busy ? { error: alert } : null;
   }, 45_000, "passkey unlock to finish");
 }
@@ -308,6 +336,9 @@ async function mainDid(page) {
 
 /** JPEG of the window, small enough for the annotation chunks (<= ~27 000 base64 chars). */
 async function screenshot(cdp, page, name) {
+  // Let the screen's entrance animation finish and the QR canvas draw.
+  await page.locator("main canvas").first().waitFor({ timeout: 10_000 }).catch(() => undefined);
+  await page.waitForTimeout(2000);
   const size = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
   let data = "";
   let used = null;
@@ -514,6 +545,44 @@ try {
     );
   }
   facts.screenshot = await screenshot(cdp, page, "webview2-final");
+
+  // ---- scenario 3: the passkey prompt is cancelled (or no Windows Hello answers).
+  // The app must offer a password instead of leaving the user on the intro screen.
+  if (webauthnOk) {
+    await wipeIdentity(page);
+    await waitState(page, "create");
+    const refusing = await addAuthenticator(cdp, true, false);
+    const t0 = Date.now();
+    const outcome = await clickCreate(page);
+    facts.cancelled = { createOutcome: outcome, seconds: Math.round((Date.now() - t0) / 1000) };
+    const fallback = page.locator("main > .screen > button.secondary");
+    const offered = outcome.startsWith("error") && (await fallback.count()) === 1;
+    check("passkey cancelled: the app offers a password", offered, outcome);
+    if (offered) {
+      await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId: refusing });
+      await fallback.click();
+      await waitState(page, "create-password");
+      const fields = page.locator('input[autocomplete="new-password"]');
+      await fields.nth(0).fill(PASSWORD);
+      await fields.nth(1).fill(PASSWORD);
+      await page.locator("main > form.screen button[type=submit]").click();
+      await waitState(page, "mnemonic", 60_000);
+      const rec = await storedRecord(page);
+      const { did } = await confirmMnemonic(page);
+      facts.cancelled.storedMethod = rec?.unlockMethod;
+      check(
+        "passkey cancelled: identity created with the password",
+        rec?.unlockMethod === "password" && did.startsWith("did:key:z6Mk"),
+        `method=${rec?.unlockMethod}`,
+      );
+    }
+    annotate(
+      "notice",
+      "webview2-cancelled",
+      `refusing authenticator -> ${outcome} after ${facts.cancelled.seconds}s, password offered=${offered}, ` +
+        `storedMethod=${facts.cancelled.storedMethod ?? "n/a"}`,
+    );
+  }
   await closeApp();
 } catch (err) {
   fatalError = err;
