@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import worker, { type Env } from "../../worker/index";
+import worker, { limiterKey, type Env } from "../../worker/index";
 import { encodeChatCode } from "../../worker/logic";
 import { MemoryKV } from "./memoryKv";
 
@@ -140,7 +140,8 @@ describe("invitation rate limit", () => {
     const res = await worker.fetch(req, e);
     expect(res.status).toBe(429);
     expect(await res.json()).toEqual({ error: "rate_limited" });
-    expect(e.INVITE_LIMITER.limit).toHaveBeenCalledWith({ key: "203.0.113.7" });
+    expect(e.INVITE_LIMITER.limit).toHaveBeenCalledWith({ key: await limiterKey("203.0.113.7", env.TELEGRAM_WEBHOOK_SECRET) });
+    expect(e.INVITE_LIMITER.limit).not.toHaveBeenCalledWith({ key: "203.0.113.7" });
   });
 
   it("answers 429 to GET /invite/:code when over the limit", async () => {
