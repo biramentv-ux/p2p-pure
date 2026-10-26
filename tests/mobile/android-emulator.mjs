@@ -77,6 +77,9 @@ async function connect(errors) {
   return { browser, page };
 }
 
+/** The app follows the system language (English on a fresh emulator); the test uses Bulgarian names. */
+const bulgarian = (page) => page.getByRole("button", { name: /^БГ/ }).first().click({ timeout: 5000 }).catch(() => {});
+
 async function readDid(page) {
   const loc = page.locator(".did-text").first();
   if (!(await loc.count())) {
@@ -113,6 +116,7 @@ try {
   check("crypto.subtle works", env.subtle && env.digest, `secureContext=${env.secure}`);
   check("IndexedDB present", env.idb);
 
+  await bulgarian(page);
   // Create identity via the password path.
   await page.getByRole("button", { name: "Създай идентичност" }).first().click();
   const withPw = page.getByRole("button", { name: "Продължи с парола" });
