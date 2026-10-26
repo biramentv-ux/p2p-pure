@@ -8,6 +8,11 @@
  */
 import { createServer } from "vite";
 import { chromium } from "playwright-core";
+import { startDemoRelay } from "./demoRelay.mjs";
+
+// The app's demo signalling points at a local relay (the Worker is not part of this run).
+const DEMO_RELAY_PORT = 8791;
+process.env.VITE_INVITE_API = `http://127.0.0.1:${DEMO_RELAY_PORT}`;
 
 const CHROME_PATH =
   process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
@@ -22,6 +27,7 @@ setTimeout(() => {
 const server = await createServer({ server: { port: 0, host: "localhost" }, logLevel: "error" });
 await server.listen();
 const base = server.resolvedUrls.local[0].replace(/\/$/, "");
+const relay = await startDemoRelay(server, DEMO_RELAY_PORT);
 
 const browser = await chromium.launch({
   executablePath: CHROME_PATH,
@@ -203,14 +209,15 @@ try {
   await alice.page.getByRole("button", { name: "Назад" }).click();
   await alice.page.getByRole("button", { name: "Контакти" }).click();
   const listed = await alice.page.locator(".contact").innerText();
-  check("verified contact saved and listed", listed.includes("Боб") && listed.includes("потвърден"), listed);
+  // The badge is uppercased by CSS, so compare case-insensitively.
+  check("verified contact saved and listed", listed.includes("Боб") && listed.toLowerCase().includes("потвърден"), listed);
 
   // Reconnect to the verified contact: no safety step, history is still there
-  await alice.page.getByRole("button", { name: "Чат" }).first().click();
+  await alice.page.getByRole("button", { name: "Чат", exact: true }).first().click();
   await alice.page.getByRole("button", { name: "Покажи моята покана" }).click();
   const offer2 = await readQr(alice.page);
   await bob.page.getByRole("button", { name: "Назад" }).click();
-  await bob.page.getByRole("button", { name: "Чат" }).first().click();
+  await bob.page.getByRole("button", { name: "Чат", exact: true }).first().click();
   await bob.page.getByRole("button", { name: "Сканирай чужда покана" }).click();
   await pasteCode(bob.page, offer2);
   const answer2 = await readQr(bob.page);
@@ -218,6 +225,8 @@ try {
   await pasteCode(alice.page, answer2);
   await alice.page.locator(".chat").waitFor({ timeout: 60_000 });
   check("reconnect to a verified contact skips the safety step", (await alice.page.locator(".safety-code").count()) === 0);
+  // History loads after the chat screen is visible; wait for it rather than reading too early.
+  await alice.page.locator(".messages .msg").filter({ hasText: "Здрасти, Алиса тук" }).first().waitFor({ timeout: 15_000 }).catch(() => undefined);
   check(
     "chat history from the first session is still there",
     (await alice.page.locator(".messages").innerText()).includes("Здрасти, Алиса тук"),
@@ -227,6 +236,30 @@ try {
   await bob.page.locator(".messages .msg.in").filter({ hasText: "Пак здрасти" }).waitFor({ timeout: 30_000 });
   check("encrypted messaging works in the new session", true);
 
+  // Demo signalling: the same two people reconnect through a room code, no QR and no paste.
+  await alice.page.getByRole("button", { name: "Назад" }).click();
+  await alice.page.getByRole("button", { name: "Чат", exact: true }).first().click();
+  await alice.page.getByRole("button", { name: "Демо (стая)" }).click();
+  await alice.page.getByRole("button", { name: "Покажи моята покана" }).click();
+  const roomCode = (await alice.page.locator(".short-code").innerText()).trim();
+  check("demo: host shows a room code", /^[2-9A-HJKMNP-TV-Z]{5}-[2-9A-HJKMNP-TV-Z]{5}$/.test(roomCode), roomCode);
+
+  await bob.page.getByRole("button", { name: "Назад" }).click();
+  await bob.page.getByRole("button", { name: "Чат", exact: true }).first().click();
+  await bob.page.getByRole("button", { name: "Демо (стая)" }).click();
+  await bob.page.getByRole("button", { name: "Сканирай чужда покана" }).click();
+  await bob.page.getByLabel("Кратък код").fill(roomCode);
+  await bob.page.getByRole("button", { name: "Присъедини се" }).click();
+
+  await alice.page.locator(".chat").waitFor({ timeout: 60_000 });
+  await bob.page.locator(".chat").waitFor({ timeout: 60_000 });
+  check("demo: both sides reach the chat through the room", true);
+
+  await alice.page.locator(".composer input").fill("Стаята работи");
+  await alice.page.getByRole("button", { name: "Изпрати" }).click();
+  await bob.page.locator(".messages .msg.in").filter({ hasText: "Стаята работи" }).waitFor({ timeout: 30_000 });
+  check("demo: encrypted message arrives over the reconnected channel", true);
+
   check("no page errors (alice)", alice.errors.length === 0, alice.errors.join(" | "));
   check("no page errors (bob)", bob.errors.length === 0, bob.errors.join(" | "));
 } catch (err) {
@@ -234,6 +267,7 @@ try {
 } finally {
   log("closing");
   await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 15_000))]);
+  await relay.close();
   await Promise.race([server.close(), new Promise((r) => setTimeout(r, 5_000))]);
 }
 
