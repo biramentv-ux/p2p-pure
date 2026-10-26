@@ -8,10 +8,27 @@
  */
 import { createServer } from "vite";
 import { chromium } from "playwright-core";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { startDemoRelay } from "./demoRelay.mjs";
 
 // The app's demo signalling points at a local relay (the Worker is not part of this run).
 const DEMO_RELAY_PORT = 8791;
+const require = createRequire(import.meta.url);
+const AXE_SOURCE = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
+const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"];
+
+/** Serious and critical axe violations on the current page, as short strings. */
+async function blockingViolations(page) {
+  await page.addScriptTag({ content: AXE_SOURCE });
+  const found = await page.evaluate(async (tags) => {
+    const out = await window.axe.run(document, { runOnly: { type: "tag", values: tags } });
+    return out.violations
+      .filter((v) => v.impact === "serious" || v.impact === "critical")
+      .map((v) => `${v.id}: ${v.nodes[0]?.target?.join(" ") ?? ""}`);
+  }, AXE_TAGS);
+  return found;
+}
 process.env.VITE_INVITE_API = `http://127.0.0.1:${DEMO_RELAY_PORT}`;
 
 const CHROME_PATH =
@@ -259,6 +276,29 @@ try {
   await alice.page.getByRole("button", { name: "Изпрати" }).click();
   await bob.page.locator(".messages .msg.in").filter({ hasText: "Стаята работи" }).waitFor({ timeout: 30_000 });
   check("demo: encrypted message arrives over the reconnected channel", true);
+
+  // Dark theme on real session screens: chat, outgoing call, and a group.
+  await alice.page.emulateMedia({ colorScheme: "dark" });
+  await alice.page.waitForTimeout(300);
+  const darkChat = await blockingViolations(alice.page);
+  check("dark: chat screen has no serious accessibility violations", darkChat.length === 0, darkChat.join(" | "));
+
+  await alice.page.getByRole("button", { name: "Аудио разговор" }).click();
+  await alice.page.locator(".call-panel").first().waitFor({ timeout: 15_000 });
+  await alice.page.waitForTimeout(300);
+  const darkCall = await blockingViolations(alice.page);
+  check("dark: outgoing call screen has no serious accessibility violations", darkCall.length === 0, darkCall.join(" | "));
+
+  await alice.page.getByRole("button", { name: "Назад" }).click();
+  await alice.page.getByRole("button", { name: "Контакти", exact: true }).click();
+  await alice.page.getByRole("button", { name: "Групов чат", exact: true }).click();
+  await alice.page.getByLabel("Име на групата").fill("Тест група");
+  await alice.page.getByLabel("Вашето име в групата").fill("Алиса");
+  await alice.page.getByRole("button", { name: "Създай групата" }).click();
+  await alice.page.locator("h1", { hasText: "Тест група" }).waitFor({ timeout: 15_000 });
+  await alice.page.waitForTimeout(300);
+  const darkGroup = await blockingViolations(alice.page);
+  check("dark: group screen has no serious accessibility violations", darkGroup.length === 0, darkGroup.join(" | "));
 
   check("no page errors (alice)", alice.errors.length === 0, alice.errors.join(" | "));
   check("no page errors (bob)", bob.errors.length === 0, bob.errors.join(" | "));
