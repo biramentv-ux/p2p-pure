@@ -87,7 +87,8 @@ describe("Windows Hello availability", () => {
   });
 });
 
-describe("Windows Hello unlock", () => {
+// Each case derives the password key (PBKDF2) more than once: seconds on a shared CI runner.
+describe("Windows Hello unlock", { timeout: 30_000 }, () => {
   it("enables with the password, then unlocks to the same identity", async () => {
     const { calls } = installFakeTauri();
     const created = await createIdentity(PW);
