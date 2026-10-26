@@ -1,12 +1,15 @@
 import { QrCode } from "../components/QrCode";
 import type { UnlockedIdentity } from "../../identity";
 import { useI18n } from "../../i18n";
+import { TurnSettings } from "../components/TurnSettings";
 
 interface ShowQrScreenProps {
   identity: UnlockedIdentity;
+  /** Opens the one-time move of the identity to a new device. */
+  onMove?: () => void;
 }
 
-export function ShowQrScreen({ identity }: ShowQrScreenProps) {
+export function ShowQrScreen({ identity, onMove }: ShowQrScreenProps) {
   const { t } = useI18n();
   return (
     <div className="screen">
@@ -16,6 +19,12 @@ export function ShowQrScreen({ identity }: ShowQrScreenProps) {
       <p className="did-text" title={identity.did}>
         {identity.did}
       </p>
+      {onMove && (
+        <button className="secondary" onClick={onMove}>
+          {t("Премести на ново устройство")}
+        </button>
+      )}
+      <TurnSettings identity={identity} />
     </div>
   );
 }

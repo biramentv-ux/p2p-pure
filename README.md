@@ -44,7 +44,7 @@
 | 📞 | **Аудио и видео разговори** | По същата директна връзка, медията е DTLS-SRTP. |
 | 👥 | **Групи до 9 души** *(обновено)* | Админ, име и снимка на групата. Файлове, снимки, видео до 50 MB и GIF от GIPHY. Новият член не вижда старата история; махането става и когато махнатият е офлайн. Всичко се пази шифровано. |
 | 🪟 | **Windows** *(ново)* | Инсталатор без админ права, portable zip и `winget`. Цялото приложение е вътре. |
-| 🐧 | **Linux** *(ново)* | `.deb`, `.rpm`, AppImage и `install.sh` с проверка на сумите. Цялото приложение е вътре. |
+| 🐧 | **Linux** *(ново)* | `.deb`, `.rpm`, AppImage, Flatpak и `install.sh` с проверка на сумите. Цялото приложение е вътре. |
 | 🎨 | **Нов дизайн** *(ново)* | „Запечатана поща“: небесно синьо и електрик пурпурно-розово, IBM Plex с кирилица, светъл и тъмен режим, AA контраст. |
 | 🌍 | **Два езика** | Български (по подразбиране) и English. |
 | ⚡ | **Разширение за Chrome** | `Ctrl+Shift+M` отваря месинджъра. |
@@ -215,7 +215,7 @@ npx cap open android     # отваря Android Studio; или ios за Xcode
 
 ## 🐧 Linux
 
-Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) или `AppImage`, или пусни `install.sh`: той избира пакета, **проверява контролната сума** и инсталира.
+Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE), `AppImage` или `.flatpak` (`flatpak install --user ./файла.flatpak`, без достъп до файловете ти), или пусни `install.sh`: той избира пакета, **проверява контролната сума** и инсталира.
 
 ```bash
 bash install.sh              # или: bash install.sh --appimage  (само за теб, без root)
@@ -233,7 +233,7 @@ bash install.sh              # или: bash install.sh --appimage  (само з�
 
 ## ⚠️ Ограничения, които приемаме
 
-- **Само публични STUN сървъри.** Без TURN релей, затова строги NAT или корпоративни firewall-и може да блокират връзката.
+- **По подразбиране само публични STUN сървъри.** Приложението не включва TURN релей, затова строги NAT или корпоративни firewall-и може да блокират връзката. По избор можеш да въведеш **собствен** `turn:`/`turns:` сървър (раздел Идентичност, "собствен TURN релей"). Релеят вижда метаданни (IP адреси, време, размер), но не съдържанието, защото всичко е криптирано от край до край. Данните му се пазат само криптирани на устройството ([SECURITY.md](SECURITY.md)).
 - **Един сървър с тясна роля.** Worker-ът пази временни покани (до 10 минути, изтриват се при първо взимане) и препраща кадрите на демо стаите без да ги записва. Не пише логове, а IP адресът за ограничението на заявките се хешира. Cloudflare като платформа вижда IP адреси и адреси на заявките ([SECURITY.md](SECURITY.md)). Не вижда съобщения.
 - **Изтриването на чат** стига до другия само ако е онлайн.
 - **Групите:** поканата на чакащ кандидат не се запазва при презареждане; член, премахнат докато е офлайн, научава при следващото свързване.
@@ -519,7 +519,7 @@ The extension collects no data; it only opens the app.
 
 ## ⚠️ Trade-offs we accept
 
-- **Public STUN servers only.** No TURN relay, so strict NATs or corporate firewalls may block the connection.
+- **Public STUN servers only by default.** The app ships no TURN relay, so strict NATs or corporate firewalls may block the connection. Optionally you can enter **your own** `turn:`/`turns:` server (Identity tab, "own TURN relay"). A relay sees metadata (IP addresses, timing, sizes) but not content, because everything is end-to-end encrypted. Its credentials are stored only encrypted on the device ([SECURITY.md](SECURITY.md)).
 - **One server with a narrow role.** The Worker keeps temporary invitations (up to 10 minutes, deleted on first fetch) and forwards demo-room frames without storing them. It writes no logs, and the IP used for rate limiting is hashed. Cloudflare as a platform sees IP addresses and request URLs ([SECURITY.md](SECURITY.md)). It never sees messages.
 - **Deleting a chat** reaches the other person only if they are online.
 - **Groups:** a pending candidate's invitation is not kept across a reload; a member removed while offline learns about it on the next connection.

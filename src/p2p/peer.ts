@@ -6,13 +6,12 @@
  * SDP (with all candidates) inside the invitation. Trickle would need a
  * signalling channel we don't have.
  *
- * Only public STUN is used (hard constraint). No TURN: some NATs will fail.
+ * By default only public STUN is used and some NATs will fail. A TURN relay is used only if
+ * the person configured their own in Settings (src/p2p/turnConfig.ts); the app ships none.
  */
+import { STUN_SERVERS, buildRtcConfiguration, getActiveTurn } from "./turnConfig";
 
-export const ICE_SERVERS: RTCIceServer[] = [
-  { urls: ["stun:stun.l.google.com:19302"] },
-  // A second public STUN server (no data passes through it). Helps reflexive candidates on IPv6 networks.
-];
+export const ICE_SERVERS: RTCIceServer[] = STUN_SERVERS;
 /** Pause sending while this many bytes wait in the browser's buffer (photos are many frames). */
 const SEND_BUFFER_HIGH = 512 * 1024;
 export const DATA_CHANNEL_LABEL = "p2pm";
@@ -41,9 +40,12 @@ export class PeerLink {
   private resolveOpen!: () => void;
   private rejectOpen!: (err: Error) => void;
   private closed = false;
+  /** Notified once when the link stops working after (or before) it opened. */
+  private closeHandlers = new Set<(reason: string) => void>();
+  private closeReason: string | null = null;
 
   private constructor() {
-    this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    this.pc = new RTCPeerConnection(buildRtcConfiguration(getActiveTurn()));
     this.openPromise = new Promise<void>((resolve, reject) => {
       this.resolveOpen = resolve;
       this.rejectOpen = reject;
@@ -55,6 +57,7 @@ export class PeerLink {
       const state = this.pc.connectionState;
       if (state === "failed" || state === "closed") {
         this.rejectOpen(new PeerLinkError(`Connection ${state}. The network may block direct P2P.`));
+        this.notifyClose(`connection ${state}`);
       }
     };
   }
@@ -147,7 +150,29 @@ export class PeerLink {
     return () => this.handlers.delete(handler);
   }
 
+  /**
+   * Called once when the data channel closes or the connection fails, also after it opened
+   * (waitForOpen only covers the time before). Fires at once if that already happened.
+   */
+  onClose(handler: (reason: string) => void): () => void {
+    if (this.closeReason !== null) {
+      handler(this.closeReason);
+      return () => undefined;
+    }
+    this.closeHandlers.add(handler);
+    return () => this.closeHandlers.delete(handler);
+  }
+
+  private notifyClose(reason: string): void {
+    if (this.closeReason !== null) return;
+    this.closeReason = reason;
+    const handlers = [...this.closeHandlers];
+    this.closeHandlers.clear();
+    for (const h of handlers) h(reason);
+  }
+
   close(): void {
+    this.notifyClose("closed locally");
     if (this.closed) return;
     this.closed = true;
     this.rejectOpen(new PeerLinkError("Link closed."));
@@ -159,7 +184,10 @@ export class PeerLink {
     this.channel = channel;
     channel.binaryType = "arraybuffer";
     channel.onopen = () => this.resolveOpen();
-    channel.onclose = () => this.rejectOpen(new PeerLinkError("Data channel closed."));
+    channel.onclose = () => {
+      this.rejectOpen(new PeerLinkError("Data channel closed."));
+      this.notifyClose("data channel closed");
+    };
     channel.onmessage = (ev) => {
       if (ev.data instanceof ArrayBuffer) {
         const bytes = new Uint8Array(ev.data);

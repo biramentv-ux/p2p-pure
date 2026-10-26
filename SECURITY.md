@@ -33,6 +33,23 @@ Either both happen or neither does. Malformed legacy rows are left untouched rat
 If the migration fails the app still unlocks, and the next unlock retries.
 Note: deleted IndexedDB rows may survive in the browser's storage files until compaction.
 
+## Moving the identity to a new device (threat model)
+
+Design: `docs/MULTIDEVICE.md`. Code: `src/transfer/`, `src/identity/seedTransfer.ts`.
+
+One-time MOVE, not sync. The old device sends the 64-byte BIP39 seed and the contact book to the new device over a WebRTC data channel set up with QR codes or pasted text (no server). The old device then offers to wipe itself.
+
+- **Key agreement:** ephemeral X25519 per transfer, HKDF-SHA-256 with a transcript that includes both SDPs (so the DTLS fingerprints), frames in AES-256-GCM with a per-direction key and strict counter. Replayed, reordered, dropped or altered frames abort the transfer.
+- **Confirmation (SAS):** 6 words (66 bits) shown on both screens; the seed is released only after both people confirmed. A mismatch aborts and nothing is sent.
+- **One-time, short-lived:** an offer lives 10 minutes and accepts one answer. It carries no DID and no signature.
+- **Re-authentication:** starting a transfer needs the password or a passkey tap even when the app is unlocked.
+- **The new device protects the seed with its own passkey or password.** Nothing about the old device's unlock method is sent.
+- **No Double Ratchet state is copied** (none is stored on disk), groups and history are not transferred, so no ratchet or group chain exists on two devices after a move.
+
+Attacks and what stops them: a camera or shoulder-surfer seeing the QR codes cannot derive the keys (they lack the ephemeral secrets) but can race the legitimate new device; the SAS comparison and the one-answer rule make that visible and fail it. An active network attacker cannot change an SDP or key without changing the SAS and breaking the first frame. Pasting the code through an untrusted channel lets that channel replace it: the SAS is then the only defence.
+
+Residual risks: the plaintext seed is in memory on both devices during the transfer; a compromised old or new device defeats everything; choosing "Later" leaves the identity on both devices; the seed is the root of the identity, so anyone who completes a transfer (with both SAS confirmations) holds it. Message history is not transferred and is deleted with the old device.
+
 ## The signalling Worker
 
 Scope: the Cloudflare Worker at `tg.dyrakarmy.online` (`worker/`). Messages, photos and calls never pass through it; they go device to device over WebRTC.
@@ -57,6 +74,16 @@ The Worker runs on Cloudflare, and Cloudflare terminates TLS. As the platform op
 ### What Telegram sees
 
 In the Telegram path, Telegram sees the sender and recipient chats, the invitation text and the bot messages. The bot is not an encrypted channel.
+
+## Optional TURN relay (user-configured)
+
+Off by default. The app ships no TURN server and no credentials. A person can enter their own `turn:` / `turns:` URL, username and credential in the Identity tab (Settings: own TURN relay); `src/p2p/turnConfig.ts` validates it (only `turn:`/`turns:`, no credentials inside the URL, a warning for private-range hosts and for plain `turn:`).
+
+- **What a relay sees:** traffic metadata only: both endpoints' IP addresses, timing and packet sizes. Not content: the data channel is DTLS, and the messages inside are encrypted again end to end (Double Ratchet), so the relay operator cannot read them. A relay you do not run is a third party that learns who talks to whom and when; use your own or one you trust.
+- **Relay only (optional):** sets `iceTransportPolicy: "relay"` and leaves STUN out, so neither the other person nor STUN servers see this device's IP. Cost: slower, and the relay sees every connection. Without it, a relay is used only when direct paths fail, but the relay candidate is part of the invitation (it contains the relay's address, which the other person then learns).
+- **At rest:** the whole record (URL, username, credential, flags) is AES-256-GCM encrypted with a key derived from the history key (`src/p2p/turnStore.ts`, using `atRestCrypto.ts`), so nothing readable is stored while locked. After unlock it sits in memory and is dropped on lock. The credential is a TURN password in the ICE configuration, so page scripts in the same origin could read it while unlocked, like any other in-memory secret; the CSP (`script-src 'self'`) is the mitigation.
+- **CSP:** unchanged. WebRTC ICE/TURN traffic is not governed by `connect-src` (which covers fetch, XHR, WebSocket, EventSource and beacons).
+- **Not changed:** the Worker and Telegram paths still see only what is listed above. TURN credentials are never sent to them.
 
 ## Reporting
 

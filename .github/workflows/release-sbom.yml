@@ -1,0 +1,138 @@
+name: Release SBOM
+
+# CycloneDX SBOMs (web, Electron, Rust/Tauri) + SHA256SUMS-sbom.txt for every published
+# release, signed keylessly with cosign (Sigstore, GitHub OIDC): no signing key or secret
+# exists anywhere. Verification commands for users: docs/SUPPLY-CHAIN.md.
+#
+# Note: a release created by another workflow with the default GITHUB_TOKEN does not fire
+# `release: published`; run this workflow by hand (workflow_dispatch) with the tag in that case.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach the SBOMs to (e.g. desktop-v0.7.0)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-sbom-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  COSIGN_VERSION: v3.1.4
+
+jobs:
+  generate:
+    name: Generate SBOMs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Validate tag name
+        run: |
+          # The tag ends up in file names and shell commands: allow only a safe alphabet.
+          [[ "$TAG" =~ ^[A-Za-z0-9._-]{1,100}$ ]] || { echo "::error::unsafe tag name"; exit 1; }
+
+      # Tools: the scripts of the ref that triggered the workflow (trusted, current).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Subject: the tree of the release tag (only its lockfiles/manifests are read).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          path: src
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-cyclonedx (pinned)
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked
+
+      - name: Generate SBOMs
+        # Lockfile-based, nothing from the repo is executed (no npm install / build scripts).
+        # SOURCE_DATE_EPOCH = the tag's commit time: SBOM timestamps are byte-stable.
+        run: |
+          SOURCE_DATE_EPOCH="$(git -C src log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
+          node scripts/release/sbom.mjs --root src --out release-sbom --version "$TAG"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: release-sbom/*.cdx.json
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    name: Checksums, sign, attach
+    needs: generate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # gh release upload
+      id-token: write   # keyless signing certificate from the GitHub OIDC token
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Only the helper scripts are needed here (from the triggering ref, not the tag).
+          persist-credentials: false
+          sparse-checkout: scripts/release
+          sparse-checkout-cone-mode: true
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom
+          path: release-sbom
+
+      - name: SHA256SUMS
+        run: |
+          node scripts/release/sums.mjs release-sbom
+          cat release-sbom/SHA256SUMS-sbom.txt
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
+      - name: Sign SHA256SUMS-sbom.txt (cosign keyless)
+        run: |
+          # cosign v3: --bundle writes one self-contained Sigstore bundle (signature,
+          # Fulcio certificate, Rekor entry). --yes skips the interactive prompt.
+          cosign sign-blob --yes \
+            --bundle release-sbom/SHA256SUMS-sbom.txt.sigstore.json \
+            release-sbom/SHA256SUMS-sbom.txt
+
+      - name: Verify what was just signed
+        run: |
+          cosign verify-blob \
+            --bundle release-sbom/SHA256SUMS-sbom.txt.sigstore.json \
+            --certificate-identity-regexp "^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release-sbom\.yml@" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            release-sbom/SHA256SUMS-sbom.txt
+          (cd release-sbom && sha256sum --check SHA256SUMS-sbom.txt)
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" release-sbom/* --clobber --repo "$GITHUB_REPOSITORY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-signed
+          path: release-sbom/*
+          retention-days: 30
