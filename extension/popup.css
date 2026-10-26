@@ -1,53 +1,105 @@
-/* Same palette as the app ("Sealed Ledger"). Dark by default, light when the browser asks for it. */
+/*
+ * Same look as the app: the friendly "Daybreak Kitchen" theme (src/friendly.css).
+ * The extension cannot import the app's CSS, so the token values are copied here; keep them in sync.
+ * Warm paper, deep ink, one teal action colour, coral and sunny accents, pill buttons.
+ * Light by default; dark follows the browser setting.
+ * No remote fonts (the extension CSP and the privacy promise): the app's fonts are used only
+ * when they are installed locally, otherwise the system stack.
+ */
+
+/* ---------- light (default) ---------- */
 :root {
-  color-scheme: dark light;
-  --ink-0: #0c0d10;
-  --ink-1: #14161c;
-  --line: #2b303b;
-  --text: #b7b2a5;
-  --text-h: #efe9db;
-  --muted: #8b877c;
-  --ember: #e9a23b;
-  --ember-ink: #1a1206;
-  --ember-hi: #f4b65a;
-  --danger: #f0786a;
-  --focus: 0 0 0 3px rgba(233, 162, 59, 0.45);
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ink-0: #fff7ec;        /* page: warm paper */
+  --ink-1: #ffffff;        /* cards */
+  --ink-2: #fdf0e0;        /* raised */
+  --ink-3: #f6e4cf;        /* hover / pressed */
+  --line: #ead9c4;
+
+  --text: #3b3146;
+  --text-h: #211a2b;
+  --muted: #6b6076;
+
+  /* action: teal (AA with white text), accent: coral for highlights only */
+  --ember: #0f766e;
+  --ember-hi: #115e59;
+  --ember-ink: #ffffff;
+  --ember-soft: rgba(15, 118, 110, 0.11);
+  --ember-line: rgba(15, 118, 110, 0.4);
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.09);
+  --coral: #ff7a59;
+  --sunny: #ffd166;
+
+  /* The app uses a translucent ring; here it is solid so the ring itself is at least 3:1 (WCAG 1.4.11). */
+  --focus: 0 0 0 3px #fff7ec, 0 0 0 6px #0f766e;
+  --radius-s: 12px;
+  --radius: 18px;
+  --shadow-lift: 0 1px 0 #fff inset, 0 14px 30px -18px rgba(59, 49, 70, 0.35);
+  --shadow-action: 0 8px 18px -12px rgba(15, 118, 110, 0.7);
+
+  --display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
+  --sans: 'Instrument Sans Variable', 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: light) {
+/* ---------- dark (browser setting) ---------- */
+@media (prefers-color-scheme: dark) {
   :root {
-    --ink-0: #f2eee3;
-    --ink-1: #fbf8f0;
-    --line: #d8d0bd;
-    --text: #4f4a3f;
-    --text-h: #1b1a16;
-    --muted: #6b6558;
-    --ember: #9a5508;
-    --ember-ink: #ffffff;
-    --ember-hi: #b5690c;
-    --danger: #b4402f;
-    --focus: 0 0 0 3px rgba(154, 85, 8, 0.4);
+    --ink-0: #1d1826;
+    --ink-1: #251f31;
+    --ink-2: #2e2740;
+    --ink-3: #382f4b;
+    --line: #3d3452;
+    --text: #e6dcef;
+    --text-h: #fff7ec;
+    --muted: #b3a7c2;
+    --ember: #5eead4;
+    --ember-hi: #99f6e4;
+    --ember-ink: #0f1b1c;
+    --ember-soft: rgba(94, 234, 212, 0.14);
+    --ember-line: rgba(94, 234, 212, 0.45);
+    --danger: #fda4af;
+    --danger-soft: rgba(253, 164, 175, 0.12);
+    --coral: #ff9a7a;
+    --sunny: #ffd166;
+    --focus: 0 0 0 3px #1d1826, 0 0 0 6px #5eead4;
+    --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 34px -18px rgba(0, 0, 0, 0.6);
+    --shadow-action: 0 8px 18px -12px rgba(0, 0, 0, 0.8);
+    color-scheme: dark;
   }
 }
 
+/* ---------- base ---------- */
 * {
   box-sizing: border-box;
+}
+
+/* The glow sits on the root, so it fills the whole popup however tall the text makes it. */
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(320px 260px at 100% -10%, rgba(255, 122, 89, 0.14), transparent 70%),
+    radial-gradient(300px 240px at -10% 110%, rgba(15, 118, 110, 0.12), transparent 70%),
+    var(--ink-0);
 }
 
 body {
   margin: 0;
   width: 340px;
-  background: var(--ink-0);
+  /* daybreak: a thin coral-to-sunny line along the top edge */
+  border-top: 4px solid var(--coral);
+  border-image: linear-gradient(90deg, var(--coral), var(--sunny)) 1;
   color: var(--text);
-  font: 14px/1.5 var(--sans);
+  font: 15px/1.5 var(--sans);
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
 }
 
 .card {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px;
+  padding: 20px 18px 18px;
 }
 
 .brand {
@@ -57,14 +109,19 @@ body {
 }
 
 .brand img {
-  border-radius: 10px;
+  flex: none;
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-lift);
 }
 
 h1 {
   margin: 0;
-  font-size: 18px;
-  color: var(--text-h);
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.15;
   letter-spacing: -0.01em;
+  color: var(--text-h);
 }
 
 p {
@@ -72,39 +129,48 @@ p {
 }
 
 .sub {
+  margin-top: 2px;
   color: var(--muted);
   font-size: 13px;
 }
 
 .status {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--ink-1);
+  /* A soft panel, not a pill, so it never reads as a third button. */
+  padding: 11px 14px;
+  border-radius: var(--radius-s);
+  background: var(--ink-2);
   color: var(--text);
 }
 
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
+/* ---------- actions: pill buttons, 48px targets ---------- */
 button {
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 10px;
+  min-height: 48px;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
   font: inherit;
   font-weight: 600;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: transform 120ms ease, background-color 160ms ease;
+  /* No box-shadow transition: the focus ring appears at once. */
+  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
 }
 
 button:active {
-  transform: translateY(1px) scale(0.99);
+  transform: translateY(0) scale(0.98);
 }
 
-button:focus-visible {
+/* Keyboard users always see where they are. */
+:focus-visible {
   outline: none;
   box-shadow: var(--focus);
 }
@@ -113,6 +179,7 @@ button:focus-visible {
   border: 0;
   background: var(--ember);
   color: var(--ember-ink);
+  box-shadow: var(--shadow-action);
 }
 
 .primary:hover {
@@ -120,24 +187,39 @@ button:focus-visible {
 }
 
 .secondary {
-  border: 1px solid var(--line);
-  background: transparent;
+  border: 1.5px solid var(--line);
+  background: var(--ink-1);
   color: var(--text-h);
 }
 
 .secondary:hover {
-  border-color: var(--ember);
+  border-color: var(--ember-line);
+  background: var(--ink-2);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  box-shadow: var(--focus);
 }
 
 .error {
+  padding: 10px 14px;
+  border-radius: var(--radius-s);
+  background: var(--danger-soft);
   color: var(--danger);
   font-weight: 600;
+}
+
+.error[hidden] {
+  display: none;
 }
 
 .foot {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding-top: 12px;
+  border-top: 1.5px dashed var(--line);
   color: var(--muted);
   font-size: 12px;
 }
@@ -146,89 +228,8 @@ button:focus-visible {
   button {
     transition: none;
   }
-}
-
-/* ---- hybrid theme, same as the app: printed frames, phosphor accent, block cursor ---- */
-:root {
-  --phosphor: #6cf0a0;
-  --frame: #efe9db;
-  --frame-shadow: #000000;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --phosphor: #1f7a3f;
-    --frame: #1b1a16;
-    --frame-shadow: #1b1a16;
+  button:hover,
+  button:active {
+    transform: none;
   }
-}
-
-.status {
-  font-family: var(--mono, ui-monospace, Consolas, monospace);
-  border: 2px solid var(--frame);
-  box-shadow: 3px 3px 0 var(--frame-shadow);
-}
-
-.status::before {
-  content: "";
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 8px;
-  vertical-align: 1px;
-  background: var(--phosphor);
-}
-
-h1::after {
-  content: "";
-  display: inline-block;
-  width: 0.45em;
-  height: 0.9em;
-  margin-left: 0.2em;
-  vertical-align: -0.08em;
-  background: var(--phosphor);
-  animation: blink 1.05s steps(1, end) infinite;
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
-button {
-  border: 2px solid var(--frame);
-  box-shadow: 4px 4px 0 var(--frame-shadow);
-}
-
-button:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 var(--frame-shadow);
-}
-
-button:active {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 var(--frame-shadow);
-}
-
-.primary {
-  background: var(--ember);
-  color: var(--ember-ink);
-}
-
-.primary:hover {
-  background: var(--ember-hi);
-}
-
-.secondary {
-  background: var(--ink-1);
-  color: var(--text-h);
-}
-
-.secondary:hover {
-  background: var(--phosphor);
-  color: var(--ink-0);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  h1::after { animation: none; }
-  button:hover, button:active { transform: none; }
 }

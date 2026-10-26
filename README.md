@@ -110,7 +110,7 @@ npx vite preview --host 127.0.0.1 --port 4173
 3. В Chrome отвори `chrome://extensions`, включи **Developer mode** и натисни **Load unpacked**.
 4. Избери папката. Клавишната комбинация е `Ctrl+Shift+M` (на Mac `Command+Shift+M`).
 
-Разширението не събира данни и няма собствен сървър. Само отваря приложението. Публикуване в Chrome Web Store още не е направено.
+Разширението не събира данни и няма собствен сървър. Само отваря приложението. Публикуване в Chrome Web Store още не е направено. Прозорчето му е в същата светла или тъмна тема като приложението и следва настройката на браузъра.
 
 ### 🪟 Windows (Tauri 2)
 
@@ -294,7 +294,7 @@ The signalling Worker defaults to `https://tg.dyrakarmy.online`. Change it at bu
 3. In Chrome open `chrome://extensions`, turn on **Developer mode**, then click **Load unpacked**.
 4. Pick the folder. The shortcut is `Ctrl+Shift+M` (`Command+Shift+M` on Mac).
 
-The extension collects no data and has no server of its own; it only opens the app. It is not yet published in the Chrome Web Store.
+The extension collects no data and has no server of its own; it only opens the app. It is not yet published in the Chrome Web Store. Its popup uses the same light or dark theme as the app and follows the browser setting.
 
 ### 🪟 Windows (Tauri 2)
 
