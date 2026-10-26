@@ -37,7 +37,7 @@
 | 🔑 | **Възстановяване с 12 думи** | BIP39. Записваш ги веднъж и ги ползваш на ново устройство. |
 | 📷 | **Контакт с QR или кратък код** | Подписана покана. Краткият код е 10 знака, важи 10 минути и работи веднъж. |
 | 🛰️ | **Демо стая** *(ново)* | Превключвател „Локален (QR) / Демо (стая)“. В демо режим единият отваря стая и праща кода, другият влиза с него. |
-| 🔢 | **Шест думи за проверка** | Двамата виждат едни и същи 6 думи, изчислени от публичните X25519 ключове (v2). Ако съвпадат, никой не стои по средата. |
+| 🔢 | **12 думи за проверка** | Двамата виждат едни и същи 12 думи (3 групи по 4), изчислени от публичните X25519 ключове (v3, 132 бита). Ако съвпадат, никой не стои по средата. |
 | 💬 | **Шифровани чатове** | Double Ratchet. Историята и контактите се пазят в IndexedDB, шифровани с AES-GCM. |
 | 📎 | **Файлове до 100 MB** *(ново)* | Всякакви файлове и видео, директно между устройствата. Получателят приема или отказва; файлове до 25 MB остават шифровани в историята. |
 | 🖼️ | **Снимки, локация, изтриване** | Изтриване на чата и при двамата. Локацията се праща само при твое натискане. |
@@ -67,13 +67,13 @@ flowchart LR
 
 ## 🎬 Урок: как Ани и Петър се свързват
 
-<img src="docs/assets/tutorial-far-away.gif" alt="Анимация в 9 стъпки: профил, избор на режим, покана, демо стая, шест думи, чат, разговор, група и устройства" width="640">
+<img src="docs/assets/tutorial-far-away.gif" alt="Анимация в 9 стъпки: профил, избор на режим, покана, демо стая, думи за проверка, чат, разговор, група и устройства" width="640">
 
 1. **Профил.** Всеки създава профил на своя телефон с passkey или парола и записва 12-те думи.
 2. **Режим.** Избират „Локален (QR)“, ако са заедно, или „Демо (стая)“, ако са далеч.
 3. **Покана.** Ани натиска „Покажи моята покана“. Петър сканира QR кода или въвежда краткия код.
 4. **Демо стая.** От разстояние: Ани отваря стая и праща кода, Петър натиска „Присъедини се“.
-5. **Шест думи.** Сравняват думите на глас или по видео и натискат „Думите съвпадат“.
+5. **Думи за проверка.** Сравняват 12-те думи на глас или по видео и натискат „Думите съвпадат“.
 6. **Чат.** Пишат си, пращат снимки и локация.
 7. **Разговор.** Звънят си с аудио или видео.
 8. **Група.** Ани създава група до 9 души, слага ѝ име и снимка и кани хора.
@@ -236,7 +236,7 @@ bash install.sh              # или: bash install.sh --appimage  (само з�
 - **Един сървър с тясна роля.** Worker-ът пази временни покани (до 10 минути, изтриват се при първо взимане) и препраща кадрите на демо стаите без да ги записва. Не пише логове, а IP адресът за ограничението на заявките се хешира. Cloudflare като платформа вижда IP адреси и адреси на заявките ([SECURITY.md](SECURITY.md)). Не вижда съобщения.
 - **Изтриването на чат** стига до другия само ако е онлайн.
 - **Групите:** поканата на чакащ кандидат не се запазва при презареждане; член, премахнат докато е офлайн, научава при следващото свързване.
-- **Шестте думи (v2)** са 66 бита. Подготвя се версия с по-силна проверка.
+- **Кодът за сигурност (v3)** е 12 думи = 132 бита (преди: 6 думи, 66 бита). Вече проверените контакти остават проверени; новите сравнения ползват 12 думи.
 - **Криптографията не е одитирана** от независим екип. Double Ratchet е собствена реализация по публичната спецификация на Signal, не официалната `libsignal`.
 
 ## 🗂️ Структура
@@ -267,7 +267,7 @@ docs/               ръководства: Windows, Linux, демо сигна�
 |---|---|
 | `npm test` | Unit тестове: 50 файла, 428 теста |
 | `npm run lint` | oxlint |
-| `npm run test:e2e` | Двама души в браузър: QR, шест думи, шифрован обмен, replay защита |
+| `npm run test:e2e` | Двама души в браузър: QR, 12 думи за проверка, шифрован обмен, replay защита |
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
 | `npm run test:demo` | Демо стая през локален relay (8 проверки) |
 | `npm run test:pages` | Билдът за GitHub Pages под подпът `/p2p-pure/` (6 проверки) |
@@ -323,7 +323,7 @@ docs/               ръководства: Windows, Linux, демо сигна�
 | 🔑 | **Recovery with 12 words** | BIP39. Write them down once and use them on a new device. |
 | 📷 | **Contact by QR or short code** | A signed invitation. The short code is 10 characters, valid for 10 minutes, single use. |
 | 🛰️ | **Demo room** *(new)* | A "Local (QR) / Demo (room)" switch. In demo mode one person opens a room and sends the code; the other joins with it. |
-| 🔢 | **Six words to verify** | Both sides see the same 6 words, computed from both public X25519 keys (v2). If they match, nobody sits in between. |
+| 🔢 | **12 words to verify** | Both sides see the same 12 words (3 groups of 4), computed from both public X25519 keys (v3, 132 bits). If they match, nobody sits in between. |
 | 💬 | **Encrypted chats** | Double Ratchet. History and contacts are kept in IndexedDB, encrypted with AES-GCM. |
 | 📎 | **Files up to 100 MB** *(new)* | Any file or video, straight between devices. The recipient accepts or declines; files up to 25 MB stay encrypted in the history. |
 | 🖼️ | **Photos, location, deletion** | Delete a chat on both sides. Location is sent only when you tap to send it. |
@@ -353,13 +353,13 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 
 ## 🎬 Tutorial: how Ani and Petar connect
 
-<img src="docs/assets/tutorial-far-away.gif" alt="Nine-step animation: profile, mode, invitation, demo room, six words, chat, call, group and devices (labels in Bulgarian)" width="640">
+<img src="docs/assets/tutorial-far-away.gif" alt="Nine-step animation: profile, mode, invitation, demo room, verification words, chat, call, group and devices (labels in Bulgarian)" width="640">
 
 1. **Profile.** Each person creates a profile on their phone with a passkey or a password and writes down the 12 words.
 2. **Mode.** They pick "Local (QR)" when together, or "Demo (room)" when far apart.
 3. **Invitation.** Ani taps "Show my invitation". Petar scans the QR code or types the short code.
 4. **Demo room.** From a distance: Ani opens a room and sends the code; Petar taps "Join".
-5. **Six words.** They compare the words out loud or on video and tap "The words match".
+5. **Verification words.** They compare the 12 words out loud or on video and tap "The words match".
 6. **Chat.** They write, send photos and location.
 7. **Call.** They call with audio or video.
 8. **Group.** Ani creates a group of up to 9 people, gives it a name and a photo, and invites people.
@@ -522,7 +522,7 @@ The extension collects no data; it only opens the app.
 - **One server with a narrow role.** The Worker keeps temporary invitations (up to 10 minutes, deleted on first fetch) and forwards demo-room frames without storing them. It writes no logs, and the IP used for rate limiting is hashed. Cloudflare as a platform sees IP addresses and request URLs ([SECURITY.md](SECURITY.md)). It never sees messages.
 - **Deleting a chat** reaches the other person only if they are online.
 - **Groups:** a pending candidate's invitation is not kept across a reload; a member removed while offline learns about it on the next connection.
-- **The six words (v2)** carry 66 bits. A stronger check is being prepared.
+- **The safety code (v3)** is 12 words = 132 bits (previously 6 words, 66 bits). Contacts already verified stay verified; new comparisons use 12 words.
 - **The cryptography is not independently audited.** The Double Ratchet is our own implementation of Signal's public specification, not the official `libsignal`.
 
 ## 🗂️ Structure
@@ -553,7 +553,7 @@ docs/               guides: Windows, Linux, demo signalling, groups, Telegram bo
 |---|---|
 | `npm test` | Unit tests: 50 files, 428 tests |
 | `npm run lint` | oxlint |
-| `npm run test:e2e` | Two people in a browser: QR, six words, encrypted exchange, replay protection |
+| `npm run test:e2e` | Two people in a browser: QR, 12 verification words, encrypted exchange, replay protection |
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
 | `npm run test:demo` | Demo room through a local relay (8 checks) |
 | `npm run test:pages` | The GitHub Pages build under the `/p2p-pure/` sub-path (6 checks) |

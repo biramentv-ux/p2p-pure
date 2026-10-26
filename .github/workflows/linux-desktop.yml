@@ -23,7 +23,7 @@ on:
       - ".github/workflows/linux-desktop.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name) || '' }}
@@ -35,9 +35,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -92,6 +94,22 @@ jobs:
           APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test \
             xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs
 
+      # Same installed .deb on a real Wayland compositor (headless Weston, no X server for the app).
+      - name: Test the installed app on Wayland (headless Weston)
+        run: |
+          sudo apt-get install -y -qq weston
+          env -u DISPLAY APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test-wayland WAYLAND=1 \
+            node tests/desktop/electron-linux.mjs
+
+      # Camera and QR scanner with Chromium's fake camera (flags only on the test command line, none in
+      # the app). The video is made by ffmpeg from the invitation QR the app shows. This tests the
+      # permission handler, getUserMedia and the QR decoder, not real camera hardware.
+      - name: Test camera permission and QR scanner (fake camera)
+        run: |
+          sudo apt-get install -y -qq ffmpeg
+          APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test-camera FAKE_CAMERA=auto \
+            xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs
+
       - name: Install, remove and reinstall with install.sh (checksums, local files)
         run: |
           set -euo pipefail
@@ -118,17 +136,19 @@ jobs:
             && echo "::notice title=appimage::the AppImage starts and passes the same checks" \
             || echo "::warning title=appimage::the AppImage did not pass here (userns restricted: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)); use the .deb on Ubuntu 24.04"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: p2p-messenger-linux-tests
           path: |
             desktop-test
             desktop-test-appimage
+            desktop-test-wayland
+            desktop-test-camera
           if-no-files-found: ignore
           retention-days: 14
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: p2p-messenger-linux-x64
           path: out/*
@@ -143,8 +163,10 @@ jobs:
     timeout-minutes: 25
     container: fedora:latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: p2p-messenger-linux-x64
           path: out
@@ -158,7 +180,7 @@ jobs:
           npm install --no-save --no-package-lock playwright-core@1.56.0
           NO_SANDBOX=1 APP_BIN="/opt/P2P Messenger/p2p-messenger" OUT_DIR=desktop-test-rpm \
             xvfb-run -a -s "-screen 0 1280x900x24" node tests/desktop/electron-linux.mjs
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: p2p-messenger-linux-rpm-test
@@ -170,10 +192,14 @@ jobs:
     if: inputs.release_tag != '' || startsWith(github.ref, 'refs/tags/desktop-v')
     needs: [build, rpm-fedora]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: p2p-messenger-linux-x64
           path: out
