@@ -89,6 +89,7 @@ flowchart LR
 | **Сайтът** `https://dyrakarmy.online` | Същото, на собствения домейн | Онлайн, когато компютърът на собственика работи. |
 | **Windows** | Компютър с Windows 10/11 | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
 | **Linux** | Компютър с Linux (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `.deb`, `.rpm`, `AppImage` или `install.sh` |
+| **Android** | Телефон с Android 7+ | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-…-android.apk`, отваряш го на телефона ([docs/ANDROID-APK.md](docs/ANDROID-APK.md)) |
 | **Локално копие** | Разработка, или ако сайтът не работи | Git и Node.js, виж по-долу. |
 
 ## 💻 Локално стартиране, стъпка по стъпка

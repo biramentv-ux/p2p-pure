@@ -49,7 +49,7 @@ const ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const MAX_NAME_CHARS = 120;
 
 /** Shown inline only when the bytes really are this type; everything else is a download. */
-export const INLINE_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/webm"] as const;
+export const INLINE_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/webm", "audio/mpeg", "audio/ogg", "audio/wav", "audio/flac", "audio/mp4", "audio/aac"] as const;
 export type InlineMime = (typeof INLINE_MIME)[number];
 export const DOWNLOAD_MIME = "application/octet-stream";
 
@@ -96,8 +96,14 @@ export function sniffInlineMime(head: Uint8Array): InlineMime | null {
   if (b.length >= 8 && b[0] === 0x89 && ascii(1, 4) === "PNG" && b[4] === 0x0d && b[5] === 0x0a) return "image/png";
   if (b.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
   if (b.length >= 6 && (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a")) return "image/gif";
-  if (b.length >= 12 && ascii(4, 8) === "ftyp") return "video/mp4";
+  if (b.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WAVE") return "audio/wav";
+  if (b.length >= 12 && ascii(4, 8) === "ftyp") return ascii(8, 12) === "M4A " || ascii(8, 12) === "M4B " ? "audio/mp4" : "video/mp4";
   if (b.length >= 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return "video/webm";
+  if (b.length >= 4 && ascii(0, 4) === "OggS") return "audio/ogg";
+  if (b.length >= 4 && ascii(0, 4) === "fLaC") return "audio/flac";
+  if (b.length >= 3 && ascii(0, 3) === "ID3") return "audio/mpeg";
+  // MPEG audio frame sync: 11 set bits. Layer bits 00 mean AAC (ADTS), anything else MP3.
+  if (b.length >= 2 && b[0] === 0xff && (b[1] & 0xe0) === 0xe0) return (b[1] & 0x06) === 0 ? "audio/aac" : "audio/mpeg";
   return null;
 }
 
