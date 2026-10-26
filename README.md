@@ -112,6 +112,10 @@ npx vite preview --host 127.0.0.1 --port 4173
 
 Разширението не събира данни и няма собствен сървър. Само отваря приложението. Публикуване в Chrome Web Store още не е направено.
 
+### 🪟 Windows (Tauri 2)
+
+Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `P2P-Messenger-Setup-x64.exe` (инсталатор, без администраторски права) или `P2P-Messenger-portable-x64.zip` (без инсталиране). Цялото приложение е вътре в пакета и не зависи от сайта. Пакетът още не е подписан: при първо стартиране натисни **More info → Run anyway**. Подробности: [docs/WINDOWS.md](docs/WINDOWS.md).
+
 ### 📲 Android и iOS (Capacitor 8)
 
 ```bash
@@ -289,6 +293,10 @@ The signalling Worker defaults to `https://tg.dyrakarmy.online`. Change it at bu
 4. Pick the folder. The shortcut is `Ctrl+Shift+M` (`Command+Shift+M` on Mac).
 
 The extension collects no data and has no server of its own; it only opens the app. It is not yet published in the Chrome Web Store.
+
+### 🪟 Windows (Tauri 2)
+
+Download `P2P-Messenger-Setup-x64.exe` (installer, no admin rights) or `P2P-Messenger-portable-x64.zip` (no install) from [Releases](https://github.com/biramentv-ux/p2p-pure/releases). The whole app is inside the package and does not depend on the website. The package is not signed yet: on first start choose **More info → Run anyway**. Details: [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ### 📲 Android and iOS (Capacitor 8)
 
