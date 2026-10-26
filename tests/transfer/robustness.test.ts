@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_CONTACTS } from "../../src/transfer/bundle";
 import { TRANSFER_TTL_MS } from "../../src/transfer/packet";
+import { openFrame, sealFrame } from "../../src/transfer/session";
 import { makeKeys, sampleContacts, setup, waitFor } from "./helpers";
 
 async function toCompare(s: ReturnType<typeof setup>) {
@@ -42,7 +43,9 @@ describe("channel closes after it opened (Codex P2: link.ts)", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(s.receiver.state).toBe("received");
     expect(s.receiver.bundle).not.toBeNull();
-    await expect(s.receiver.reportStored("did:key:zOwn")).resolves.toBeUndefined(); // fake send still works
+    expect(s.receiver.peerEnded).toBe(true);
+    // The ack cannot reach anyone: it throws, so the screen shows "not confirmed, not wiped".
+    await expect(s.receiver.reportStored("did:key:zOwn")).rejects.toMatchObject({ code: "CLOSED" });
   });
 
   it("a close that arrives right behind the final `stored` frame still ends in stored", async () => {
@@ -92,7 +95,74 @@ describe("protocol deadline", () => {
     await waitFor(s.sender, "failed");
     expect(s.sender.error?.code).toBe("EXPIRED");
     expect(s.sender.error?.message).toMatch(/не е изтрито/);
-    expect(s.receiver.state).toBe("received"); // the new device may still store what it has
+    // Let the sender's last frame and its channel close actually reach the new device.
+    await new Promise((r) => setTimeout(r, 120));
+    const last = s.ch.a.sent[s.ch.a.sent.length - 1];
+    await expect(openFrame(s.keys.receiver, 2, last)).resolves.toEqual({ t: "gone" }); // not `abort`
+    expect(s.receiver.state).toBe("received");
+    expect(s.receiver.bundle).not.toBeNull();
+    expect(s.receiver.peerEnded).toBe(true);
+    await expect(s.receiver.reportStored(s.ownDid)).rejects.toMatchObject({ code: "CLOSED" });
+  });
+
+  it("a deadline while the contacts are still being read: the seed is never sent", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const s = setup({
+      keys: soon(),
+      getBundle: async () => {
+        await gate;
+        return { seed: new Uint8Array(64).fill(1), contacts: [] };
+      },
+    });
+    await toCompare(s);
+    await s.receiver.confirmSas(true);
+    await new Promise((r) => setTimeout(r, 5));
+    const confirming = s.sender.confirmSas(true);
+    await waitFor(s.sender, "failed");
+    release();
+    await confirming;
+    await new Promise((r) => setTimeout(r, 30));
+    expect(s.sender.error?.code).toBe("EXPIRED");
+    expect(s.ch.a.sent).toHaveLength(2); // hello + abort, no bundle after the failure
+    expect(s.receiver.bundle).toBeNull();
+  });
+});
+
+describe("a received bundle survives whatever comes after it", () => {
+  async function received() {
+    const s = setup();
+    await toCompare(s);
+    await s.receiver.confirmSas(true);
+    await s.sender.confirmSas(true);
+    await waitFor(s.receiver, "received");
+    return s;
+  }
+
+  it("an explicit abort frame from the old device", async () => {
+    const s = await received();
+    s.ch.b.deliver(await sealFrame(s.keys.sender, 2, { t: "abort" }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(s.receiver.state).toBe("received");
+    expect(s.receiver.bundle).not.toBeNull();
+    expect(s.receiver.peerEnded).toBe(true);
+  });
+
+  it("a frame that does not open", async () => {
+    const s = await received();
+    s.ch.b.deliver("{not a frame");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(s.receiver.state).toBe("received");
+    expect(s.receiver.bundle).not.toBeNull();
+  });
+
+  it("the sender never sends abort once the bundle left (e.g. a bad frame after release)", async () => {
+    const s = await received();
+    const before = s.ch.a.sent.length;
+    s.ch.a.deliver("{garbage");
+    await waitFor(s.sender, "failed");
+    await new Promise((r) => setTimeout(r, 10));
+    expect(s.ch.a.sent.length).toBe(before);
   });
 });
 
