@@ -119,35 +119,65 @@ async function killLeftoverWebView2() {
   await new Promise((r) => execFile("taskkill", ["/IM", "msedgewebview2.exe", "/T", "/F"], () => r()));
 }
 
+const run = (cmd, args) => new Promise((ok) => execFile(cmd, args, { timeout: 20_000 }, (e, out) => ok(e ? null : out)));
+const DEBUG_ARG = `--remote-debugging-port=${PORT}`;
+const POLICY_KEY = "HKCU\\Software\\Policies\\Microsoft\\Edge\\WebView2\\AdditionalBrowserArguments";
+let debugVia = null; // how the DevTools port was opened: "env" or "registry"
+let policySet = false;
+
+/**
+ * Starts the app with the WebView2 DevTools port open. Two documented ways exist: the
+ * WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS variable, and the per-app registry value under
+ * Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments (read only when
+ * no variable is set). The first one that works is kept for the restarts.
+ */
+async function spawnWindowsApp(via) {
+  const env = { ...process.env };
+  delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS;
+  if (via === "env") env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = DEBUG_ARG;
+  if (via === "registry" && !policySet) {
+    const name = APP_EXE.split(/[\\/]/).pop();
+    await run("reg", ["add", POLICY_KEY, "/v", name, "/t", "REG_SZ", "/d", DEBUG_ARG, "/f"]);
+    policySet = true;
+  }
+  return spawn(APP_EXE, [], { env, stdio: "ignore" });
+}
+
 async function launchApp() {
   if (await cdpUp()) throw new Error(`port ${PORT} is already in use before launch`);
   await killLeftoverWebView2();
-  let child;
+  let child, exited, version;
   if (APP_EXE) {
-    child = spawn(APP_EXE, [], {
-      env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${PORT}` },
-      stdio: "ignore",
-    });
+    const ways = debugVia ? [debugVia] : ["env", "registry"];
+    for (const via of ways) {
+      child = await spawnWindowsApp(via);
+      exited = new Promise((r) => child.once("exit", (code) => r(code)));
+      try {
+        version = await Promise.race([
+          waitFor(cdpUp, 40_000, `the WebView2 DevTools endpoint (${via})`),
+          exited.then((code) => { throw new Error(`app exited during start (code ${code})`); }),
+        ]);
+        debugVia = via;
+        break;
+      } catch (err) {
+        const procs = await webviewProcesses();
+        annotate("warning", `webview2-debug-${via}`, `${err.message}. ${procs ? procs.slice(0, 2500) : "no msedgewebview2.exe browser process"}`);
+        await run("taskkill", ["/PID", String(child.pid), "/T", "/F"]);
+        await exited;
+        await killLeftoverWebView2();
+        if (via === ways[ways.length - 1]) throw err;
+      }
+    }
   } else {
     staticServer ??= await startStaticServer(resolve(LOCAL_DIST));
     localProfile ??= mkdtempSync(join(tmpdir(), "webview2-identity-"));
     const url = `http://tauri.localhost:${staticServer.address().port}/`;
     child = spawn(CHROME_PATH, [
-      "--headless=new", "--no-sandbox", "--no-first-run", `--remote-debugging-port=${PORT}`,
+      "--headless=new", "--no-sandbox", "--no-first-run", DEBUG_ARG,
       `--user-data-dir=${localProfile}`, "--window-size=480,860", url,
     ], { stdio: "ignore" });
-  }
-  const exited = new Promise((r) => child.once("exit", (code) => r(code)));
-  let version;
-  try {
-    version = await Promise.race([
-      waitFor(cdpUp, 60_000, "the WebView2 DevTools endpoint"),
-      exited.then((code) => { throw new Error(`app exited during start (code ${code})`); }),
-    ]);
-  } catch (err) {
-    const procs = await webviewProcesses();
-    annotate("warning", "webview2-processes", procs ? procs.slice(0, 3000) : "no msedgewebview2.exe browser process");
-    throw err;
+    exited = new Promise((r) => child.once("exit", (code) => r(code)));
+    version = await waitFor(cdpUp, 60_000, "the DevTools endpoint");
   }
   const browser = await chromium.connectOverCDP(CDP);
   const page = await waitFor(async () => {
@@ -400,7 +430,7 @@ try {
   annotate(
     "notice",
     "webview2-env",
-    `origin=${e.origin} secureContext=${e.isSecureContext} navigator.credentials=${e.navigatorCredentials} ` +
+    `devtools=${debugVia ?? "local"} origin=${e.origin} secureContext=${e.isSecureContext} navigator.credentials=${e.navigatorCredentials} ` +
       `PublicKeyCredential=${e.publicKeyCredential} platformAuthenticator(Windows Hello)=${e.platformAuthenticator} ` +
       `clientCapabilities.prf=${prfCap ?? "n/a"} indexedDB=${e.indexedDB} lang=${e.language} browser=${facts.browser}`,
   );
@@ -597,6 +627,7 @@ try {
   }
 } finally {
   staticServer?.close();
+  if (policySet) await run("reg", ["delete", POLICY_KEY, "/f"]);
 }
 
 facts.pageErrors = allPageErrors;
