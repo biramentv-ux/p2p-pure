@@ -20,7 +20,8 @@
  *     Message keys are AES-256-GCM keys, used once.
  *   - Skipped message keys are cached (bounded by MAX_SKIP per chain) so that
  *     late, out-of-order messages still decrypt. Each cached key is deleted
- *     after use.
+ *     (and zeroed) after use. The whole cache is bounded by MAX_SKIPPED_TOTAL;
+ *     the oldest keys are evicted first.
  *   - All receive state changes are computed on copies and committed only
  *     after the message authenticates.
  *
@@ -64,6 +65,13 @@ export function createEphemeralKeyPair(): EphemeralKeyPair {
 
 /** Maximum number of message keys skipped (cached) per chain. */
 export const MAX_SKIP = 100;
+/**
+ * Maximum number of skipped message keys kept for the whole session (spec section 8.4
+ * suggests a per-session limit, for example 1000). Without it an authenticated peer could
+ * skip MAX_SKIP messages again and again and grow the cache without bound. When full, the
+ * oldest keys are dropped (and wiped); those messages can no longer be decrypted.
+ */
+export const MAX_SKIPPED_TOTAL = 1000;
 
 const enc = new TextEncoder();
 const LABEL_ROOT = enc.encode("p2p-messenger/session/root/v1");
@@ -392,6 +400,7 @@ export class SecureSession {
     if (cachedKey) {
       const pt = await this.decrypt(cachedKey, this.recvDirection, m);
       this.skipped.delete(cachedId);
+      cachedKey.fill(0);
       return pt;
     }
 
@@ -436,6 +445,12 @@ export class SecureSession {
     this.nr = m.n + 1;
     this.needsRatchet = needsRatchet;
     for (const p of pending) this.skipped.set(p.id, p.key);
+    // Map keeps insertion order: the first entries are the oldest skipped keys.
+    for (const [id, key] of this.skipped) {
+      if (this.skipped.size <= MAX_SKIPPED_TOTAL) break;
+      key.fill(0);
+      this.skipped.delete(id);
+    }
     return pt;
   }
 

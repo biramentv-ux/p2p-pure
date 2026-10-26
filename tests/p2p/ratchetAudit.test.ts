@@ -12,6 +12,7 @@ import { mnemonicToSeed } from "../../src/identity/mnemonic";
 import {
   createEphemeralKeyPair,
   MAX_SKIP,
+  MAX_SKIPPED_TOTAL,
   SecureSession,
   SessionError,
   type EphemeralKeyPair,
@@ -295,6 +296,29 @@ describe("skipped keys and MAX_SKIP versus the reference", () => {
     await rejects(b.open(bad));
     expect(await b.open(w0)).toBe("keep");
   });
+});
+
+describe("total skipped-key store is bounded (spec 8.4)", () => {
+  it("a peer that keeps skipping MAX_SKIP messages cannot grow the cache past MAX_SKIPPED_TOTAL", async () => {
+    const { initiator: a, responder: b } = implPair();
+    const first: string[] = [];
+    const last: string[] = [];
+    const rounds = Math.ceil(MAX_SKIPPED_TOTAL / MAX_SKIP) + 4;
+    for (let r = 0; r < rounds; r++) {
+      const batch: string[] = [];
+      for (let i = 0; i < MAX_SKIP; i++) batch.push(await a.seal(`r${r}.${i}`));
+      const delivered = await a.seal(`r${r}.delivered`);
+      expect(await b.open(delivered)).toBe(`r${r}.delivered`);
+      if (r === 0) first.push(...batch);
+      if (r === rounds - 1) last.push(...batch);
+      expect(internals(b).skipped.size).toBeLessThanOrEqual(MAX_SKIPPED_TOTAL);
+    }
+    expect(internals(b).skipped.size).toBe(MAX_SKIPPED_TOTAL);
+    // Newest skipped keys are kept, the oldest were evicted, and the session still works.
+    expect(await b.open(last[5])).toBe(`r${rounds - 1}.5`);
+    await rejects(b.open(first[0]));
+    expect(await b.open(await a.seal("alive"))).toBe("alive");
+  }, 60_000);
 });
 
 describe("replay, tamper and AAD", () => {
