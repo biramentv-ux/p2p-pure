@@ -15,7 +15,7 @@ on:
     tags: ["desktop-v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 # The release tag comes from a pushed desktop-v* tag, or from the manual input above
 # (then GitHub creates the tag on the built commit when the release is made).
@@ -26,17 +26,23 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 45
+    outputs:
+      winget_dir: ${{ steps.winget.outputs.dir }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: src-tauri -> target
 
@@ -205,12 +211,45 @@ jobs:
           Write-Output "::notice title=winget-validate-output::$text"
           Write-Output "::notice title=winget-validate::manifests are valid"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: p2p-messenger-windows-x64
           path: out/*
           if-no-files-found: error
           retention-days: 30
+
+      # The manifests directory (with the release URL already inside) for the release job.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: p2p-messenger-winget-dir
+          path: winget
+          if-no-files-found: error
+          retention-days: 30
+
+  # Only this job can write to the repository (release assets); the build above is read-only.
+  release:
+    if: inputs.release_tag != '' || startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      WINGET_DIR: ${{ needs.build.outputs.winget_dir }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: p2p-messenger-windows-x64
+          path: out
+
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: p2p-messenger-winget-dir
+          path: winget
 
       - name: Attach to release (release only)
         if: env.RELEASE_TAG != ''
@@ -234,7 +273,7 @@ jobs:
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { $env:PATH += ";$env:LOCALAPPDATA\Microsoft\WindowsApps" }
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Write-Output "::warning::winget not available; install test skipped"; exit 0 }
           winget settings --enable LocalManifestFiles
-          winget install --manifest "${{ steps.winget.outputs.dir }}" --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+          winget install --manifest "$env:WINGET_DIR" --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
           if ($LASTEXITCODE -ne 0) { Write-Output "::error title=winget-install::install from the release failed ($LASTEXITCODE)"; exit 1 }
           Write-Output "::notice title=winget-install::installed from the release through winget"
 
@@ -249,4 +288,4 @@ jobs:
             exit 0
           }
           Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe submit --token $env:WINGET_TOKEN "${{ steps.winget.outputs.dir }}"
+          .\wingetcreate.exe submit --token $env:WINGET_TOKEN "$env:WINGET_DIR"
