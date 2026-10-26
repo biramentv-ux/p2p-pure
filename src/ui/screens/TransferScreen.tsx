@@ -20,6 +20,7 @@ import { TransferError } from "../../transfer/packet";
 import { acceptAnswerText, answerOffer, beginSend, runEndpoint, type SenderOffer } from "../../transfer/link";
 import { stopWritersAndWipe, type BackgroundWriter } from "../../transfer/wipe";
 import { completeReceive, newReceiveProgress } from "../../transfer/receive";
+import { attachEndpoint } from "../../transfer/attach";
 
 const MIN_PASSWORD_LENGTH = 12;
 /** The receiver waits longer: the sender has to scan its answer first. */
@@ -198,9 +199,7 @@ export function TransferSendScreen({ identity, onMoved, onCancel, takeWriters }:
           setView({ k: "intro" });
         }
       };
-      endpoint.onState(onState);
-      onState(endpoint.state);
-      setView({ k: "protocol" });
+      attachEndpoint(endpoint, () => setView({ k: "protocol" }), onState);
     } catch (err) {
       fail(err);
     }
@@ -414,10 +413,8 @@ export function TransferReceiveScreen({ onDone, onCancel }: RecvProps) {
           setView({ k: "intro" });
         }
       };
-      endpoint.onState(onState);
-      if (endpoint.state === "received") onState(endpoint.state);
-      else setState(endpoint.state);
-      setView((v) => (v.k === "unlock" ? v : { k: "protocol" }));
+      // Replays every state, terminal ones included, after the protocol view is selected.
+      attachEndpoint(endpoint, () => setView({ k: "protocol" }), onState);
     } catch (err) {
       fail(err);
     }
