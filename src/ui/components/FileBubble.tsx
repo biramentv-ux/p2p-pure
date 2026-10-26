@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { FileCard } from "../../history/messageStore";
-import { loadFile } from "../../history/fileStore";
 import { DOWNLOAD_MIME } from "../../p2p/fileTransfer";
 import { useI18n } from "../../i18n";
 import { formatSize } from "../fileSize";
@@ -9,9 +8,8 @@ interface FileBubbleProps {
   card: FileCard;
   /** Object URL from this session (just sent or received). */
   url?: string;
-  /** Where kept files live: a contact's DID or a group slot. */
-  owner: string;
-  historyKey: Uint8Array;
+  /** Reads the kept file from the device, or null when it was not kept. */
+  load: () => Promise<Blob | null>;
 }
 
 /**
@@ -19,7 +17,7 @@ interface FileBubbleProps {
  * download link. The blob is labelled with the sniffed type, and only real media get an inline
  * element, so an HTML or SVG file can never render as a page here.
  */
-export function FileBubble({ card, url, owner, historyKey }: FileBubbleProps) {
+export function FileBubble({ card, url, load }: FileBubbleProps) {
   const { t, locale } = useI18n();
   const [src, setSrc] = useState<string | null>(url ?? null);
   const [missing, setMissing] = useState(false);
@@ -28,7 +26,7 @@ export function FileBubble({ card, url, owner, historyKey }: FileBubbleProps) {
 
   async function open(): Promise<string | null> {
     if (src) return src;
-    const blob = card.stored ? await loadFile(historyKey, owner, card.id) : null;
+    const blob = card.stored ? await load() : null;
     if (!blob) {
       setMissing(true);
       return null;

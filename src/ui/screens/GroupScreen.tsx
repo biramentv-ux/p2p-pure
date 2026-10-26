@@ -2,6 +2,10 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { listContacts, saveContact, type Contact } from "../../contacts/contacts";
 import { MAX_GROUP_MEMBERS } from "../../group/groupModel";
 import { MAX_GROUP_PHOTO_BYTES, type GroupSession } from "../../group/groupSession";
+import { MAX_GROUP_FILE_BYTES } from "../../p2p/fileTransfer";
+import { FileBubble, TransferList } from "../components/FileBubble";
+import { GifPicker } from "../components/GifPicker";
+import { GIPHY_KEY } from "../giphy";
 import { CIPHER_SUITES, suiteLabel, type CipherSuite } from "../../p2p/cipherSuite";
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
 import { identityX25519Public } from "../../identity/x25519";
@@ -39,6 +43,9 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
   const [checking, setChecking] = useState<string | null>(null);
   const logRef = useRef<HTMLUListElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [showGif, setShowGif] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -125,6 +132,32 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
       const bytes = await prepareImage(file, { maxBytes: MAX_GROUP_PHOTO_BYTES, maxSide: GROUP_PHOTO_SIDE });
       await group.setPhoto(bytes);
     });
+  }
+
+  /**
+   * Sends a file, photo, video or GIF to every member linked right now. It does not block the
+   * screen: each member accepts on their own, and the list below shows the progress.
+   */
+  async function sendFile(blob: Blob, fileName: string) {
+    setError(null);
+    if (blob.size > MAX_GROUP_FILE_BYTES) {
+      setError(t("Файлът е по-голям от {mb} MB.", { mb: Math.round(MAX_GROUP_FILE_BYTES / 1048576) }));
+      return;
+    }
+    setSending(fileName);
+    try {
+      const sent = group.sendFile(blob, fileName);
+      // Hashing ends quickly; from then on the transfer list shows each member.
+      setTimeout(() => setSending(null), 1500);
+      const r = await sent;
+      if (r.delivered < r.offered) {
+        setError(t("Файлът стигна до {done} от {all} участници.", { done: r.delivered, all: r.offered }));
+      }
+    } catch (err) {
+      setError(t(err instanceof Error ? err.message : "Файлът не беше изпратен."));
+    } finally {
+      setSending(null);
+    }
   }
 
   /** The user compared the words with this member and they matched: saved as a verified contact. */
@@ -325,14 +358,76 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
       {view.joined && (
         <>
           <h2>{t("Съобщения")}</h2>
-          <ul ref={logRef} aria-label={t("Съобщения")} style={{ maxHeight: "40vh", overflowY: "auto", listStyle: "none", padding: 0 }}>
+          <p className="group-history-note">{t("Всеки вижда съобщенията и файловете от момента, в който е влязъл в групата.")}</p>
+          <ul
+            ref={logRef}
+            className="group-log"
+            tabIndex={0}
+            aria-label={t("Съобщения")}
+            style={{ maxHeight: "40vh", overflowY: "auto", listStyle: "none", padding: 0 }}
+          >
             {view.messages.map((m) => (
               <li key={m.id}>
                 <strong>{m.mine ? t("Вие") : (members.find((x) => x.did === m.from)?.name ?? t("Участник"))}:</strong>{" "}
-                {m.text}
+                {m.file ? (
+                  <FileBubble card={m.file} url={view.fileUrls[m.file.id]} load={() => group.loadFile(m.file!.id)} />
+                ) : (
+                  m.text
+                )}
               </li>
             ))}
           </ul>
+          {sending && (
+            <p role="status">{t("Подготвям „{name}“…", { name: sending })}</p>
+          )}
+          <TransferList
+            items={view.transfers.map((x) => {
+              const peerName = members.find((mm) => mm.did === x.peer)?.name ?? t("Участник");
+              return {
+                id: `${x.peer}|${x.id}`,
+                name: x.direction === "out" ? `${x.name} → ${peerName}` : `${peerName}: ${x.name}`,
+                size: x.size,
+                direction: x.direction,
+                phase: x.phase,
+                done: x.done,
+              };
+            })}
+            onAccept={(key) => {
+              const [peer, id] = key.split("|");
+              void group.acceptFile(peer, id);
+            }}
+            onCancel={(key) => {
+              const [peer, id] = key.split("|");
+              void group.cancelFile(peer, id);
+            }}
+          />
+          {showGif && <GifPicker onPick={(blob, gifName) => void sendFile(blob, gifName)} onClose={() => setShowGif(false)} />}
+          <input
+            ref={fileInput}
+            type="file"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void sendFile(f, f.name);
+            }}
+          />
+          <div className="call-actions group-attach">
+            <button
+              type="button"
+              className="secondary"
+              disabled={others.length === 0 || !!sending}
+              onClick={() => fileInput.current?.click()}
+              aria-label={t("Прикачи файл, снимка или видео до 50 MB")}
+            >
+              {t("Файл")}
+            </button>
+            {GIPHY_KEY && (
+              <button type="button" className="secondary" disabled={others.length === 0} onClick={() => setShowGif((v) => !v)} aria-expanded={showGif}>
+                GIF
+              </button>
+            )}
+          </div>
           <form
             onSubmit={(e) => {
               e.preventDefault();

@@ -206,8 +206,7 @@ try {
   });
   const png = Buffer.from(pngB64, "base64");
   await alice.page
-    .locator('input[type="file"]')
-    .nth(1)
+    .locator('input[type="file"][accept="image/*"]:not([capture])')
     .setInputFiles({ name: "foto.png", mimeType: "image/png", buffer: png });
   await bob.page.locator(".messages .msg.in img.msg-image").waitFor({ timeout: 30_000 });
   const widthB = await bob.page.locator(".messages .msg.in img.msg-image").evaluate((i) => i.naturalWidth);
@@ -216,8 +215,7 @@ try {
   check("sender also sees the photo it sent", true);
 
   await bob.page
-    .locator('input[type="file"]')
-    .nth(0)
+    .locator('input[type="file"][capture]')
     .setInputFiles({ name: "kamera.png", mimeType: "image/png", buffer: png });
   await alice.page.locator(".messages .msg.in img.msg-image").waitFor({ timeout: 30_000 });
   check("photo taken with the camera input arrives", true);
@@ -350,7 +348,7 @@ try {
     return c.toDataURL("image/png").split(",")[1];
   });
   await alice.page
-    .locator('input[type="file"]')
+    .locator('input[type="file"][accept="image/*"]')
     .setInputFiles({ name: "group.png", mimeType: "image/png", buffer: Buffer.from(groupPng, "base64") });
   await alice.page.locator('img[alt="Снимка на групата"]').waitFor({ timeout: 15_000 });
   check("group: the admin sets a group photo", true);

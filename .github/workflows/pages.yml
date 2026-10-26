@@ -38,6 +38,9 @@ jobs:
       - name: Build for /p2p-pure/
         env:
           BASE_PATH: /p2p-pure/
+          # Public GIPHY client key (Settings -> Secrets and variables -> Actions -> Variables).
+          # Empty: the GIF button is hidden.
+          VITE_GIPHY_API_KEY: ${{ vars.GIPHY_API_KEY }}
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v4

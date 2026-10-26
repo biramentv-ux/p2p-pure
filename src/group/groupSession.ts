@@ -29,7 +29,11 @@ import type { PeerLink } from "../p2p/peer";
 import { isEncryptedMessage, SessionError, type SecureSession } from "../p2p/secureSession";
 import type { CipherSuite } from "../p2p/cipherSuite";
 import { bytesEqual } from "../p2p/invitation";
-import { buildPhotoFrames, chunkCount, FRAME_MARK, PhotoReceiver, sniffMime, toDataUrl } from "../p2p/photo";
+import { bytesToBase64Url } from "../p2p/encoding";
+import { buildPhotoFrames, chunkCount, FRAME_MARK, PhotoReceiver, sanitizeText, sniffMime, toDataUrl } from "../p2p/photo";
+import { FileTransfers, isFileFrame, MAX_GROUP_FILE_BYTES, type FileMeta } from "../p2p/fileTransfer";
+import { canStore, deleteFilesFor, loadFile, saveFile } from "../history/fileStore";
+import { validFileCard, type FileCard } from "../history/messageStore";
 import { GROUP_MARK, isGroupWire, type GroupWire } from "./groupChat";
 import { GroupChat } from "./groupChat";
 import { GroupLinker, type AutoLink, type LinkFactory } from "./groupLinker";
@@ -55,11 +59,41 @@ const FIRST_MESSAGE_WAIT_MS = 30_000;
 const LINK_PING = `${GROUP_MARK}{"t":"ping"}`;
 const PHOTO_HEADER = `${FRAME_MARK}P|`;
 const PHOTO_CHUNK = `${FRAME_MARK}D|`;
+/** A file card in the local group history. Only written by this device (received texts lose \u0001). */
+const FILE_CARD_MARK = `${FRAME_MARK}C|`;
+
+/** Where this group's kept files live in the file store. */
+export function groupFileOwner(groupId: string): string {
+  return `group:${groupId}`;
+}
+
+function parseCard(text: string): FileCard | undefined {
+  if (!text.startsWith(FILE_CARD_MARK)) return undefined;
+  try {
+    return validFileCard(JSON.parse(text.slice(FILE_CARD_MARK.length)) as FileCard) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A file on its way to or from one member. */
+export interface GroupTransfer {
+  /** The member on the other end of this link. */
+  peer: string;
+  id: string;
+  name: string;
+  size: number;
+  direction: "in" | "out";
+  phase: "offer" | "waiting" | "moving";
+  done: number;
+}
 
 export interface GroupMessageView {
   id: number;
   from: string;
   text: string;
+  /** A file instead of text. */
+  file?: FileCard;
   mine: boolean;
   at: number;
 }
@@ -89,10 +123,15 @@ export interface GroupView {
   photo: string | null;
   /** The group photo is on its way: frames received of total. */
   photoProgress: { done: number; total: number } | null;
+  /** Files offered to this device, and files moving in either direction. */
+  transfers: GroupTransfer[];
+  /** Object URLs of files sent or received in this session, by file id. */
+  fileUrls: Record<string, string>;
 }
 
 /** What the group needs from a link. PeerLink has all of it. */
-export type GroupLink = Pick<PeerLink, "send" | "onMessage" | "close"> & Partial<Pick<PeerLink, "waitForDrain" | "isOpen">>;
+export type GroupLink = Pick<PeerLink, "send" | "onMessage" | "close"> &
+  Partial<Pick<PeerLink, "waitForDrain" | "isOpen" | "sendBinary" | "onBinary">>;
 
 export interface GroupSessionOptions {
   chat?: GroupChat | null;
@@ -118,6 +157,9 @@ interface LinkEntry {
   recvQueue: Promise<unknown>;
   /** Resolves once a message from the peer was opened: from then on this side can always send. */
   ready: Promise<void>;
+  /** File transfers on this link, when the link carries binary messages. */
+  files: FileTransfers | null;
+  offBinary: () => void;
 }
 
 function hashHex(bytes: Uint8Array): string {
@@ -161,7 +203,8 @@ export class GroupSession {
     this.historyKey = options.historyKey ?? null;
     this.findContact = options.findContact ?? null;
     const events: MeshEvents = {
-      message: (from, text) => this.addMessage(from, text, from === this.myDid),
+      // \u0001 is dropped from received text, so nobody can pose a text as a file card.
+      message: (from, text) => this.addMessage(from, sanitizeText(text), from === this.myDid),
       membership: () => {
         // Someone was removed: close the direct link to them, so nothing more goes either way.
         // Invitees and introduced candidates are not members yet and keep their links.
@@ -206,13 +249,10 @@ export class GroupSession {
       this.photo = options.photo;
       this.photoHash = chat.snapshot.photoHash;
     }
-    const messages = (options.history ?? []).map((h) => ({
-      id: this.nextId++,
-      from: h.from,
-      text: h.text,
-      mine: h.from === this.myDid,
-      at: h.at,
-    }));
+    const messages = (options.history ?? []).map((h) => {
+      const file = parseCard(h.text);
+      return { id: this.nextId++, from: h.from, text: file ? "" : h.text, file, mine: h.from === this.myDid, at: h.at };
+    });
     this.view = {
       state: null,
       isAdmin: false,
@@ -227,6 +267,8 @@ export class GroupSession {
       pending: false,
       photo: null,
       photoProgress: null,
+      transfers: [],
+      fileUrls: {},
     };
     this.refresh();
   }
@@ -268,6 +310,8 @@ export class GroupSession {
     const old = this.links.get(contact.did);
     if (old) {
       old.unsubscribe();
+      old.offBinary();
+      old.files?.close();
       old.link.close();
       this.mesh.detach(contact.did);
     }
@@ -284,7 +328,16 @@ export class GroupSession {
       sendQueue: Promise.resolve(),
       recvQueue: Promise.resolve(),
       ready,
+      files: null,
+      offBinary: () => undefined,
     };
+    if (link.sendBinary && link.onBinary) {
+      entry.files = this.filesFor(contact.did, entry);
+      const files = entry.files;
+      entry.offBinary = link.onBinary((bytes) => {
+        files.handleBinary(bytes);
+      });
+    }
     entry.unsubscribe = link.onMessage((text) => {
       if (!isEncryptedMessage(text)) return;
       void this.enqueueReceive(entry, async () => {
@@ -294,6 +347,8 @@ export class GroupSession {
         if (isGroupWire(plaintext)) {
           await this.mesh.handle(contact.did, plaintext);
           this.persist();
+        } else if (isFileFrame(plaintext)) {
+          entry.files?.handleControl(plaintext);
         } else if (plaintext.startsWith(PHOTO_HEADER) || plaintext.startsWith(PHOTO_CHUNK)) {
           this.onPhotoFrame(contact.did, entry, plaintext);
         }
@@ -319,6 +374,8 @@ export class GroupSession {
     const entry = this.links.get(did);
     if (!entry) return;
     entry.unsubscribe();
+    entry.offBinary();
+    entry.files?.close();
     entry.link.close();
     this.links.delete(did);
     this.mesh.detach(did);
@@ -438,6 +495,115 @@ export class GroupSession {
     const entry = this.links.get(did);
     if (!entry) return;
     entry.contact = { ...entry.contact, verified: true, verifiedAt: Date.now() };
+    this.refresh();
+  }
+
+  /* ---------- files ---------- */
+
+  /**
+   * Sends a file (up to 50 MB) to every member this device is linked to right now. Each link
+   * gets its own offer and its own key inside that pairwise session, so only the members of
+   * this moment can receive it: someone who joins later never gets the key. Every recipient
+   * decides whether to take it. Resolves with how many members got the whole file.
+   */
+  async sendFile(blob: Blob, name: string): Promise<{ delivered: number; offered: number }> {
+    const state = this.mesh.state;
+    if (!state || !this.view.joined) throw new Error("Още няма група.");
+    if (blob.size > MAX_GROUP_FILE_BYTES) throw new Error("Файлът е твърде голям.");
+    const targets = [...this.links.values()].filter(
+      (e) => e.files && e.contact.did !== this.myDid && state.members.some((m) => m.did === e.contact.did),
+    );
+    if (targets.length === 0) throw new Error("Няма свързани участници.");
+    const results = await Promise.allSettled(targets.map((e) => e.files!.send(blob, name)));
+    const metas = results.filter((r): r is PromiseFulfilledResult<FileMeta> => r.status === "fulfilled").map((r) => r.value);
+    if (metas.length > 0) {
+      // One card in our own history, under an id of our own (each recipient got its own id).
+      const meta = { ...metas[0], id: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(8))) };
+      const card = await this.keepFile(meta, new Blob([blob], { type: meta.mime }));
+      this.addFileMessage(this.myDid, card, true);
+    }
+    return { delivered: metas.length, offered: targets.length };
+  }
+
+  /** A kept file of this group, or null. */
+  async loadFile(id: string): Promise<Blob | null> {
+    if (!this.historyKey || !this.groupId) return null;
+    return loadFile(this.historyKey, groupFileOwner(this.groupId), id);
+  }
+
+  async acceptFile(peer: string, id: string): Promise<void> {
+    await this.links.get(peer)?.files?.accept(id);
+  }
+
+  async cancelFile(peer: string, id: string): Promise<void> {
+    this.setTransfers(this.view.transfers.filter((t) => !(t.peer === peer && t.id === id)));
+    await this.links.get(peer)?.files?.cancel(id);
+  }
+
+  private filesFor(peer: string, entry: LinkEntry): FileTransfers {
+    const upsert = (t: GroupTransfer) =>
+      this.setTransfers([...this.view.transfers.filter((x) => !(x.peer === t.peer && x.id === t.id)), t]);
+    const remove = (id: string) => this.setTransfers(this.view.transfers.filter((x) => !(x.peer === peer && x.id === id)));
+    const isMemberNow = () => this.mesh.state?.members.some((m) => m.did === peer) ?? false;
+    return new FileTransfers(
+      { sendControl: (pt) => this.sendOn(entry, pt), sendBinary: (bytes) => entry.link.sendBinary!(bytes) },
+      {
+        offered: (m) => {
+          // Only members may send files; a candidate or a removed member is refused at once.
+          if (!isMemberNow() || !this.view.joined) {
+            void entry.files?.cancel(m.id);
+            return;
+          }
+          upsert({ peer, id: m.id, name: m.name, size: m.size, direction: "in", phase: "offer", done: 0 });
+        },
+        outgoing: (m) => upsert({ peer, id: m.id, name: m.name, size: m.size, direction: "out", phase: "waiting", done: 0 }),
+        progress: (id, done) =>
+          this.setTransfers(this.view.transfers.map((x) => (x.peer === peer && x.id === id ? { ...x, phase: "moving", done } : x))),
+        received: (meta, blob) => {
+          remove(meta.id);
+          if (!isMemberNow()) return; // removed while the file was on its way
+          void this.keepFile(meta, blob).then((card) => this.addFileMessage(peer, card, false));
+        },
+        sent: (meta) => remove(meta.id),
+        failed: (id, reason, direction) => {
+          remove(id);
+          if (direction === "in" && reason !== "Отказано.") this.notice(reason);
+        },
+      },
+      MAX_GROUP_FILE_BYTES,
+    );
+  }
+
+  private setTransfers(transfers: GroupTransfer[]): void {
+    this.view = { ...this.view, transfers };
+    this.refresh();
+  }
+
+  /** Keeps a file up to 25 MB encrypted on the device; larger ones live only in this session. */
+  private async keepFile(meta: FileMeta, blob: Blob): Promise<FileCard> {
+    this.view = { ...this.view, fileUrls: { ...this.view.fileUrls, [meta.id]: URL.createObjectURL(blob) } };
+    let stored = canStore(meta.size) && this.historyKey !== null && this.groupId !== null;
+    if (stored) {
+      try {
+        await saveFile(this.historyKey!, groupFileOwner(this.groupId!), meta.id, blob);
+      } catch {
+        stored = false;
+      }
+    }
+    return { id: meta.id, name: meta.name, size: meta.size, mime: meta.mime, stored };
+  }
+
+  private addFileMessage(from: string, card: FileCard, mine: boolean): void {
+    const message: GroupMessageView = { id: this.nextId++, from, text: "", file: card, mine, at: Date.now() };
+    this.view = { ...this.view, messages: [...this.view.messages, message] };
+    const key = this.historyKey;
+    const groupId = this.groupId;
+    if (key && groupId) {
+      const text = FILE_CARD_MARK + JSON.stringify(card);
+      this.saveQueue = this.saveQueue
+        .then(() => appendGroupMessage(key, groupId, { from, text, at: message.at }))
+        .catch(() => this.notice("Съобщението не можа да се запази на това устройство."));
+    }
     this.refresh();
   }
 
@@ -590,6 +756,7 @@ export class GroupSession {
       // The keys of a group this device left must not stay on disk. The history goes with them.
       this.saveQueue = this.saveQueue
         .then(() => deleteGroup(this.historyKey!, groupId))
+        .then(() => deleteFilesFor(groupFileOwner(groupId)))
         .catch(() => this.notice("Групата не можа да се изтрие от това устройство."));
     }
     this.notice("Бяхте махнат от групата. Ключовете и историята ѝ са изтрити от това устройство.");

@@ -28,6 +28,9 @@ export class AutoFakeLink implements AutoLink {
   private opened = false;
   private closed = false;
   private handlers = new Set<(text: string) => void>();
+  private binaryHandlers = new Set<(bytes: Uint8Array) => void>();
+  /** How many binary messages this side sent (file chunks). */
+  binarySent = 0;
   private pending: string[] = [];
   private openWaiters: Array<() => void> = [];
   /** Every text this side sent, for checks that nothing leaks in plaintext. */
@@ -67,6 +70,24 @@ export class AutoFakeLink implements AutoLink {
       return;
     }
     for (const h of [...this.handlers]) h(text);
+  }
+
+  async sendBinary(bytes: Uint8Array): Promise<void> {
+    if (!this.isOpen() || !this.peer) throw new Error("Data channel is not open.");
+    this.binarySent++;
+    const peer = this.peer;
+    const copy = bytes.slice();
+    setTimeout(() => peer.deliverBinary(copy), 0);
+  }
+
+  private deliverBinary(bytes: Uint8Array): void {
+    if (this.closed) return;
+    for (const h of [...this.binaryHandlers]) h(bytes);
+  }
+
+  onBinary(handler: (bytes: Uint8Array) => void): () => void {
+    this.binaryHandlers.add(handler);
+    return () => this.binaryHandlers.delete(handler);
   }
 
   onMessage(handler: (text: string) => void): () => void {
