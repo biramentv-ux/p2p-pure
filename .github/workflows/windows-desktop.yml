@@ -6,11 +6,21 @@ name: Windows desktop
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Create this release (e.g. desktop-v0.7.0); empty = build only'
+        required: false
+        default: ''
   push:
     tags: ["desktop-v*"]
 
 permissions:
   contents: write
+
+# The release tag comes from a pushed desktop-v* tag, or from the manual input above
+# (then GitHub creates the tag on the built commit when the release is made).
+env:
+  RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name) || '' }}
 
 jobs:
   build:
@@ -112,10 +122,11 @@ jobs:
         run: |
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           $sha = (Get-FileHash out/P2P-Messenger-Setup-x64.exe -Algorithm SHA256).Hash
-          if ("${{ github.ref }}".StartsWith("refs/tags/desktop-v")) {
-            $tagVersion = "${{ github.ref_name }}".Substring("desktop-v".Length)
+          if ($env:RELEASE_TAG) {
+            if (-not $env:RELEASE_TAG.StartsWith("desktop-v")) { Write-Output "::error::release tag must start with desktop-v"; exit 1 }
+            $tagVersion = $env:RELEASE_TAG.Substring("desktop-v".Length)
             if ($tagVersion -ne $version) { Write-Output "::error::tag $tagVersion does not match tauri.conf.json version $version"; exit 1 }
-            $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/P2P-Messenger-Setup-x64.exe"
+            $url = "https://github.com/${{ github.repository }}/releases/download/$($env:RELEASE_TAG)/P2P-Messenger-Setup-x64.exe"
           } else {
             # Manual runs have no release yet: the url is a placeholder, good for validation only.
             $url = "https://github.com/${{ github.repository }}/releases/download/desktop-v$version/P2P-Messenger-Setup-x64.exe"
@@ -153,16 +164,16 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Attach to release (tags only)
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
+      - name: Attach to release (release only)
+        if: env.RELEASE_TAG != ''
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" out/* --title "P2P Messenger for Windows ${{ github.ref_name }}" --notes-file docs/WINDOWS.md --prerelease
+          gh release create "$env:RELEASE_TAG" out/* --target "${{ github.sha }}" --title "P2P Messenger for Windows $env:RELEASE_TAG" --notes-file docs/WINDOWS.md --prerelease
 
-      - name: Install with winget from the release (tags only)
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
+      - name: Install with winget from the release (release only)
+        if: env.RELEASE_TAG != ''
         shell: pwsh
         run: |
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { $env:PATH += ";$env:LOCALAPPDATA\Microsoft\WindowsApps" }
@@ -173,7 +184,7 @@ jobs:
           Write-Output "::notice title=winget-install::installed from the release through winget"
 
       - name: Submit to microsoft/winget-pkgs (tags only, needs WINGET_TOKEN)
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        if: env.RELEASE_TAG != ''
         shell: pwsh
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
