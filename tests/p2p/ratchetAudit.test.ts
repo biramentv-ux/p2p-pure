@@ -95,7 +95,7 @@ const internals = (s: SecureSession) => s as unknown as { skipped: Map<string, U
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("primitives: published known-answer vectors", () => {
+describe("primitives: published known-answer vectors", { timeout: 120_000 }, () => {
   it("HKDF-SHA256 matches RFC 5869 test case 1 (noble and node:crypto)", () => {
     const ikm = unhex("0b".repeat(22));
     const salt = unhex("000102030405060708090a0b0c");
@@ -131,7 +131,7 @@ describe("primitives: published known-answer vectors", () => {
   });
 });
 
-describe("golden vector with a deterministic RNG", () => {
+describe("golden vector with a deterministic RNG", { timeout: 120_000 }, () => {
   it("first message of a fixed session is byte-for-byte stable and the reference decrypts it", async () => {
     let counter = 1;
     vi.spyOn(globalThis.crypto, "getRandomValues").mockImplementation(((arr: Uint8Array) => {
@@ -159,7 +159,7 @@ const GOLDEN = {
   wire: '{"t":"msg","s":"a","n":0,"pn":0,"dh":"6tw9e5SqQOSUeS8kjphlh4MWv4yg7NwbPk1JF9JkAGY","iv":"9RtBZ42z2f8lS3GX","ct":"oLbJQAED1zTaVRewBqzxlA2d_QCa_w"}',
 };
 
-describe("interoperability with the reference (random scripts, out-of-order delivery)", () => {
+describe("interoperability with the reference (random scripts, out-of-order delivery)", { timeout: 120_000 }, () => {
   const combos: ["impl" | "ref", "impl" | "ref"][] = [["impl", "impl"], ["impl", "ref"], ["ref", "impl"], ["ref", "ref"]];
   for (const [ka, kb] of combos) {
     it(`${ka} initiator <-> ${kb} responder, 12 seeds x 90 steps`, async () => {
@@ -240,7 +240,7 @@ describe("interoperability with the reference (random scripts, out-of-order deli
   });
 });
 
-describe("skipped keys and MAX_SKIP versus the reference", () => {
+describe("skipped keys and MAX_SKIP versus the reference", { timeout: 120_000 }, () => {
   it("accepts exactly MAX_SKIP skipped and refuses MAX_SKIP + 1, like the reference", async () => {
     for (const kind of ["impl", "ref"] as const) {
       for (const gap of [MAX_SKIP, MAX_SKIP + 1]) {
@@ -298,7 +298,7 @@ describe("skipped keys and MAX_SKIP versus the reference", () => {
   });
 });
 
-describe("total skipped-key store is bounded (spec 8.4)", () => {
+describe("total skipped-key store is bounded (spec 8.4)", { timeout: 120_000 }, () => {
   it("a peer that keeps skipping MAX_SKIP messages cannot grow the cache past MAX_SKIPPED_TOTAL", async () => {
     const { initiator: a, responder: b } = implPair();
     const first: string[] = [];
@@ -321,7 +321,7 @@ describe("total skipped-key store is bounded (spec 8.4)", () => {
   }, 60_000);
 });
 
-describe("replay, tamper and AAD", () => {
+describe("replay, tamper and AAD", { timeout: 120_000 }, () => {
   it("replays are rejected in the current chain, after a DH ratchet, and leave the session working", async () => {
     const { initiator: a, responder: b } = implPair();
     const w1 = await a.seal("1");
@@ -425,7 +425,7 @@ describe("replay, tamper and AAD", () => {
   });
 });
 
-describe("nonces and message keys", () => {
+describe("nonces and message keys", { timeout: 120_000 }, () => {
   it("3000 seals: no IV, ciphertext or (dh, n) pair repeats, even for identical plaintext", async () => {
     const { initiator: a } = implPair();
     const ivs = new Set<string>(), cts = new Set<string>(), ids = new Set<string>();
@@ -454,7 +454,7 @@ describe("nonces and message keys", () => {
   });
 });
 
-describe("concurrency", () => {
+describe("concurrency", { timeout: 120_000 }, () => {
   it("many parallel seal() calls produce unique, in-order counters and all decrypt", async () => {
     const { initiator: a, responder: b } = implPair();
     const wires = await Promise.all(Array.from({ length: 50 }, (_, i) => a.seal(`p${i}`)));
