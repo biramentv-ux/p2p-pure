@@ -3,6 +3,7 @@ import type { FileCard } from "../../history/messageStore";
 import { DOWNLOAD_MIME } from "../../p2p/fileTransfer";
 import { useI18n } from "../../i18n";
 import { formatSize } from "../fileSize";
+import { AudioPlayer } from "./AudioPlayer";
 
 interface FileBubbleProps {
   card: FileCard;
@@ -23,6 +24,9 @@ export function FileBubble({ card, url, load }: FileBubbleProps) {
   const [missing, setMissing] = useState(false);
   const isImage = card.mime.startsWith("image/");
   const isVideo = card.mime.startsWith("video/");
+  const isAudio = card.mime.startsWith("audio/");
+  // A track starts by itself only when the person tapped "Play" here.
+  const [tapped, setTapped] = useState(false);
 
   async function open(): Promise<string | null> {
     if (src) return src;
@@ -57,18 +61,26 @@ export function FileBubble({ card, url, load }: FileBubbleProps) {
     );
   }
   if (isImage && src) return <img className="msg-image" src={src} alt={card.name} />;
+  if (isAudio && src) return <AudioPlayer src={src} name={card.name} autoPlay={tapped} />;
   if (isVideo && src) return <video className="msg-video" src={src} controls playsInline preload="metadata" aria-label={card.name} />;
   return (
     <span className="msg-file">
       <span className="file-icon" aria-hidden="true">
-        {isVideo ? "▶" : "⎙"}
+        {isVideo ? "▶" : isAudio ? "♪" : "⎙"}
       </span>
       <span className="file-meta">
         <strong>{card.name}</strong>
         <small>{size}</small>
       </span>
-      {isVideo && !src ? (
-        <button type="button" className="secondary" onClick={() => void open()}>
+      {(isVideo || isAudio) && !src ? (
+        <button
+          type="button"
+          className="secondary"
+          onClick={() => {
+            setTapped(true);
+            void open();
+          }}
+        >
           {t("Пусни")}
         </button>
       ) : (
