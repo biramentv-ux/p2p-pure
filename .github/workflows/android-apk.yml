@@ -112,10 +112,13 @@ jobs:
           # Only the permissions the app declares, nothing added by a dependency.
           grep -o "uses-permission: name='[^']*'" badging.txt | sort > perms.txt
           cat perms.txt
-          allowed="CAMERA RECORD_AUDIO MODIFY_AUDIO_SETTINGS ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION INTERNET"
+          # USE_BIOMETRIC / USE_FINGERPRINT come from androidx.credentials (passkey prompt);
+          # DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION is androidx.core's own, scoped to this app.
+          allowed="CAMERA RECORD_AUDIO MODIFY_AUDIO_SETTINGS ACCESS_FINE_LOCATION ACCESS_COARSE_LOCATION INTERNET USE_BIOMETRIC USE_FINGERPRINT"
           while read -r line; do
             name="${line#*name=\'}"; name="${name%\'}"
             short="${name##*.}"
+            if [ "$name" = "bg.p2pmessenger.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" ]; then continue; fi
             case " $allowed " in *" $short "*) ;; *) echo "::error::unexpected permission $name"; exit 1 ;; esac
           done < perms.txt
           mkdir -p out
