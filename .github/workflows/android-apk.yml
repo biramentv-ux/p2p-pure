@@ -56,6 +56,10 @@ jobs:
           case "$RELEASE_TAG" in android-v*) ;; *) echo "::error::release tag must start with android-v"; exit 1 ;; esac
 
       - name: Install, build the web app, sync the Android project
+        env:
+          # The WebView runs on localhost; Credential Manager needs the real domain that serves
+          # /.well-known/assetlinks.json with this APK's signing fingerprint.
+          VITE_PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID || 'dyrakarmy.online' }}
         run: |
           npm ci
           npm run build
