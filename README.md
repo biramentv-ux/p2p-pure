@@ -116,6 +116,8 @@ npx vite preview --host 127.0.0.1 --port 4173
 
 Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `P2P-Messenger-Setup-x64.exe` (инсталатор, без администраторски права) или `P2P-Messenger-portable-x64.zip` (без инсталиране). Цялото приложение е вътре в пакета и не зависи от сайта. Пакетът още не е подписан: при първо стартиране натисни **More info → Run anyway**. Подробности: [docs/WINDOWS.md](docs/WINDOWS.md).
 
+С winget (след приемане в официалното хранилище): `winget install DyrakArmy.P2PMessenger`. Дотогава: `winget install --manifest` от манифестите в Release-а.
+
 ### 📲 Android и iOS (Capacitor 8)
 
 ```bash
@@ -297,6 +299,8 @@ The extension collects no data and has no server of its own; it only opens the a
 ### 🪟 Windows (Tauri 2)
 
 Download `P2P-Messenger-Setup-x64.exe` (installer, no admin rights) or `P2P-Messenger-portable-x64.zip` (no install) from [Releases](https://github.com/biramentv-ux/p2p-pure/releases). The whole app is inside the package and does not depend on the website. The package is not signed yet: on first start choose **More info → Run anyway**. Details: [docs/WINDOWS.md](docs/WINDOWS.md).
+
+With winget (once accepted in the official repository): `winget install DyrakArmy.P2PMessenger`. Until then: `winget install --manifest` with the manifests attached to the release.
 
 ### 📲 Android and iOS (Capacitor 8)
 
