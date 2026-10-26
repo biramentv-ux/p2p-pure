@@ -44,7 +44,7 @@
 | 📞 | **Аудио и видео разговори** | По същата директна връзка, медията е DTLS-SRTP. |
 | 👥 | **Групи до 9 души** *(обновено)* | Админ, име и снимка на групата. Файлове, снимки, видео до 50 MB и GIF от GIPHY. Новият член не вижда старата история; махането става и когато махнатият е офлайн. Всичко се пази шифровано. |
 | 🪟 | **Windows** *(ново)* | Инсталатор без админ права, portable zip и `winget`. Цялото приложение е вътре. |
-| 🐧 | **Linux** *(ново)* | `.deb`, `.rpm`, AppImage и `install.sh` с проверка на сумите. Цялото приложение е вътре. |
+| 🐧 | **Linux** *(ново)* | `.deb`, `.rpm`, AppImage, Flatpak и `install.sh` с проверка на сумите. Цялото приложение е вътре. |
 | 🎨 | **Нов дизайн** *(ново)* | „Запечатана поща“: небесно синьо и електрик пурпурно-розово, IBM Plex с кирилица, светъл и тъмен режим, AA контраст. |
 | 🌍 | **Два езика** | Български (по подразбиране) и English. |
 | ⚡ | **Разширение за Chrome** | `Ctrl+Shift+M` отваря месинджъра. |
@@ -214,7 +214,7 @@ npx cap open android     # отваря Android Studio; или ios за Xcode
 
 ## 🐧 Linux
 
-Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) или `AppImage`, или пусни `install.sh`: той избира пакета, **проверява контролната сума** и инсталира.
+Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE), `AppImage` или `.flatpak` (`flatpak install --user ./файла.flatpak`, без достъп до файловете ти), или пусни `install.sh`: той избира пакета, **проверява контролната сума** и инсталира.
 
 ```bash
 bash install.sh              # или: bash install.sh --appimage  (само за теб, без root)
