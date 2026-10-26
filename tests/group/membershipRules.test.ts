@@ -87,6 +87,12 @@ describe("a new member does not see earlier messages", () => {
     await until(() => bob.g.snapshot.joined, "bob joined");
     expect(bob.g.snapshot.messages).toEqual([]);
 
+    // Alice must have the new key first: a text she sealed with the old one stays unreadable
+    // for Bob, which is exactly the rule under test.
+    await until(
+      () => alice.g.snapshot.state?.epoch === admin.g.snapshot.state?.epoch && alice.g.snapshot.state?.members.length === 3,
+      "alice has the new epoch",
+    );
     await alice.g.sendText("здрасти, Боб");
     await until(() => bob.g.snapshot.messages.some((m) => m.text === "здрасти, Боб"), "new message");
     expect(bob.g.snapshot.messages.map((m) => m.text)).toEqual(["здрасти, Боб"]);

@@ -34,6 +34,23 @@ function pair() {
 }
 
 describe("SecureSession", () => {
+  it("seal and open called at the same time do not break the ratchet", async () => {
+    const { initiator: a, responder: b } = pair();
+    expect(await b.open(await a.seal("старт"))).toBe("старт");
+    for (let round = 0; round < 10; round++) {
+      // b says two things in one chain. a reads the first, so its next seal starts a new chain;
+      // that seal runs while a is still opening the second message.
+      const b1 = await b.seal(`b${round}.1`);
+      const b2 = await b.seal(`b${round}.2`);
+      expect(await a.open(b1)).toBe(`b${round}.1`);
+      const [got2, fromA] = await Promise.all([a.open(b2), a.seal(`a${round}`)]);
+      expect(got2).toBe(`b${round}.2`);
+      expect(await b.open(fromA)).toBe(`a${round}`);
+      // And the conversation keeps working in both directions afterwards.
+      expect(await b.open(await a.seal(`a${round}+`))).toBe(`a${round}+`);
+    }
+  });
+
   it("both sides derive compatible keys: a message goes both ways", async () => {
     const { initiator, responder } = pair();
     expect(await responder.open(await initiator.seal("здравей"))).toBe("здравей");
