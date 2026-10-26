@@ -5,7 +5,7 @@ import '@fontsource-variable/instrument-sans'
 import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import App from './App.tsx'
-import './hybrid.css'
+import './friendly.css'
 import './loud.css'
 import { I18nProvider } from './i18n'
 

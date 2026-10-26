@@ -1,0 +1,228 @@
+/*
+ * Friendly theme: "Daybreak Kitchen". The default look for everyone.
+ * Warm paper, deep ink, one teal action colour and a soft coral accent. Large touch targets,
+ * rounded bubbles, calm motion. Loaded after index.css and App.css, so it only overrides
+ * tokens and component polish. Light by default; dark follows the system setting.
+ * Contrast of text and actions is AA on both themes (checked by tests/e2e/a11y.mjs).
+ */
+
+/* ---------- light (default) ---------- */
+/* Same specificity as index.css's light block, so these win by order. */
+:root:not([data-theme="dark"]) {
+  --ink-0: #fff7ec;        /* page: warm paper */
+  --ink-1: #ffffff;        /* cards, bars */
+  --ink-2: #fdf0e0;        /* raised, incoming bubbles */
+  --ink-3: #f6e4cf;        /* hover / pressed */
+  --line: #ead9c4;
+  --line-soft: rgba(42, 34, 51, 0.08);
+
+  --text: #3b3146;
+  --text-h: #211a2b;
+  --muted: #6b6076;
+
+  /* action: teal (AA with white text), accent: coral for highlights only */
+  --ember: #0f766e;
+  --ember-hi: #115e59;
+  --ember-ink: #ffffff;
+  --ember-soft: rgba(15, 118, 110, 0.11);
+  --ember-line: rgba(15, 118, 110, 0.4);
+  --sage: #2f7d4f;
+  --sage-soft: rgba(47, 125, 79, 0.12);
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.09);
+  --aqua: #0e7490;
+  --rose: #be3d5a;
+  --coral: #ff7a59;
+  --sunny: #ffd166;
+
+  --msg-out: #0f766e;
+  --msg-out-text: #ffffff;
+  --focus: 0 0 0 3px #fff7ec, 0 0 0 6px rgba(15, 118, 110, 0.55);
+
+  --radius-s: 12px;
+  --radius: 18px;
+  --radius-l: 28px;
+  --shadow-lift: 0 1px 0 #fff inset, 0 14px 30px -18px rgba(59, 49, 70, 0.35);
+
+  --display: 'Fraunces Variable', 'Fraunces', Georgia, serif;
+  --sans: 'Instrument Sans Variable', 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+
+/* ---------- dark (system setting) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink-0: #1d1826;
+    --ink-1: #251f31;
+    --ink-2: #2e2740;
+    --ink-3: #382f4b;
+    --line: #3d3452;
+    --line-soft: rgba(255, 247, 236, 0.07);
+    --text: #e6dcef;
+    --text-h: #fff7ec;
+    --muted: #b3a7c2;
+    --ember: #5eead4;
+    --ember-hi: #99f6e4;
+    --ember-ink: #0f1b1c;
+    --ember-soft: rgba(94, 234, 212, 0.14);
+    --ember-line: rgba(94, 234, 212, 0.45);
+    --sage: #86efac;
+    --sage-soft: rgba(134, 239, 172, 0.13);
+    --danger: #fda4af;
+    --danger-soft: rgba(253, 164, 175, 0.12);
+    --aqua: #67e8f9;
+    --rose: #fda4c4;
+    --coral: #ff9a7a;
+    --sunny: #ffd166;
+    --msg-out: #0d5f58;
+    --msg-out-text: #f0fdfa;
+    --focus: 0 0 0 3px #1d1826, 0 0 0 6px rgba(94, 234, 212, 0.6);
+    --shadow-lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 34px -18px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ink-0: #1d1826;
+  --ink-1: #251f31;
+  --ink-2: #2e2740;
+  --ink-3: #382f4b;
+  --line: #3d3452;
+  --text: #e6dcef;
+  --text-h: #fff7ec;
+  --muted: #b3a7c2;
+  --ember: #5eead4;
+  --ember-ink: #0f1b1c;
+  --msg-out: #0d5f58;
+  --msg-out-text: #f0fdfa;
+  color-scheme: dark;
+}
+
+/* ---------- base ---------- */
+body {
+  background:
+    radial-gradient(60vmax 60vmax at 100% -10%, rgba(255, 122, 89, 0.14), transparent 60%),
+    radial-gradient(50vmax 50vmax at -10% 110%, rgba(15, 118, 110, 0.12), transparent 60%),
+    var(--ink-0);
+  background-attachment: fixed;
+}
+
+.screen h1 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.4rem);
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  color: var(--text-h);
+}
+
+/* Screens rise in one after another: a single calm page load, not scattered effects. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.screen > * {
+  animation: rise 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.screen > *:nth-child(2) { animation-delay: 60ms; }
+.screen > *:nth-child(3) { animation-delay: 120ms; }
+.screen > *:nth-child(4) { animation-delay: 180ms; }
+.screen > *:nth-child(n + 5) { animation-delay: 240ms; }
+
+/* ---------- touch targets and actions ---------- */
+.screen button,
+.composer button,
+.chat-header button,
+.call-buttons button {
+  min-height: 48px;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 18px -12px rgba(15, 118, 110, 0.7);
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+.screen button:hover:not(:disabled) { transform: translateY(-1px); }
+.screen button:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+.screen button.secondary {
+  background: var(--ink-1);
+  box-shadow: none;
+  border: 1.5px solid var(--line);
+}
+
+input,
+textarea {
+  min-height: 48px;
+  border-radius: var(--radius);
+  font-size: 1rem;
+}
+
+/* Keyboard users always see where they are. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+/* ---------- messages: bubbles with a soft tail ---------- */
+.msg {
+  border-radius: 20px 20px 20px 6px;
+  padding: 0.6rem 0.95rem;
+  box-shadow: 0 1px 2px rgba(59, 49, 70, 0.06);
+}
+.msg.out {
+  border-radius: 20px 20px 6px 20px;
+}
+
+/* ---------- composer and tabs as soft pills ---------- */
+.composer {
+  border-radius: 999px;
+  padding: 0.35rem;
+  background: var(--ink-1);
+  border: 1.5px solid var(--line);
+  box-shadow: var(--shadow-lift);
+}
+.composer input {
+  border: none;
+  background: transparent;
+  min-height: 44px;
+  padding-left: 0.9rem;
+}
+
+.tabs {
+  border-radius: 999px;
+  background: var(--ink-1);
+  box-shadow: var(--shadow-lift);
+  padding: 0.3rem;
+}
+
+/* ---------- small accents ---------- */
+.chips li {
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  background: var(--sunny);
+  color: #3b2a00;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen > *,
+  .screen button,
+  .composer button {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .screen { padding-left: 16px; padding-right: 16px; }
+  .screen h1 { font-size: 1.7rem; }
+}
+
+/* Inactive tabs use the body text colour, so they stay AA on the bar and on the glider. */
+.tab {
+  color: var(--text);
+}
+.tab:hover {
+  color: var(--text-h);
+}
