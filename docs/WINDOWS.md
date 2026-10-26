@@ -93,9 +93,13 @@ winget проверява SHA256 на инсталатора спрямо ман
   се качват и в GitHub Release (отбелязан като pre-release).
 - Версията е в `src-tauri/tauri.conf.json` и `src-tauri/Cargo.toml`.
 
-## Подпис (по-късно)
+## Подпис
 
-Когато има сертификат, в `tauri.conf.json` се добавя `bundle.windows.certificateThumbprint`
-(или команда за подпис), и CI подписва и инсталатора, и самата програма. Тогава
-предупреждението на SmartScreen постепенно изчезва, докато подписаните издания натрупват
-репутация.
+CI подписва инсталатора и самата програма със `signtool` (и ги проверява със
+`signtool verify`), когато собственикът добави секретите `WINDOWS_CERT_PFX_BASE64` и
+`WINDOWS_CERT_PASSWORD`. Без тях стъпката се пропуска с бележка. Видове сертификати
+(включително безплатни/евтини за отворен код: SignPath, Azure Trusted Signing, Certum) и
+точните стъпки: [SIGNING.md](SIGNING.md). Предупреждението на SmartScreen изчезва веднага с
+EV / Trusted Signing или постепенно с OV, докато подписаните издания натрупат репутация.
+
+Проверка на подписа (PowerShell): `Get-AuthenticodeSignature .\P2P-Messenger-Setup-x64.exe`.

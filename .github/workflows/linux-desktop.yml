@@ -1,5 +1,7 @@
 # Linux desktop packages (Electron): .deb, .rpm and AppImage. Built on a clean Ubuntu runner,
-# so the result does not depend on the owner's machine. Unsigned for now (see docs/LINUX.md).
+# so the result does not depend on the owner's machine. Signed only when the secret
+# LINUX_GPG_PRIVATE_KEY exists (release job; see docs/SIGNING.md); without it the
+# release is exactly as before: unsigned, with SHA-256 checksums.
 # Why Electron and not Tauri as on Windows: the WebKitGTK of Debian and Ubuntu has no WebRTC,
 # and the direct links between devices need it. Run from the Actions tab, or push a tag
 # "desktop-v*" to also attach the files to the GitHub release (shared with Windows).
@@ -56,7 +58,7 @@ jobs:
         run: npx vitest run
 
       - name: Shell script check
-        run: shellcheck -S warning scripts/linux/install.sh
+        run: shellcheck -S warning scripts/linux/*.sh
 
       - name: Build the web app and the packages
         run: |
@@ -203,6 +205,55 @@ jobs:
         with:
           name: p2p-messenger-linux-x64
           path: out
+      # Inert until the owner adds the secret. Signs the .rpm, SHA256SUMS-linux.txt (.asc), pins
+      # the key fingerprint in install.sh and builds the signed APT + dnf repository metadata
+      # (published by pages.yml under <site>/linux/). The key lives only in $RUNNER_TEMP.
+      - name: Sign and build the update channel (only with LINUX_GPG_PRIVATE_KEY)
+        id: sign
+        env:
+          LINUX_GPG_PRIVATE_KEY: ${{ secrets.LINUX_GPG_PRIVATE_KEY }}
+          LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+          REPO_BASE_URL: ${{ vars.LINUX_REPO_URL || format('https://{0}.github.io/{1}/linux', github.repository_owner, github.event.repository.name) }}
+        run: |
+          set -euo pipefail
+          if [ -z "$LINUX_GPG_PRIVATE_KEY" ]; then
+            echo "::notice title=linux-signing::LINUX_GPG_PRIVATE_KEY is not set; packages stay unsigned (SHA-256 only), no APT/dnf repository"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apt-utils createrepo-c rpm gnupg
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$LINUX_GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          fprs="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1=="sec"{p=1;next} $1=="fpr"&&p{print $10;p=0}')"
+          [ "$(printf '%s\n' "$fprs" | grep -c .)" = 1 ] || { echo "::error::LINUX_GPG_PRIVATE_KEY must hold exactly one secret key"; exit 1; }
+          export SIGNING_FPR="$fprs"
+          if [ -n "$LINUX_GPG_PASSPHRASE" ]; then
+            (umask 077; printf '%s' "$LINUX_GPG_PASSPHRASE" > "$RUNNER_TEMP/gpg-pass")
+            export GPG_PASSPHRASE_FILE="$RUNNER_TEMP/gpg-pass"
+          fi
+          bash scripts/linux/sign-release.sh out
+          bash scripts/linux/build-repo.sh out repo/linux
+          tar -C repo -czf out/p2p-messenger-linux-repo.tar.gz --exclude='*.deb' --exclude='*.rpm' linux
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "::notice title=linux-signing::signed with $SIGNING_FPR"
+      - name: Remove the signing key from the runner
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/gnupg" "$RUNNER_TEMP/gpg-pass"
+      # The repository as users will see it, before it is published: apt on this runner and dnf
+      # in Fedora, both through install.sh --add-repo (pinned key, signed metadata) from file://.
+      - name: Test the signed repository (apt and dnf)
+        if: steps.sign.outputs.signed == 'true'
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /srv/p2p-repo && sudo cp -r repo/linux /srv/p2p-repo/ && sudo chmod -R a+rX /srv/p2p-repo
+          bash out/install.sh --add-repo --repo-url file:///srv/p2p-repo/linux
+          dpkg-query -W -f='${Version}\n' p2p-messenger | grep -qx "${RELEASE_TAG#desktop-v}"
+          bash out/install.sh --uninstall
+          test ! -e /etc/apt/sources.list.d/p2p-messenger.sources
+          docker run --rm -v /srv/p2p-repo:/srv/p2p-repo:ro -v "$PWD/out:/out:ro" fedora:latest \
+            bash -c 'bash /out/install.sh --add-repo --repo-url file:///srv/p2p-repo/linux && rpm -q p2p-messenger && rpm -q gpg-pubkey --qf "%{SUMMARY}\n"'
       - name: Attach to the release (created by whichever desktop workflow comes first)
         env:
           GH_TOKEN: ${{ github.token }}
