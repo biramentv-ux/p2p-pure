@@ -20,7 +20,7 @@ on:
         default: ''
   # TEMPORARY (removed before merge): builds this branch and attaches the APK to a preview release.
   push:
-    branches: ["feat/android-apk"]
+    branches: ["feat/android-apk", "preview/apk-chat-media"]
 
 permissions:
   contents: read
