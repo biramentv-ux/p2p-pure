@@ -220,7 +220,7 @@ npx cap open android     # отваря Android Studio; или ios за Xcode
 bash install.sh              # или: bash install.sh --appimage  (само за теб, без root)
 ```
 
-Пакетът още не е подписан. Linux версията носи свой Chromium (Electron), защото WebKitGTK на Debian и Ubuntu няма WebRTC. Passkey няма: приложението се отключва с парола. На Ubuntu 24.04 ползвай `.deb`, не AppImage. Подробности: [docs/LINUX.md](docs/LINUX.md).
+Подписът (GPG) и хранилището за `apt`/`dnf` (`bash install.sh --add-repo`) се включват, щом собственикът добави ключ ([docs/SIGNING.md](docs/SIGNING.md)); дотогава пакетът е неподписан. Linux версията носи свой Chromium (Electron), защото WebKitGTK на Debian и Ubuntu няма WebRTC. Passkey няма: приложението се отключва с парола. На Ubuntu 24.04 ползвай `.deb`, не AppImage. Подробности: [docs/LINUX.md](docs/LINUX.md).
 
 ## 🧩 Разширение за Chrome
 
@@ -282,7 +282,7 @@ docs/               ръководства: Windows, Linux, демо сигна�
 |---|---|---|
 | `web.yml` | push и PR към `main` | Сканиране за тайни, lint, unit тестове, билд, разширение, `npm audit` |
 | `gradle.yml` | push и PR към `main` | Android билд с Capacitor |
-| `pages.yml` | push към `main` | Публикува онлайн версията в GitHub Pages |
+| `pages.yml` | push към `main`, след Linux издание | Публикува онлайн версията в GitHub Pages (и подписаното Linux хранилище в `/linux/`, ако има) |
 | `windows-desktop.yml` | ръчно или таг `desktop-v*` | Инсталатор, portable, тест в WebView2, winget, Release |
 | `worker-deploy.yml` | промяна в `worker/` или ръчно | Тестове и публикуване на сигналния Worker в Cloudflare |
 
@@ -506,7 +506,7 @@ Download the `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) or `AppImage` fr
 bash install.sh              # or: bash install.sh --appimage  (just for you, no root)
 ```
 
-The package is not signed yet. The Linux app ships its own Chromium (Electron), because the WebKitGTK of Debian and Ubuntu has no WebRTC. There are no passkeys: the app unlocks with a password. On Ubuntu 24.04 use the `.deb`, not the AppImage. Details: [docs/LINUX.md](docs/LINUX.md).
+GPG signing and an `apt`/`dnf` repository (`bash install.sh --add-repo`) switch on once the owner adds a key ([docs/SIGNING.md](docs/SIGNING.md)); until then the package is unsigned. The Linux app ships its own Chromium (Electron), because the WebKitGTK of Debian and Ubuntu has no WebRTC. There are no passkeys: the app unlocks with a password. On Ubuntu 24.04 use the `.deb`, not the AppImage. Details: [docs/LINUX.md](docs/LINUX.md).
 
 ## 🧩 Chrome extension
 
@@ -568,7 +568,7 @@ docs/               guides: Windows, Linux, demo signalling, groups, Telegram bo
 |---|---|---|
 | `web.yml` | push and PR to `main` | Secret scan, lint, unit tests, build, extension, `npm audit` |
 | `gradle.yml` | push and PR to `main` | Android build with Capacitor |
-| `pages.yml` | push to `main` | Publishes the online version to GitHub Pages |
+| `pages.yml` | push to `main`, after a Linux release | Publishes the online version to GitHub Pages (and the signed Linux repository under `/linux/`, if any) |
 | `windows-desktop.yml` | manual or a `desktop-v*` tag | Installer, portable, WebView2 test, winget, Release |
 | `worker-deploy.yml` | a change in `worker/`, or manual | Tests and deploys the signalling Worker to Cloudflare |
 
