@@ -18,6 +18,10 @@ describe("Android APK build", () => {
     expect(wf.match(/contents: write/g)?.length).toBe(1);
   });
 
+  it("builds the web app with the real passkey domain, not the WebView's localhost", () => {
+    expect(wf).toMatch(/VITE_PASSKEY_RP_ID: \$\{\{ vars\.PASSKEY_RP_ID \|\| 'dyrakarmy\.online' \}\}/);
+  });
+
   it("never puts a secret in the command line or the log", () => {
     expect(wf).not.toMatch(/-PapkKey|--ks-pass|storepass\s+["']?\$\{\{/);
     expect(wf).toMatch(/::add-mask::/);
