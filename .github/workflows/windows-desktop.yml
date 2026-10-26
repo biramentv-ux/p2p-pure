@@ -119,12 +119,34 @@ jobs:
       # Drives identity creation and unlock in the installed app over CDP (WebView2 remote
       # debugging), with a virtual authenticator in place of Windows Hello. See the script.
       - name: Identity test in WebView2 (virtual authenticator)
+        id: identity
         shell: pwsh
         timeout-minutes: 8
         run: |
           $dir = Join-Path $env:LOCALAPPDATA "P2P Messenger"
           $exe = Get-ChildItem $dir -Filter *.exe | Where-Object { $_.Name -notmatch 'uninstall' } | Select-Object -First 1
           $env:APP_EXE = $exe.FullName
+          $env:OUT_DIR = "desktop-test"
+          node tests/desktop/webview2-identity.mjs
+
+      # Only when the installed app's DevTools port could not be opened from outside: the same
+      # app is rebuilt with the port in its window config (never shipped) and tested instead.
+      - name: Identity test on a DevTools build (fallback)
+        if: steps.identity.outputs.devtools == 'unavailable'
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          $conf = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $win = $conf.app.windows[0]
+          # wry's own defaults are replaced by this value, so they are repeated here.
+          $win | Add-Member -NotePropertyName additionalBrowserArgs -NotePropertyValue "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --remote-debugging-port=9222"
+          $variant = Join-Path $env:RUNNER_TEMP "devtools-variant.json"
+          @{ app = @{ windows = @($win) } } | ConvertTo-Json -Depth 10 | Out-File -Encoding utf8 $variant
+          Get-Content $variant
+          npx tauri build --no-bundle --config $variant
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $env:APP_EXE = (Resolve-Path src-tauri/target/release/p2p-messenger.exe).Path
+          $env:DEVTOOLS_VIA = "config"
           $env:OUT_DIR = "desktop-test"
           node tests/desktop/webview2-identity.mjs
 
