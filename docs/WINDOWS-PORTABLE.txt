@@ -1,0 +1,35 @@
+P2P Messenger - преносима версия за Windows (x64)
+================================================
+
+Как се ползва
+1. Разархивирай папката където искаш (Desktop, флашка, Documents).
+2. Стартирай "P2P Messenger.exe".
+3. Първия път Windows може да покаже "Windows protected your PC".
+   Натисни "More info" (Повече информация), после "Run anyway" (Изпълни въпреки това).
+   Това е, защото файлът още не е подписан със сертификат.
+
+Изисквания
+- Windows 10 или 11, 64-битов.
+- Microsoft Edge WebView2. В Windows 11 е вграден. Ако програмата не тръгне на
+  по-стар Windows 10, ползвай инсталатора (P2P-Messenger-Setup-x64.exe): той го
+  добавя сам.
+
+Къде стоят данните
+- Профилът, контактите и историята се пазят шифровани в профила на потребителя
+  на Windows (%LOCALAPPDATA%\bg.p2pmessenger.desktop), не в папката на програмата.
+  Ако преместиш програмата на друг компютър, данните не идват с нея. Там възстанови
+  профила с 12-те думи.
+
+Проверка на файла
+- SHA256 сумите са в SHA256SUMS.txt до изтегления файл. В PowerShell:
+    Get-FileHash ".\P2P-Messenger-portable-x64.zip" -Algorithm SHA256
+
+
+P2P Messenger - portable version for Windows (x64)
+
+1. Unzip the folder anywhere and run "P2P Messenger.exe".
+2. If Windows shows "Windows protected your PC", choose "More info", then "Run anyway".
+   The file is not code-signed yet.
+3. Needs Windows 10/11 x64 with Microsoft Edge WebView2 (built into Windows 11; the
+   installer adds it if missing). Data is stored encrypted in
+   %LOCALAPPDATA%\bg.p2pmessenger.desktop, not next to the exe.
