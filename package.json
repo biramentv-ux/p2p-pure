@@ -10,6 +10,7 @@
     "tauri": "tauri",
     "lint": "oxlint",
     "preview": "vite preview",
+    "phone": "node scripts/phone.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

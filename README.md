@@ -7,10 +7,10 @@
 **Личен, децентрализиран, шифрован от край до край.**
 **A private, decentralised, end-to-end encrypted messenger.**
 
-[![Tests](https://img.shields.io/badge/unit_tests-255_passing-2f7d4a?style=for-the-badge)](#-тестове--tests)
-[![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-9a5508?style=for-the-badge)](#-тестове--tests)
-[![Platforms](https://img.shields.io/badge/web_·_Android_·_iOS-PWA_+_Capacitor-0f766e?style=for-the-badge)](#-инсталация--installation)
-[![Languages](https://img.shields.io/badge/languages-BG_·_EN-be185d?style=for-the-badge)](#-language)
+[![Tests](https://img.shields.io/badge/unit_tests-401_passing-1f6fc4?style=for-the-badge)](#-тестове)
+[![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-13213a?style=for-the-badge)](#-тестове)
+[![Platforms](https://img.shields.io/badge/web_·_Windows_·_Android_·_iOS-PWA_+_Tauri_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
+[![Languages](https://img.shields.io/badge/languages-BG_·_EN-d41b7f?style=for-the-badge)](#-език)
 
 ### 🌍 Language / Език
 
@@ -24,183 +24,265 @@
 
 # 🇧🇬 Български
 
-> Съобщенията се шифроват на устройството и се пращат **директно** между двама души през WebRTC.
+> Съобщенията се шифроват на устройството и се пращат **директно** между хората през WebRTC.
 > Няма централен сървър, който пази съобщения, акаунти или телефонни номера.
 
-*Състояние към 21 октомври 2026: работеща PWA за уеб, Capacitor проект за Android и iOS, Chrome разширение за бърз достъп, двуезичен интерфейс (БГ и EN) и тестове на всички нива. Native билдовете не са тествани на физически устройства.*
+*Състояние към 26 октомври 2026: работеща PWA за уеб и телефон, програма за Windows (инсталатор, portable и winget), Capacitor проект за Android и iOS, разширение за Chrome, двуезичен интерфейс и тестове на всички нива. Native билдовете за Android и iOS не са тествани на физически устройства.*
 
 ## ✨ Какво може
 
 | | Функция | Какво означава |
 |---|---|---|
-| 🪪 | **Идентичност без регистрация** | Passkey на устройството → `did:key` (`z6Mk…`). Без имейл, телефон или SMS. |
-| 🔑 | **Възстановяване с 12 думи** | BIP39. Записваш ги веднъж и ги ползваш на нов телефон. |
-| 📷 | **Контакт с QR код или кратък код** | Кратък код от 10 символа, валиден 10 минути и за еднократна употреба. |
-| 🔢 | **Проверка на събеседника** | Двамата виждат един и същи код от 6 думи, изчислен от публичните X25519 ключове на двамата (версия v2). Сравнявате го лично или по видео. |
-| 🛰️ | **Два режима на сигнализация** | Локален режим (по подразбиране): QR или текст, без мрежови заявки. Демо режим: WebSocket стая в сигналния Worker, за по-лесно начало. |
-| 👥 | **Групов чат (бета)** | До 9 участника. Създателят е админ: добавя, премахва, сменя името, снимката и криптографския метод. Всеки участник е свързан с всеки друг. |
-| 💬 | **Шифровани чатове** | Double Ratchet подход. Историята се пази в IndexedDB, шифрована с AES-GCM. |
-| 🖼️ | **Снимки, локация, изтриване** | Изтриване на чат от двете страни. Локацията се праща само при твое натискане. |
-| 📞 | **Аудио и видео разговори** | WebRTC, медията е DTLS-SRTP. |
-| 🌍 | **Два езика** | Български (по подразбиране) и English. Смяната е в горната лента и се помни. |
-| ⚡ | **Бърз достъп от браузъра** | Разширение за Chrome: клавишна комбинация `Ctrl+Shift+M` отваря месинджъра. |
+| 🪪 | **Профил без регистрация** | Passkey на устройството или парола → `did:key` (`z6Mk…`). Без имейл, телефон или SMS. |
+| 🔑 | **Възстановяване с 12 думи** | BIP39. Записваш ги веднъж и ги ползваш на ново устройство. |
+| 📷 | **Контакт с QR или кратък код** | Подписана покана. Краткият код е 10 знака, важи 10 минути и работи веднъж. |
+| 🛰️ | **Демо стая** *(ново)* | Превключвател „Локален (QR) / Демо (стая)“. В демо режим единият отваря стая и праща кода, другият влиза с него. |
+| 🔢 | **Шест думи за проверка** | Двамата виждат едни и същи 6 думи, изчислени от публичните X25519 ключове (v2). Ако съвпадат, никой не стои по средата. |
+| 💬 | **Шифровани чатове** | Double Ratchet. Историята се пази в IndexedDB, шифрована с AES-GCM. |
+| 🖼️ | **Снимки, локация, изтриване** | Изтриване на чата и при двамата. Локацията се праща само при твое натискане. |
+| 📞 | **Аудио и видео разговори** | По същата директна връзка, медията е DTLS-SRTP. |
+| 👥 | **Групи до 9 души** *(обновено)* | Админ, име и снимка на групата, смяна на ключа при премахване. Състоянието и историята се пазят шифровани. Новите членове се свързват автоматично през админа. |
+| 🪟 | **Windows** *(ново)* | Инсталатор без админ права, portable zip и `winget`. Цялото приложение е вътре. |
+| 🎨 | **Нов дизайн** *(ново)* | „Запечатана поща“: небесно синьо и електрик пурпурно-розово, IBM Plex с кирилица, светъл и тъмен режим, AA контраст. |
+| 🌍 | **Два езика** | Български (по подразбиране) и English. |
+| ⚡ | **Разширение за Chrome** | `Ctrl+Shift+M` отваря месинджъра. |
 
 ## 🧭 Как работи
 
 ```mermaid
 flowchart LR
-  A["📱 Твоето устройство"] -- "WebRTC DataChannel · шифровано" --> B["📱 Устройство на събеседника"]
-  A -. "покана (~150 байта), 10 мин." .-> W[("☁️ Cloudflare Worker<br/>tg.dyrakarmy.online")]
-  W -. "webhook" .-> T["🤖 Telegram бот"]
+  A["📱 Твоето устройство"] -- "WebRTC · шифровано от край до край" --> B["📱 Устройство на събеседника"]
+  A -. "подписана покана, 10 мин." .-> W[("☁️ Сигнален Worker<br/>tg.dyrakarmy.online")]
+  W -. "само препраща" .-> B
 ```
 
-Сървърът (Worker) вижда само кратки покани и не може да прочете нито една. Съобщенията, снимките и разговорите не минават през него.
+Сървърът (Cloudflare Worker) вижда само кратки подписани покани. Не може да ги подправи и не вижда съобщенията, снимките или разговорите. Локалният режим (QR) не ползва сървър изобщо.
 
-**Сигнализацията е отделена от WebRTC.** `src/signaling/` дава общ интерфейс `ISignalingProvider`. Двата режима са два провайдъра:
+Сигнализацията е отделена от WebRTC (`src/signaling/`, интерфейс `ISignalingProvider`):
 
-- **Локален (офлайн)** — `OfflineSignalingProvider`. Поканата е подписан низ, който се показва като QR или текст. Няма мрежови заявки.
-- **Демо (WebSocket)** — `WebSocketSignalingProvider`. Единият устройство отваря стая и показва 10-символен код; другият се присъединява с кода. Worker-ът пренася кадрите между двамата и не ги чете. Подписаната покана се проверява на клиента.
+- **Локален** (`OfflineSignalingProvider`): поканата е подписан текст, показан като QR. Без мрежови заявки.
+- **Демо** (`WebSocketSignalingProvider`): стая в Worker-а с 10-знаков код. Worker-ът препраща кадрите и не ги чете; подписът се проверява на устройството.
 
-Ядрото на приложението работи без Worker-а. Демо режимът е допълнителен канал.
+## 🎬 Урок: как Ани и Петър се свързват
 
-> **В момента:** превключвателят Демо/Локален в интерфейса още не е готов, а Worker-ът трябва да се публикува с новата миграция за Durable Object (`SignalRoom`).
+<img src="docs/assets/tutorial-far-away.gif" alt="Анимация в 9 стъпки: профил, избор на режим, покана, демо стая, шест думи, чат, разговор, група и устройства" width="640">
 
-## 🎬 Урок за деца: как двама се свързват от разстояние
+1. **Профил.** Всеки създава профил на своя телефон с passkey или парола и записва 12-те думи.
+2. **Режим.** Избират „Локален (QR)“, ако са заедно, или „Демо (стая)“, ако са далеч.
+3. **Покана.** Ани натиска „Покажи моята покана“. Петър сканира QR кода или въвежда краткия код.
+4. **Демо стая.** От разстояние: Ани отваря стая и праща кода, Петър натиска „Присъедини се“.
+5. **Шест думи.** Сравняват думите на глас или по видео и натискат „Думите съвпадат“.
+6. **Чат.** Пишат си, пращат снимки и локация.
+7. **Разговор.** Звънят си с аудио или видео.
+8. **Група.** Ани създава група до 9 души, слага ѝ име и снимка и кани хора.
+9. **Навсякъде.** Работи в браузъра на телефона, на компютъра и като програма за Windows.
 
-<img src="docs/assets/tutorial-far-away.gif" alt="Анимация: Ани и Петър се свързват от разстояние, всеки със своя телефон" width="640">
+> ⚠️ Връзката е директна, без посредник. Някои мобилни мрежи блокират директните връзки. Ако не се свърже, опитайте с една Wi‑Fi мрежа за първото сдвояване.
 
-Ани и Петър са далеч един от друг, всеки със собствен телефон. Ето как се свързват:
+## 🚀 Как да го пробвам
 
-1. Всеки създава своя идентичност на телефона си. Не трябва телефонен номер или имейл.
-2. Ани натиска „Покажи моята покана“ и показва QR код или кратък код (10 знака, важи 10 минути и работи само веднъж).
-3. Петър натиска „Сканирай чужда покана“ и сканира QR кода или въвежда краткия код.
-4. Петър показва „Отговор“, а Ани го сканира с „Сканирай отговора“.
-5. И двамата виждат едни и същи 6 думи. Сравняват ги лично или по видео и натискат „Думите съвпадат“.
-6. Пишат си. Съобщенията са шифровани и минават директно между телефоните.
+| Начин | За кого | Какво трябва |
+|---|---|---|
+| **Публичният сайт** `https://dyrakarmy.online` | Най-бързо, на телефон или компютър | Браузър. Сайтът е онлайн, когато компютърът на собственика работи (виж [Публикуване](#-публикуване-и-ci)). |
+| **Windows** | Компютър с Windows 10/11 | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
+| **Локално копие** | Разработка, или ако сайтът не работи | Git и Node.js, виж по-долу. |
 
-> ⚠️ Връзката е директна, без посредник. Не винаги минава: някои мобилни мрежи блокират директните връзки. Ако не се свърже, опитайте с една Wi‑Fi мрежа за първото сдвояване.
+## 💻 Локално стартиране, стъпка по стъпка
 
-## ⚠️ Ограничения, които приемаме
+### 1. Какво ти трябва (веднъж)
 
-- **Само публични STUN сървъри** (`stun.l.google.com`). Без TURN релей, затова строги NAT или корпоративни firewall-и може да блокират връзката.
-- **Един сървър с ограничена роля.** Cloudflare Worker-ът пази временни покани и обработва webhook-а на Telegram бота.
-- **Изтриването на чат** стига до другия човек само ако той е онлайн. Няма сървър, който да пази историята.
-- **Публичният адрес `dyrakarmy.online`** се обслужва през Cloudflare Tunnel от компютъра на собственика. Достъпността му зависи от този компютър.
-- **Групите са само в паметта.** При презареждане на страницата групата се губи, а съобщенията от групата не се записват в историята.
-- **Снимката на групата** се сверява по хеш; самият файл още не се предава.
-- **Безопасният код v2** е различен от v1. И двете устройства трябва да са на една версия, за да сравнят кодовете.
+| Програма | Версия | Windows | macOS | Linux (Debian/Ubuntu) |
+|---|---|---|---|---|
+| Git | всяка | `winget install --id Git.Git` | `xcode-select --install` | `sudo apt install git` |
+| Node.js | 22.12 или по-нова (или 20.19+) | `winget install --id OpenJS.NodeJS.LTS` | `brew install node@22` | от [nodejs.org](https://nodejs.org) или `nvm install 22` |
 
-## 🛠️ Инсталация и стартиране
+След инсталиране **затвори и отвори терминала отново** и провери:
 
-Нужни са Node.js LTS и npm.
+```bash
+git --version
+node --version     # трябва да е v22.12.0 или по-нова
+npm --version
+```
+
+На Windows ползвай **PowerShell** или **Windows Terminal**. Ако PowerShell откаже да пусне `npm` заради „execution policy“, изпълни веднъж `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+### 2. Изтегли кода
+
+```bash
+git clone https://github.com/biramentv-ux/p2p-pure.git
+cd p2p-pure
+```
+
+Създава се папка `p2p-pure`. Всички следващи команди се пускат от нея.
+
+### 3. Инсталирай зависимостите
 
 ```bash
 npm ci
-npm run dev              # разработка на http://localhost:5173
-npm run build            # tsc + vite build, генерира PWA service worker
-npx vite preview --host 127.0.0.1 --port 4173
 ```
 
-Адресът на сигналния Worker е по подразбиране `https://tg.dyrakarmy.online`. Може да се смени при билд с `VITE_INVITE_API`.
+`npm ci` инсталира точно версиите от `package-lock.json` (1-3 минути първия път). Не се пращат никакви данни освен свалянето на пакетите.
 
-### 🧩 Chrome разширение (бърз достъп)
+### 4. Пусни приложението
 
-1. `npm run extension:pack` → файлът е в `dist/extension/p2p-messenger-quick-launch-1.0.0.zip`.
-2. Разархивирай го или ползвай папката `extension/` директно.
-3. В Chrome отвори `chrome://extensions`, включи **Developer mode** и натисни **Load unpacked**.
-4. Избери папката. Клавишната комбинация е `Ctrl+Shift+M` (на Mac `Command+Shift+M`).
+```bash
+npm run dev
+```
 
-Разширението не събира данни и няма собствен сървър. Само отваря приложението. Публикуване в Chrome Web Store още не е направено. Прозорчето му е в същата светла или тъмна тема като приложението и следва настройката на браузъра.
+Отвори **http://localhost:5173** в Chrome, Edge, Firefox или Safari. Промените по кода се виждат веднага. Спиране: `Ctrl+C`.
 
-### 🪟 Windows (Tauri 2)
+За да видиш точно това, което се публикува (със service worker и офлайн режим):
 
-Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `P2P-Messenger-Setup-x64.exe` (инсталатор, без администраторски права) или `P2P-Messenger-portable-x64.zip` (без инсталиране). Цялото приложение е вътре в пакета и не зависи от сайта. Пакетът още не е подписан: при първо стартиране натисни **More info → Run anyway**. Подробности: [docs/WINDOWS.md](docs/WINDOWS.md).
+```bash
+npm run build      # проверка на типовете и билд в папка dist/
+npm run preview    # http://localhost:4173
+```
 
-С winget (след приемане в официалното хранилище): `winget install DyrakArmy.P2PMessenger`. Дотогава: `winget install --manifest` от манифестите в Release-а.
+### 5. Пробвай с двама души на един компютър
 
-### 📲 Android и iOS (Capacitor 8)
+Отвори приложението в **два отделни профила** на браузъра (например обикновен прозорец и „инкогнито“, или Chrome и Edge). Всеки профил е отделен човек със свой профил и ключове. Свържи ги с QR (покажи кода на екрана и го сканирай с камерата) или с демо стая.
+
+### 6. Проблеми и решения
+
+| Проблем | Решение |
+|---|---|
+| `npm ci` пише за стара версия на Node | Обнови Node.js до 22.12+ и отвори нов терминал. |
+| `Port 5173 is already in use` | Друг процес ползва порта. Затвори го или пусни `npm run dev -- --port 5174`. |
+| Passkey бутонът не работи | Passkey изисква `localhost` или https. Отвори през `localhost`, не през IP адрес. |
+| Камерата не се включва | Разреши камерата в браузъра (иконата вляво от адреса). Също изисква `localhost` или https. |
+| Не се свързва | Двете страни трябва да са онлайн едновременно. Някои мрежи блокират директни връзки; пробвай една Wi‑Fi мрежа. |
+| Демо стая връща грешка | Сигналният Worker трябва да е публикуван с демо стаите (виж [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md)). Локалният режим работи винаги. |
+
+## 📱 Стартиране директно от телефон
+
+### Вариант А: от публичния сайт (без компютър)
+
+1. Отвори `https://dyrakarmy.online` в Chrome (Android) или Safari (iPhone).
+2. Добави го като приложение:
+   - **Android, Chrome:** меню ⋮ → **Add to Home screen / Инсталиране на приложението**.
+   - **iPhone, Safari:** бутон „Сподели“ → **Add to Home Screen / Към началния екран**.
+3. Отваряй го от иконата. Работи на цял екран и без интернет за вече заредените части.
+
+### Вариант Б: твоето локално копие на телефона
+
+На компютъра, в папката на проекта:
+
+```bash
+npm run phone
+```
+
+Командата билдва приложението, пуска го на компютъра и показва:
+
+- **адрес в същата Wi‑Fi мрежа** (`http://192.168.x.x:4173`). Стига, за да видиш екраните, но телефонът не дава камера, passkey и разговори на страница без https.
+- **временен https адрес и QR код** в терминала, ако имаш `cloudflared`. Сканирай кода с камерата на телефона и всичко работи.
+
+`cloudflared` се инсталира веднъж и **не иска акаунт**:
+
+```bash
+winget install --id Cloudflare.cloudflared    # Windows
+brew install cloudflared                      # macOS
+```
+
+Временният адрес (`https://….trycloudflare.com`) се сменя при всяко пускане и работи, докато терминалът е отворен. Passkey е обвързан с адреса, затова профил, създаден там, е за тест. За постоянна употреба ползвай Вариант А или програмата за Windows.
+
+### Вариант В: native приложение (Android/iOS, за разработчици)
 
 ```bash
 npm run build
 npx cap add android      # или ios, веднъж
 npm run mobile:sync
 npx cap sync
-npx cap open android     # или ios
+npx cap open android     # отваря Android Studio; или ios за Xcode
 ```
 
-- `appId`: `bg.p2pmessenger.app`
-- Android passkey през Credential Manager (`PasskeyBridgePlugin.java`). `rpId` се подава през `VITE_PASSKEY_RP_ID`.
-- Разрешения: камера, микрофон, точна локация. Манифестите се генерират от `npm run mobile:sync`.
+Нужни са Android Studio или Xcode. Преди публикуване: SHA-256 отпечатъкът в `assetlinks.json`, Apple Team ID в AASA файла и тест на разрешенията на реално устройство.
 
-**Преди публикуване остава:** да се замени SHA-256 отпечатъкът в `assetlinks.json` и Apple Team ID в AASA файла, и да се тестват разрешенията на реални устройства.
-**Ограничение на средата за разработка:** Android SDK и Xcode не са инсталирани тук. Native билдовете са проверени само в CI (Android).
+## 🪟 Windows
 
-## 🌍 Език
+Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases):
 
-Интерфейсът е на български по подразбиране, а на английски се показва, ако браузърът е на английски. Избраният език се запазва в браузъра.
+- `P2P-Messenger-Setup-x64.exe`: инсталатор, без администраторски права;
+- `P2P-Messenger-portable-x64.zip`: без инсталиране.
 
-Всички UI низове са в `src/i18n/en.ts`. Ключът е българският текст, така че липсващ превод показва български, а не празно място. Тестовете пазят пълното покритие, съвпадението на placeholder-ите и отсъствието на кирилица в английските стойности.
+Пакетът още не е подписан: при първо стартиране натисни **More info → Run anyway**. С winget, след приемане в официалното хранилище: `winget install DyrakArmy.P2PMessenger`. Подробности: [docs/WINDOWS.md](docs/WINDOWS.md).
+
+> В програмата за Windows отключването с passkey след рестарт може да не работи (WebView2 не връща PRF тайната). Тогава ползвай парола. CI проверява и двата пътя.
+
+## 🧩 Разширение за Chrome
+
+1. `npm run extension:pack` → `dist/extension/p2p-messenger-quick-launch-1.0.0.zip`.
+2. `chrome://extensions` → **Developer mode** → **Load unpacked** → папка `extension/`.
+3. Клавишна комбинация: `Ctrl+Shift+M` (`Command+Shift+M` на Mac).
+
+Разширението не събира данни; само отваря приложението.
+
+## ⚠️ Ограничения, които приемаме
+
+- **Само публични STUN сървъри.** Без TURN релей, затова строги NAT или корпоративни firewall-и може да блокират връзката.
+- **Един сървър с тясна роля.** Worker-ът пази временни покани и препраща кадрите на демо стаите. Не вижда съобщения.
+- **Изтриването на чат** стига до другия само ако е онлайн.
+- **Групите:** поканата на чакащ кандидат не се запазва при презареждане; член, премахнат докато е офлайн, научава при следващото свързване.
+- **Шестте думи (v2)** са 66 бита. Подготвя се версия с по-силна проверка.
+- **Криптографията не е одитирана** от независим екип. Double Ratchet е собствена реализация по публичната спецификация на Signal, не официалната `libsignal`.
 
 ## 🗂️ Структура
 
 ```
 src/
-  i18n/             двуезичен слой: ядро, контекст, речник (bg/en)
-  identity/         passkey, did:key, BIP39
-  p2p/              WebRTC канал, сесия, снимки, управляващи съобщения
-  signaling/        провайдъри за сигнализация: локален (QR) и демо (WebSocket)
-  group/            групов чат: правила, подписани снимки, mesh връзки
-  call/             контролер за разговори
+  identity/         passkey, парола, did:key, BIP39
+  signaling/        локален (QR) и демо (WebSocket) провайдър
+  p2p/              WebRTC канал, сесия, Double Ratchet, снимки
+  group/            групи: правила, подписано състояние, връзки, шифровано хранилище
+  call/             разговори
   history/          шифрована история (IndexedDB)
   contacts/         контакти и потвърждение
-  platform/mobile/  Capacitor мост и passkey през Android Credential Manager
   ui/               екрани и компоненти
-  App.css, index.css  дизайн система (токени, светла и тъмна тема)
-extension/          Chrome разширение (MV3): popup, service worker, locales bg/en
-worker/             Cloudflare Worker: покани, стаи за демо сигнализация (Durable Object), Telegram webhook, cron
-native-overlays/    Java код за Android и настройки
-scripts/            синхронизация на мобилните файлове, Windows скриптове, пакетиране на разширението
-tests/              unit (Vitest), mock Worker, e2e (Playwright + Chromium), a11y (axe-core)
+  post.css          темата „Запечатана поща“ (светла и тъмна)
+src-tauri/          програмата за Windows (Tauri 2)
+extension/          разширение за Chrome (MV3)
+worker/             Cloudflare Worker: покани, демо стаи (Durable Object), Telegram
+scripts/            телефон (phone.mjs), Windows, winget, мобилни файлове
+tests/              unit (Vitest), e2e и a11y (Playwright + Chromium), Windows (WebView2)
+docs/               ръководства: Windows, демо сигнализация, групи, Telegram бот
 ```
 
 ## 🧪 Тестове
 
 | Команда | Какво проверява |
 |---|---|
-| `npm test` | Unit тестове: 27 файла, 255 теста (Vitest, fake-indexeddb) |
+| `npm test` | Unit тестове: 46 файла, 401 теста |
 | `npm run lint` | oxlint |
-| `npm run test:i18n` | Английският пакет в браузър: превключване, запомняне, без български текст в EN |
-| `npm run test:a11y` | axe-core (WCAG 2.2 A/AA) на всички екрани, на двата езика, в светла и тъмна тема |
-| `npm run test:extension-browser` | Разширението в Chromium: popup на двата езика, отваряне и повторно използване на раздела |
-| `npm run test:mock` | API срещу mock Worker (51 проверки) |
-| `npm run test:mock-ui` | Ръкостискане с кратък код между две страници (9 проверки) |
-| `npm run test:chat` | Локация, отказан достъп, изтриване на чат (11 проверки) |
-| `npm run test:call` | Аудио и видео разговор между две браузърни сесии (13 проверки) |
-| `npm run test:mobile` | Overlay файловете и rpId за native среда |
-| `npm run mobile:check` | Готовност на Android и iOS проектите |
-
-e2e тестовете минават с локал `bg-BG`, защото проверяват българските етикети. Тестът `tests/e2e/ui.mjs` е нестабилен и не се пуска с retry.
+| `npm run test:e2e` | Двама души в браузър: QR, шест думи, шифрован обмен, replay защита |
+| `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
+| `npm run test:demo` | Демо стая през локален relay (8 проверки) |
+| `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) на всички екрани, на двата езика |
+| `npm run test:call` | Аудио и видео разговор |
+| `npm run test:extension-browser` | Разширението в Chromium |
 
 ## 🚀 Публикуване и CI
 
-Workflow-ът `Java CI with Gradle` (`.github/workflows/gradle.yml`) се изпълнява при всеки push и PR към `main`:
+| Workflow | Кога | Какво прави |
+|---|---|---|
+| `web.yml` | push и PR към `main` | Сканиране за тайни, lint, unit тестове, билд, разширение, `npm audit` |
+| `gradle.yml` | push и PR към `main` | Android билд с Capacitor |
+| `windows-desktop.yml` | ръчно или таг `desktop-v*` | Инсталатор, portable, тест в WebView2, winget, Release |
+| `worker-deploy.yml` | промяна в `worker/` или ръчно | Тестове и публикуване на сигналния Worker в Cloudflare |
 
-1. Инсталира npm зависимостите и билдва уеб приложението.
-2. Пуска `npx cap sync android`, който генерира файловете, нужни на Gradle.
-3. Билдва Android проекта с JDK 21 (`./gradlew build`, включително lint).
-4. Изпраща dependency graph.
+**Сигналният Worker** (кратки кодове и демо стаи) се публикува от GitHub, след като добавиш секретите `CLOUDFLARE_API_TOKEN` и `CLOUDFLARE_ACCOUNT_ID`. Стъпките: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-Към 21 октомври 2026 и двата job-а минават на `main`. Ако билдът падне, в резултата от run-а се виждат последните редове от Gradle изхода и грешките от lint.
+**Публичният сайт** `dyrakarmy.online` се обслужва от компютъра на собственика през Cloudflare Tunnel: `scripts/windows/deploy.ps1` обновява билда, а тунелът го прави достъпен. Смяна на токена на тунела: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
 
-**Публичният сайт** се обновява от компютъра на собственика: `scripts/windows/deploy.ps1` дърпа `main`, билдва `dist/` и го пуска през тунела. Виж `docs/telegram-bot-guide.md` за Worker-а и бота.
+## 🌍 Език
+
+Интерфейсът е на български по подразбиране и на английски, ако браузърът е на английски. Всички низове са в `src/i18n/en.ts`; ключът е българският текст.
 
 ## 🔒 Сигурност
 
-Виж `SECURITY.md`. Подозрителна уязвимост съобщавайте на собственика на репото, не публично в issue.
+Подозрителна уязвимост съобщи лично: **Security → Report a vulnerability** в GitHub, не в публичен issue.
 
 ## 📄 Лиценз
 
-Виж `LICENSE`.
+Виж [LICENSE](LICENSE).
 
 ---
 
@@ -208,183 +290,265 @@ Workflow-ът `Java CI with Gradle` (`.github/workflows/gradle.yml`) се изп
 
 # 🇬🇧 English
 
-> Messages are encrypted on the device and sent **directly** between two people over WebRTC.
+> Messages are encrypted on the device and sent **directly** between people over WebRTC.
 > There is no central server that stores messages, accounts or phone numbers.
 
-*Status as of 21 October 2026: a working PWA for the web, a Capacitor project for Android and iOS, a Chrome quick-launch extension, a bilingual interface (BG and EN), and tests at every level. The native builds have not been tested on physical devices.*
+*Status as of 26 October 2026: a working PWA for web and phone, a Windows app (installer, portable and winget), a Capacitor project for Android and iOS, a Chrome extension, a bilingual interface and tests at every level. The Android and iOS builds have not been tested on physical devices.*
 
 ## ✨ What it does
 
 | | Feature | What it means |
 |---|---|---|
-| 🪪 | **Identity without sign-up** | A passkey on the device → `did:key` (`z6Mk…`). No email, phone or SMS. |
-| 🔑 | **Recovery with 12 words** | BIP39. Write them down once and use them on a new phone. |
-| 📷 | **Contact by QR code or short code** | A 10-character code, valid for 10 minutes and single-use. |
-| 🔢 | **Verify the other person** | Both sides see the same 6-word code, computed from both sides' public X25519 keys (version v2). Compare it in person or on video. |
-| 🛰️ | **Two signalling modes** | Local mode (default): QR or text, no network requests. Demo mode: a WebSocket room on the signalling Worker, for an easier start. |
-| 👥 | **Group chat (beta)** | Up to 9 members. The creator is admin: adds and removes members, sets the name, the photo and the encryption method. Every member is linked to every other member. |
-| 💬 | **Encrypted chats** | Double Ratchet approach. History is kept in IndexedDB, encrypted with AES-GCM. |
+| 🪪 | **Profile without sign-up** | A passkey on the device or a password → `did:key` (`z6Mk…`). No email, phone or SMS. |
+| 🔑 | **Recovery with 12 words** | BIP39. Write them down once and use them on a new device. |
+| 📷 | **Contact by QR or short code** | A signed invitation. The short code is 10 characters, valid for 10 minutes, single use. |
+| 🛰️ | **Demo room** *(new)* | A "Local (QR) / Demo (room)" switch. In demo mode one person opens a room and sends the code; the other joins with it. |
+| 🔢 | **Six words to verify** | Both sides see the same 6 words, computed from both public X25519 keys (v2). If they match, nobody sits in between. |
+| 💬 | **Encrypted chats** | Double Ratchet. History is kept in IndexedDB, encrypted with AES-GCM. |
 | 🖼️ | **Photos, location, deletion** | Delete a chat on both sides. Location is sent only when you tap to send it. |
-| 📞 | **Audio and video calls** | WebRTC; media is protected with DTLS-SRTP. |
-| 🌍 | **Two languages** | Bulgarian (default) and English. Switch in the top bar; the choice is remembered. |
-| ⚡ | **Fast access from the browser** | Chrome extension: the shortcut `Ctrl+Shift+M` opens the messenger. |
+| 📞 | **Audio and video calls** | Over the same direct connection; media is DTLS-SRTP. |
+| 👥 | **Groups of up to 9** *(updated)* | Admin, group name and photo, key change when someone is removed. State and history are stored encrypted. New members link up automatically through the admin. |
+| 🪟 | **Windows** *(new)* | Installer without admin rights, portable zip and `winget`. The whole app is inside. |
+| 🎨 | **New design** *(new)* | "Sealed Post": sky blue and electric magenta, IBM Plex with Cyrillic, light and dark mode, AA contrast. |
+| 🌍 | **Two languages** | Bulgarian (default) and English. |
+| ⚡ | **Chrome extension** | `Ctrl+Shift+M` opens the messenger. |
 
 ## 🧭 How it works
 
 ```mermaid
 flowchart LR
-  A["📱 Your device"] -- "WebRTC DataChannel · encrypted" --> B["📱 The other device"]
-  A -. "invitation (~150 bytes), 10 min" .-> W[("☁️ Cloudflare Worker<br/>tg.dyrakarmy.online")]
-  W -. "webhook" .-> T["🤖 Telegram bot"]
+  A["📱 Your device"] -- "WebRTC · end-to-end encrypted" --> B["📱 The other device"]
+  A -. "signed invitation, 10 min" .-> W[("☁️ Signalling Worker<br/>tg.dyrakarmy.online")]
+  W -. "forwards only" .-> B
 ```
 
-The server (Worker) only sees short invitations and cannot read any of them. Messages, photos and calls never pass through it.
+The server (a Cloudflare Worker) only sees short signed invitations. It cannot forge them and never sees messages, photos or calls. Local mode (QR) uses no server at all.
 
-**Signalling is separate from WebRTC.** `src/signaling/` provides one interface, `ISignalingProvider`. The two modes are two providers:
+Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvider`):
 
-- **Local (offline)** — `OfflineSignalingProvider`. The invitation is a signed string, shown as a QR code or text. No network requests.
-- **Demo (WebSocket)** — `WebSocketSignalingProvider`. One device opens a room and shows a 10-character code; the other joins with that code. The Worker forwards frames between the two and never reads them. The signed invitation is verified on the client.
+- **Local** (`OfflineSignalingProvider`): the invitation is signed text shown as a QR code. No network requests.
+- **Demo** (`WebSocketSignalingProvider`): a room on the Worker with a 10-character code. The Worker forwards frames and does not read them; the signature is checked on the device.
 
-The core app works without the Worker. Demo mode is an optional extra channel.
+## 🎬 Tutorial: how Ani and Petar connect
 
-> **Status:** the Demo/Local switch in the interface is not ready yet, and the Worker must be deployed with the new Durable Object migration (`SignalRoom`).
+<img src="docs/assets/tutorial-far-away.gif" alt="Nine-step animation: profile, mode, invitation, demo room, six words, chat, call, group and devices (labels in Bulgarian)" width="640">
 
-## 🎬 Kid-friendly tutorial: connecting from a distance
+1. **Profile.** Each person creates a profile on their phone with a passkey or a password and writes down the 12 words.
+2. **Mode.** They pick "Local (QR)" when together, or "Demo (room)" when far apart.
+3. **Invitation.** Ani taps "Show my invitation". Petar scans the QR code or types the short code.
+4. **Demo room.** From a distance: Ani opens a room and sends the code; Petar taps "Join".
+5. **Six words.** They compare the words out loud or on video and tap "The words match".
+6. **Chat.** They write, send photos and location.
+7. **Call.** They call with audio or video.
+8. **Group.** Ani creates a group of up to 9 people, gives it a name and a photo, and invites people.
+9. **Everywhere.** It runs in the phone browser, on a computer and as a Windows app.
 
-<img src="docs/assets/tutorial-far-away.gif" alt="Animation: Ani and Petar connect from a distance, each with their own phone" width="640">
+> ⚠️ The connection is direct, with no relay. Some mobile networks block direct connections. If it does not connect, use one Wi‑Fi network for the first pairing.
 
-Ani and Petar are far apart, each with their own phone. Here is how they connect:
+## 🚀 How to try it
 
-1. Each person creates their identity on their phone. No phone number or email is needed.
-2. Ani taps "Show my invitation" and shows a QR code or a short code (10 characters, valid for 10 minutes, works only once).
-3. Petar taps "Scan someone else's invitation" and scans the QR code or types the short code.
-4. Petar shows an "Answer", and Ani scans it with "Scan the answer".
-5. Both see the same 6 words. They compare them in person or on a video call and tap "The words match".
-6. They chat. Messages are encrypted and go directly between the phones.
+| Way | For whom | What you need |
+|---|---|---|
+| **The public site** `https://dyrakarmy.online` | Fastest, on phone or computer | A browser. The site is online while the owner's computer runs (see [Release](#-release-and-ci)). |
+| **Windows** | A Windows 10/11 computer | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
+| **A local copy** | Development, or when the site is down | Git and Node.js, see below. |
 
-> ⚠️ The connection is direct, with no relay. It does not always work: some mobile networks block direct connections. If it does not connect, try one Wi‑Fi network for the first pairing.
+## 💻 Running locally, step by step
 
-## ⚠️ Trade-offs we accept
+### 1. What you need (once)
 
-- **Public STUN servers only** (`stun.l.google.com`). No TURN relay, so strict NATs and corporate firewalls may block the connection.
-- **One server with a narrow role.** The Cloudflare Worker keeps temporary invitations and handles the Telegram bot webhook.
-- **Deleting a chat** reaches the other person only if they are online. No server keeps the history.
-- **The public address `dyrakarmy.online`** is served through a Cloudflare Tunnel from the owner's computer, so its availability depends on that computer.
-- **Groups live in memory only.** Reloading the page loses the group, and group messages are not saved to history.
-- **The group photo** is checked by hash; the file itself is not transferred yet.
-- **Safety code v2** differs from v1. Both devices must run the same version to compare codes.
+| Program | Version | Windows | macOS | Linux (Debian/Ubuntu) |
+|---|---|---|---|---|
+| Git | any | `winget install --id Git.Git` | `xcode-select --install` | `sudo apt install git` |
+| Node.js | 22.12 or newer (or 20.19+) | `winget install --id OpenJS.NodeJS.LTS` | `brew install node@22` | from [nodejs.org](https://nodejs.org) or `nvm install 22` |
 
-## 🛠️ Installation and running
+After installing, **close and reopen the terminal**, then check:
 
-You need Node.js LTS and npm.
+```bash
+git --version
+node --version     # must be v22.12.0 or newer
+npm --version
+```
+
+On Windows use **PowerShell** or **Windows Terminal**. If PowerShell refuses to run `npm` because of the "execution policy", run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+### 2. Get the code
+
+```bash
+git clone https://github.com/biramentv-ux/p2p-pure.git
+cd p2p-pure
+```
+
+This creates the folder `p2p-pure`. Run every next command from it.
+
+### 3. Install the dependencies
 
 ```bash
 npm ci
-npm run dev              # development on http://localhost:5173
-npm run build            # tsc + vite build, generates the PWA service worker
-npx vite preview --host 127.0.0.1 --port 4173
 ```
 
-The signalling Worker defaults to `https://tg.dyrakarmy.online`. Change it at build time with `VITE_INVITE_API`.
+`npm ci` installs exactly the versions in `package-lock.json` (1–3 minutes the first time). Nothing is sent anywhere except the package downloads.
 
-### 🧩 Chrome extension (quick launch)
+### 4. Start the app
 
-1. Run `npm run extension:pack` → the file is `dist/extension/p2p-messenger-quick-launch-1.0.0.zip`.
-2. Unzip it, or use the `extension/` folder directly.
-3. In Chrome open `chrome://extensions`, turn on **Developer mode**, then click **Load unpacked**.
-4. Pick the folder. The shortcut is `Ctrl+Shift+M` (`Command+Shift+M` on Mac).
+```bash
+npm run dev
+```
 
-The extension collects no data and has no server of its own; it only opens the app. It is not yet published in the Chrome Web Store. Its popup uses the same light or dark theme as the app and follows the browser setting.
+Open **http://localhost:5173** in Chrome, Edge, Firefox or Safari. Code changes show up immediately. Stop with `Ctrl+C`.
 
-### 🪟 Windows (Tauri 2)
+To see exactly what gets published (with the service worker and offline mode):
 
-Download `P2P-Messenger-Setup-x64.exe` (installer, no admin rights) or `P2P-Messenger-portable-x64.zip` (no install) from [Releases](https://github.com/biramentv-ux/p2p-pure/releases). The whole app is inside the package and does not depend on the website. The package is not signed yet: on first start choose **More info → Run anyway**. Details: [docs/WINDOWS.md](docs/WINDOWS.md).
+```bash
+npm run build      # type check and build into dist/
+npm run preview    # http://localhost:4173
+```
 
-With winget (once accepted in the official repository): `winget install DyrakArmy.P2PMessenger`. Until then: `winget install --manifest` with the manifests attached to the release.
+### 5. Try it as two people on one computer
 
-### 📲 Android and iOS (Capacitor 8)
+Open the app in **two separate browser profiles** (for example a normal and a private window, or Chrome and Edge). Each profile is a separate person with their own keys. Connect them with a QR code (show it on screen and scan it with the camera) or with a demo room.
+
+### 6. Problems and fixes
+
+| Problem | Fix |
+|---|---|
+| `npm ci` complains about the Node version | Update Node.js to 22.12+ and open a new terminal. |
+| `Port 5173 is already in use` | Another process uses the port. Close it or run `npm run dev -- --port 5174`. |
+| The passkey button does nothing | Passkeys need `localhost` or https. Open it through `localhost`, not an IP address. |
+| The camera does not start | Allow the camera in the browser (the icon left of the address). It also needs `localhost` or https. |
+| It does not connect | Both sides must be online at the same time. Some networks block direct connections; try one Wi‑Fi network. |
+| The demo room fails | The signalling Worker must be deployed with demo rooms (see [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md)). Local mode always works. |
+
+## 📱 Running it straight from a phone
+
+### Option A: from the public site (no computer)
+
+1. Open `https://dyrakarmy.online` in Chrome (Android) or Safari (iPhone).
+2. Add it as an app:
+   - **Android, Chrome:** menu ⋮ → **Add to Home screen / Install app**.
+   - **iPhone, Safari:** the Share button → **Add to Home Screen**.
+3. Open it from the icon. It runs full screen and works offline for the parts already loaded.
+
+### Option B: your local copy on the phone
+
+On the computer, in the project folder:
+
+```bash
+npm run phone
+```
+
+The command builds the app, serves it on the computer and shows:
+
+- **an address on the same Wi‑Fi** (`http://192.168.x.x:4173`). Enough to look at the screens, but a phone gives no camera, passkey or calls to a page without https.
+- **a temporary https address and a QR code** in the terminal, when `cloudflared` is installed. Scan the code with the phone camera and everything works.
+
+`cloudflared` is installed once and **needs no account**:
+
+```bash
+winget install --id Cloudflare.cloudflared    # Windows
+brew install cloudflared                      # macOS
+```
+
+The temporary address (`https://….trycloudflare.com`) changes every run and works while the terminal is open. A passkey belongs to its address, so a profile made there is for testing. For everyday use, take Option A or the Windows app.
+
+### Option C: the native app (Android/iOS, for developers)
 
 ```bash
 npm run build
 npx cap add android      # or ios, once
 npm run mobile:sync
 npx cap sync
-npx cap open android     # or ios
+npx cap open android     # opens Android Studio; or ios for Xcode
 ```
 
-- `appId`: `bg.p2pmessenger.app`
-- Android passkeys through Credential Manager (`PasskeyBridgePlugin.java`). `rpId` is passed via `VITE_PASSKEY_RP_ID`.
-- Permissions: camera, microphone, precise location. The manifests are generated by `npm run mobile:sync`.
+You need Android Studio or Xcode. Before release: the SHA-256 fingerprint in `assetlinks.json`, the Apple Team ID in the AASA file, and a permission test on a real device.
 
-**Still to do before release:** replace the SHA-256 fingerprint in `assetlinks.json` and the Apple Team ID in the AASA file, and test permissions on real devices.
-**Limit of this development environment:** the Android SDK and Xcode are not installed here. Native builds are verified only in CI (Android).
+## 🪟 Windows
 
-## 🌍 Language
+Download from [Releases](https://github.com/biramentv-ux/p2p-pure/releases):
 
-The interface is Bulgarian by default and switches to English when the browser is in English. The choice is saved in the browser.
+- `P2P-Messenger-Setup-x64.exe`: an installer, no admin rights needed;
+- `P2P-Messenger-portable-x64.zip`: no install.
 
-All UI strings are in `src/i18n/en.ts`. The key is the Bulgarian text, so a missing translation shows Bulgarian rather than an empty label. Tests check full coverage, placeholder matching, and that English values contain no Cyrillic.
+The package is not signed yet: on first start choose **More info → Run anyway**. With winget, once accepted in the official repository: `winget install DyrakArmy.P2PMessenger`. Details: [docs/WINDOWS.md](docs/WINDOWS.md).
+
+> In the Windows app, unlocking with a passkey after a restart may not work (WebView2 does not return the PRF secret). Use a password then. CI tests both paths.
+
+## 🧩 Chrome extension
+
+1. `npm run extension:pack` → `dist/extension/p2p-messenger-quick-launch-1.0.0.zip`.
+2. `chrome://extensions` → **Developer mode** → **Load unpacked** → the `extension/` folder.
+3. Shortcut: `Ctrl+Shift+M` (`Command+Shift+M` on Mac).
+
+The extension collects no data; it only opens the app.
+
+## ⚠️ Trade-offs we accept
+
+- **Public STUN servers only.** No TURN relay, so strict NATs or corporate firewalls may block the connection.
+- **One server with a narrow role.** The Worker keeps temporary invitations and forwards demo-room frames. It never sees messages.
+- **Deleting a chat** reaches the other person only if they are online.
+- **Groups:** a pending candidate's invitation is not kept across a reload; a member removed while offline learns about it on the next connection.
+- **The six words (v2)** carry 66 bits. A stronger check is being prepared.
+- **The cryptography is not independently audited.** The Double Ratchet is our own implementation of Signal's public specification, not the official `libsignal`.
 
 ## 🗂️ Structure
 
 ```
 src/
-  i18n/             two-language layer: core, context, dictionary (bg/en)
-  identity/         passkey, did:key, BIP39
-  p2p/              WebRTC channel, session, photos, control messages
-  signaling/        signalling providers: local (QR) and demo (WebSocket)
-  group/            group chat: rules, signed snapshots, mesh links
-  call/             call controller
+  identity/         passkey, password, did:key, BIP39
+  signaling/        local (QR) and demo (WebSocket) providers
+  p2p/              WebRTC channel, session, Double Ratchet, photos
+  group/            groups: rules, signed state, links, encrypted storage
+  call/             calls
   history/          encrypted history (IndexedDB)
   contacts/         contacts and verification
-  platform/mobile/  Capacitor bridge and Android Credential Manager passkeys
   ui/               screens and components
-  App.css, index.css  design system (tokens, light and dark themes)
-extension/          Chrome extension (MV3): popup, service worker, bg/en locales
-worker/             Cloudflare Worker: invitations, demo signalling rooms (Durable Object), Telegram webhook, cron
-native-overlays/    Android Java code and settings
-scripts/            mobile file sync, Windows scripts, extension packaging
-tests/              unit (Vitest), mock Worker, e2e (Playwright + Chromium), a11y (axe-core)
+  post.css          the "Sealed Post" theme (light and dark)
+src-tauri/          the Windows app (Tauri 2)
+extension/          Chrome extension (MV3)
+worker/             Cloudflare Worker: invitations, demo rooms (Durable Object), Telegram
+scripts/            phone (phone.mjs), Windows, winget, mobile files
+tests/              unit (Vitest), e2e and a11y (Playwright + Chromium), Windows (WebView2)
+docs/               guides: Windows, demo signalling, groups, Telegram bot
 ```
 
 ## 🧪 Tests
 
 | Command | What it checks |
 |---|---|
-| `npm test` | Unit tests: 27 files, 255 tests (Vitest, fake-indexeddb) |
+| `npm test` | Unit tests: 46 files, 401 tests |
 | `npm run lint` | oxlint |
-| `npm run test:i18n` | The English package in a browser: switching, remembering, no Bulgarian text in EN |
-| `npm run test:a11y` | axe-core (WCAG 2.2 A/AA) on every screen, in both languages, light and dark themes |
-| `npm run test:extension-browser` | The extension in Chromium: popup in both languages, opening and reusing the tab |
-| `npm run test:mock` | API against a mock Worker (51 checks) |
-| `npm run test:mock-ui` | Short-code handshake between two pages (9 checks) |
-| `npm run test:chat` | Location, refused access, chat deletion (11 checks) |
-| `npm run test:call` | Audio and video call between two browser sessions (13 checks) |
-| `npm run test:mobile` | Overlay files and rpId for the native environment |
-| `npm run mobile:check` | Readiness of the Android and iOS projects |
-
-The e2e tests run with the `bg-BG` locale because they check Bulgarian labels. `tests/e2e/ui.mjs` is flaky and is not retried.
+| `npm run test:e2e` | Two people in a browser: QR, six words, encrypted exchange, replay protection |
+| `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
+| `npm run test:demo` | Demo room through a local relay (8 checks) |
+| `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) on every screen, in both languages |
+| `npm run test:call` | Audio and video call |
+| `npm run test:extension-browser` | The extension in Chromium |
 
 ## 🚀 Release and CI
 
-The `Java CI with Gradle` workflow (`.github/workflows/gradle.yml`) runs on every push and pull request to `main`:
+| Workflow | When | What it does |
+|---|---|---|
+| `web.yml` | push and PR to `main` | Secret scan, lint, unit tests, build, extension, `npm audit` |
+| `gradle.yml` | push and PR to `main` | Android build with Capacitor |
+| `windows-desktop.yml` | manual or a `desktop-v*` tag | Installer, portable, WebView2 test, winget, Release |
+| `worker-deploy.yml` | a change in `worker/`, or manual | Tests and deploys the signalling Worker to Cloudflare |
 
-1. Installs npm dependencies and builds the web app.
-2. Runs `npx cap sync android`, which generates the files Gradle needs.
-3. Builds the Android project with JDK 21 (`./gradlew build`, including lint).
-4. Submits the dependency graph.
+**The signalling Worker** (short codes and demo rooms) is deployed from GitHub once you add the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. Steps: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-As of 21 October 2026 both jobs pass on `main`. If the build fails, the run summary shows the last lines of the Gradle output and the lint errors.
+**The public site** `dyrakarmy.online` is served from the owner's computer through a Cloudflare Tunnel: `scripts/windows/deploy.ps1` updates the build, and the tunnel makes it reachable. Rotating the tunnel token: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
 
-**The public site** is updated from the owner's computer: `scripts/windows/deploy.ps1` pulls `main`, builds `dist/`, and serves it through the tunnel. See `docs/telegram-bot-guide.md` for the Worker and the bot.
+## 🌍 Language
+
+The interface is Bulgarian by default and English when the browser is in English. All strings are in `src/i18n/en.ts`; the key is the Bulgarian text.
 
 ## 🔒 Security
 
-See `SECURITY.md`. Report a suspected vulnerability to the repository owner, not in a public issue.
+Report a suspected vulnerability privately: **Security → Report a vulnerability** on GitHub, not in a public issue.
 
 ## 📄 License
 
-See `LICENSE`.
+See [LICENSE](LICENSE).
 
 ---
 

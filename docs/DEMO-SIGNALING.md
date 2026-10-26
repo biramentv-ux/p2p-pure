@@ -15,7 +15,25 @@
 | Миграция и binding | `worker/wrangler.jsonc` | `durable_objects` и `migrations` (`v1`, `SignalRoom`) |
 | CSP | `vite.config.ts` | `connect-src` позволява `wss://` към същия хост |
 
-## Публикуване (еднократно при промяна на Worker-а)
+## Публикуване от GitHub (препоръчително, без твоя компютър)
+
+Workflow-ът `.github/workflows/worker-deploy.yml` (**Actions → Signalling Worker**) пуска
+тестовете на Worker-а, публикува го в Cloudflare и проверява, че `POST /ws/rooms` връща код.
+Пуска се сам при промяна в `worker/` на `main`, или ръчно с **Run workflow**.
+
+Еднократна настройка:
+
+1. Cloudflare → **My Profile → API Tokens → Create Token → шаблон „Edit Cloudflare Workers“**.
+   Ограничи го до акаунта си и зоната `dyrakarmy.online`. Копирай токена веднъж, директно в
+   GitHub. Не го поставяй в чат или файл.
+2. Cloudflare → **Workers & Pages → Overview**: копирай **Account ID** от дясната колона.
+3. GitHub → **Settings → Secrets and variables → Actions → New repository secret**:
+   `CLOUDFLARE_API_TOKEN` и `CLOUDFLARE_ACCOUNT_ID`.
+4. **Actions → Signalling Worker → Run workflow**. Зелено и бележка `demo-room` = готово.
+
+Без двата секрета workflow-ът само пуска тестовете и пише предупреждение.
+
+## Публикуване от твоя компютър (алтернатива)
 
 Нужни са: акаунт в Cloudflare с достъп до зоната `dyrakarmy.online`, и вече зададените
 секрети `TELEGRAM_BOT_TOKEN` и `TELEGRAM_WEBHOOK_SECRET`. Те не се променят.

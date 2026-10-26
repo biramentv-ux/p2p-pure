@@ -64,8 +64,9 @@ export const SECURITY_HEADERS: Record<string, string> = {
 // https://vite.dev/config/
 // `--mode desktop` (Tauri): no service worker or web manifest; the app ships inside the installer.
 export default defineConfig(({ mode }) => ({
-  server: { headers: SECURITY_HEADERS },
-  preview: { headers: SECURITY_HEADERS },
+  // `.trycloudflare.com`: the temporary https address of `npm run phone` (scripts/phone.mjs).
+  server: { headers: SECURITY_HEADERS, allowedHosts: ['.trycloudflare.com'] },
+  preview: { headers: SECURITY_HEADERS, allowedHosts: ['.trycloudflare.com'] },
   plugins: [
     react(),
     contentSecurityPolicy(),
