@@ -54,6 +54,30 @@ afterEach(async () => {
   setActiveTurn(null);
 });
 
+describe("TurnSettings busy state", () => {
+  it("disables Save and Delete while a save is pending; Delete cannot start meanwhile", async () => {
+    let finish!: (v: boolean) => void;
+    store.saveTurnSettings.mockReturnValue(new Promise<boolean>((r) => (finish = r)));
+    store.clearTurnSettings.mockResolvedValue(undefined);
+    await mount();
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(button("Запази").disabled).toBe(true);
+    expect(button("Изтрий релея").disabled).toBe(true);
+    await act(async () => button("Изтрий релея").click());
+    expect(store.clearTurnSettings).not.toHaveBeenCalled();
+    await act(async () => finish(true));
+    expect(button("Запази").disabled).toBe(false);
+    expect(button("Изтрий релея").disabled).toBe(false);
+  });
+
+  it("a save cancelled by the store reports no success", async () => {
+    store.saveTurnSettings.mockResolvedValue(false);
+    await mount();
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(container.querySelector('[role="status"]')).toBeNull();
+  });
+});
+
 describe("TurnSettings delete", () => {
   it("on a failed delete: relay off in memory, error shown, no success message", async () => {
     store.clearTurnSettings.mockRejectedValue(new Error("idb blocked"));
