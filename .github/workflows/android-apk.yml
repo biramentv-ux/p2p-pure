@@ -158,9 +158,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           case "$RELEASE_TAG" in android-v*) ;; *) echo "::error::release tag must start with android-v"; exit 1 ;; esac
+          # Releases in this repository are immutable once published: files can only be added
+          # while the release is a draft. So: draft -> upload -> publish.
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null | grep -qx false; then
+            echo "::error::release $RELEASE_TAG is already published (immutable); use a new tag"
+            exit 1
+          fi
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --target "${{ github.sha }}" --title "P2P Messenger for Android $RELEASE_TAG" --prerelease \
-              --notes "Android APK. Install: allow installing from this source, open the .apk. SHA-256 is in SHA256SUMS-android.txt. See docs/ANDROID-APK.md." \
-              || gh release view "$RELEASE_TAG" >/dev/null
+            gh release create "$RELEASE_TAG" --draft --target "${{ github.sha }}" --title "P2P Messenger for Android $RELEASE_TAG" --prerelease \
+              --notes "Android APK. Install: allow installing from this source, open the .apk. SHA-256 is in SHA256SUMS-android.txt. See docs/ANDROID-APK.md."
           fi
           gh release upload "$RELEASE_TAG" out/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
