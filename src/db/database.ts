@@ -5,12 +5,17 @@
  * see src/group/groupStore.ts); older stores are kept as they are.
  * Version 4 adds `files`: received and sent files up to 25 MB, each one AES-GCM encrypted
  * with the history key (src/history/fileStore.ts).
+ * Version 5 adds `contactsSealed`: contacts encrypted with a key derived from the history
+ * key, indexed by HMAC(DID) (src/contacts/contacts.ts). The old plaintext `contacts` store
+ * stays only so its rows can be migrated on the first unlock; they are deleted as they move.
  */
 export const DB_NAME = "p2p-messenger";
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 export const STORE_IDENTITY = "identity";
+/** Legacy plaintext contacts (pre-v5). Read only by the migration, then emptied. */
 export const STORE_CONTACTS = "contacts";
+export const STORE_CONTACTS_SEALED = "contactsSealed";
 export const STORE_MESSAGES = "messages";
 export const STORE_GROUPS = "groups";
 export const STORE_GROUP_MESSAGES = "groupMessages";
@@ -26,6 +31,9 @@ export function openDatabase(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_CONTACTS)) {
         db.createObjectStore(STORE_CONTACTS, { keyPath: "did" });
+      }
+      if (!db.objectStoreNames.contains(STORE_CONTACTS_SEALED)) {
+        db.createObjectStore(STORE_CONTACTS_SEALED, { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains(STORE_MESSAGES)) {
         const messages = db.createObjectStore(STORE_MESSAGES, { keyPath: "id" });

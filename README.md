@@ -38,7 +38,7 @@
 | 📷 | **Контакт с QR или кратък код** | Подписана покана. Краткият код е 10 знака, важи 10 минути и работи веднъж. |
 | 🛰️ | **Демо стая** *(ново)* | Превключвател „Локален (QR) / Демо (стая)“. В демо режим единият отваря стая и праща кода, другият влиза с него. |
 | 🔢 | **12 думи за проверка** | Двамата виждат едни и същи 12 думи (3 групи по 4), изчислени от публичните X25519 ключове (v3, 132 бита). Ако съвпадат, никой не стои по средата. |
-| 💬 | **Шифровани чатове** | Double Ratchet. Историята се пази в IndexedDB, шифрована с AES-GCM. |
+| 💬 | **Шифровани чатове** | Double Ratchet. Историята и контактите се пазят в IndexedDB, шифровани с AES-GCM. |
 | 📎 | **Файлове до 100 MB** *(ново)* | Всякакви файлове и видео, директно между устройствата. Получателят приема или отказва; файлове до 25 MB остават шифровани в историята. |
 | 🖼️ | **Снимки, локация, изтриване** | Изтриване на чата и при двамата. Локацията се праща само при твое натискане. |
 | 📞 | **Аудио и видео разговори** | По същата директна връзка, медията е DTLS-SRTP. |
@@ -249,7 +249,7 @@ src/
   group/            групи: правила, подписано състояние, връзки, шифровано хранилище
   call/             разговори
   history/          шифрована история (IndexedDB)
-  contacts/         контакти и потвърждение
+  contacts/         контакти и потвърждение (шифровани, индекс HMAC(DID))
   ui/               екрани и компоненти
   post.css          темата „Запечатана поща“ (светла и тъмна)
 src-tauri/          програмата за Windows (Tauri 2)
@@ -324,7 +324,7 @@ docs/               ръководства: Windows, Linux, демо сигна�
 | 📷 | **Contact by QR or short code** | A signed invitation. The short code is 10 characters, valid for 10 minutes, single use. |
 | 🛰️ | **Demo room** *(new)* | A "Local (QR) / Demo (room)" switch. In demo mode one person opens a room and sends the code; the other joins with it. |
 | 🔢 | **12 words to verify** | Both sides see the same 12 words (3 groups of 4), computed from both public X25519 keys (v3, 132 bits). If they match, nobody sits in between. |
-| 💬 | **Encrypted chats** | Double Ratchet. History is kept in IndexedDB, encrypted with AES-GCM. |
+| 💬 | **Encrypted chats** | Double Ratchet. History and contacts are kept in IndexedDB, encrypted with AES-GCM. |
 | 📎 | **Files up to 100 MB** *(new)* | Any file or video, straight between devices. The recipient accepts or declines; files up to 25 MB stay encrypted in the history. |
 | 🖼️ | **Photos, location, deletion** | Delete a chat on both sides. Location is sent only when you tap to send it. |
 | 📞 | **Audio and video calls** | Over the same direct connection; media is DTLS-SRTP. |
@@ -535,7 +535,7 @@ src/
   group/            groups: rules, signed state, links, encrypted storage
   call/             calls
   history/          encrypted history (IndexedDB)
-  contacts/         contacts and verification
+  contacts/         contacts and verification (encrypted, keyed by HMAC(DID))
   ui/               screens and components
   post.css          the "Sealed Post" theme (light and dark)
 src-tauri/          the Windows app (Tauri 2)
