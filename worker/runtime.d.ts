@@ -21,3 +21,31 @@ interface ScheduledController {
 interface RateLimiter {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 }
+
+/** Durable Object storage and identity, limited to what the signaling room uses. */
+interface DurableObjectState {
+  readonly storage: { setAlarm(scheduledTime: number): Promise<void> };
+}
+
+interface DurableObjectStub {
+  fetch(request: Request): Promise<Response>;
+}
+
+interface DurableObjectNamespace {
+  idFromName(name: string): unknown;
+  get(id: unknown): DurableObjectStub;
+}
+
+/** Workers: a socket that the server side has accepted, and the pair returned by WebSocketPair. */
+interface WorkerWebSocket extends WebSocket {
+  accept(): void;
+}
+
+declare class WebSocketPair {
+  0: WorkerWebSocket;
+  1: WorkerWebSocket;
+}
+
+interface ResponseInit {
+  webSocket?: WebSocket | null;
+}

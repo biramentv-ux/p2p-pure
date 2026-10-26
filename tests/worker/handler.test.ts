@@ -163,3 +163,29 @@ describe("invitation rate limit", () => {
     expect(notLimited.status).toBe(404);
   });
 });
+
+describe("demo WebSocket signaling routes", () => {
+  const roomEnv = {
+    ...env,
+    SIGNAL_ROOM: { idFromName: () => "id", get: () => ({ fetch: async () => new Response(null) }) },
+  } as Env;
+
+  it("POST /ws/rooms returns a short code and the room lifetime", async () => {
+    const res = await worker.fetch(new Request("https://sig.test/ws/rooms", { method: "POST" }), roomEnv);
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { code: string; ttlSec: number };
+    expect(body.code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{10}$/);
+    expect(body.ttlSec).toBe(600);
+  });
+
+  it("GET /ws/rooms/:code without an upgrade header is refused", async () => {
+    const res = await worker.fetch(new Request("https://sig.test/ws/rooms/ABCDEFGHJK"), roomEnv);
+    expect(res.status).toBe(426);
+  });
+
+  it("GET /ws/rooms/:code with a malformed code is refused", async () => {
+    const req = new Request("https://sig.test/ws/rooms/bad", { headers: { upgrade: "websocket" } });
+    const res = await worker.fetch(req, roomEnv);
+    expect(res.status).toBe(400);
+  });
+});

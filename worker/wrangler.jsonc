@@ -26,6 +26,11 @@
   "ratelimits": [
     { "name": "INVITE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
   ],
+  // Demo WebSocket signaling: one SignalRoom Durable Object per room code (see worker/room.ts).
+  "durable_objects": {
+    "bindings": [{ "name": "SIGNAL_ROOM", "class_name": "SignalRoom" }],
+  },
+  "migrations": [{ "tag": "v1", "new_classes": ["SignalRoom"] }],
   "kv_namespaces": [
     { "binding": "DELIVERIES", "id": "735f0036ab7a449f8935c147f5a0a28a" },
   ],
