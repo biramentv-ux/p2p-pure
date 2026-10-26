@@ -187,6 +187,11 @@ try {
   await alice.page.getByRole("region", { name: "Разговор" }).waitFor({ timeout: 30_000 });
   await bob.page.getByRole("region", { name: "Разговор" }).waitFor({ timeout: 30_000 });
   check("both sides are in the video call", true);
+  // The phase must reach "active": the call shares the chat's connection, which is already up.
+  for (const pg of [alice.page, bob.page]) {
+    await pg.getByRole("region", { name: "Разговор" }).getByRole("status").filter({ hasText: "В разговор" }).waitFor({ timeout: 30_000 });
+  }
+  check("both sides show \"В разговор\" (active phase)", true);
 
   const videoA = await remoteMediaFlowing(alice.page, "video");
   if (!videoA) console.log("  diag alice:", JSON.stringify(await pcState(alice.page)));
