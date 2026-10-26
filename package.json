@@ -31,6 +31,7 @@
     "test:extension-browser": "node tests/extension/browser.mjs",
     "extension:pack": "node scripts/extension/pack.mjs",
     "test:a11y": "node tests/e2e/a11y.mjs",
+    "test:a11y:dark": "A11Y_SCHEME=dark node tests/e2e/a11y.mjs",
     "test:crypto-suite": "node tests/e2e/crypto-suite.mjs",
     "test:demo": "node tests/e2e/demo-signaling.mjs"
   },

@@ -45,7 +45,7 @@
   --radius-l: 20px;
   --shadow-lift: 5px 5px 0 #0a0a0a;
 
-  --frame: #0a0a0a;              /* hybrid.css tokens, re-pointed at the loud palette */
+  --frame: #0a0a0a;              /* token names kept from the earlier layers, re-pointed at the loud palette */
   --frame-shadow: #0a0a0a;
   --phosphor: #c6ff00;
   --hard-shadow: 5px 5px 0 #0a0a0a;
