@@ -449,7 +449,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         />
       )}
 
-      <ol className="messages">
+      {/* Scrollable region: focusable so keyboard users can scroll the history. */}
+      <ol className="messages" tabIndex={0} aria-label={t("Съобщения")}>
         {messages.map((m, i) => (
           <li key={`${m.timestamp}-${i}`} className={m.direction === "out" ? "msg out" : "msg in"}>
             {m.location ? (
