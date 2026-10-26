@@ -3,6 +3,7 @@ import { getUnlockMethod } from "./identity";
 import type { UnlockedIdentity, UnlockMethod } from "./identity";
 import { getContact, lockContacts, unlockContacts, type Contact } from "./contacts/contacts";
 import { deriveHistoryKey } from "./history/messageStore";
+import { activateStoredTurn, deactivateTurn } from "./p2p/turnStore";
 import type { PeerLink } from "./p2p/peer";
 import type { SecureSession } from "./p2p/secureSession";
 import { useI18n } from "./i18n";
@@ -88,6 +89,7 @@ function App() {
     groupRef.current?.closeAll();
     groupRef.current = null;
     lockContacts();
+    deactivateTurn();
     setScreen({ k: "identity" });
     getUnlockMethod()
       .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
@@ -98,8 +100,10 @@ function App() {
   // (and pre-v5 plaintext contacts migrated) before any screen can read it. If the migration
   // fails the keys are still set and the plaintext rows stay for the next unlock to retry.
   const enter = (identity: UnlockedIdentity) => {
-    unlockContacts(deriveHistoryKey(identity))
-      .catch(() => undefined)
+    Promise.all([
+      activateStoredTurn(deriveHistoryKey(identity)).catch(() => undefined),
+      unlockContacts(deriveHistoryKey(identity)).catch(() => undefined),
+    ])
       .finally(() => setState({ kind: "unlocked", identity }));
   };
 
