@@ -41,11 +41,22 @@ export interface Env {
   SIGNAL_ROOM?: DurableObjectNamespace;
 }
 
+/**
+ * The rate-limit key is a keyed hash (HMAC-SHA-256, first 8 bytes as hex) of the client IP,
+ * so the limiter never receives the address itself. The key is a Worker secret.
+ */
+export async function limiterKey(ip: string, secret: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret || "unset"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(ip)));
+  return Array.from(mac.slice(0, 8), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Invitation endpoints allow this many requests per client IP per period (see wrangler.jsonc). */
 async function overInviteLimit(request: Request, env: Env): Promise<boolean> {
   if (!env.INVITE_LIMITER) return false;
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
-  const { success } = await env.INVITE_LIMITER.limit({ key: ip });
+  const { success } = await env.INVITE_LIMITER.limit({ key: await limiterKey(ip, env.TELEGRAM_WEBHOOK_SECRET) });
   return !success;
 }
 
