@@ -90,9 +90,17 @@ export function TurnSettings({ identity }: Props) {
   }
 
   async function onRemove() {
-    await clearTurnSettings().catch(() => undefined);
-    setForm(DEFAULT_TURN_SETTINGS);
+    setStatus(null);
     setWarnings([]);
+    // Stop using the relay for new connections right away, whatever happens on disk.
+    setActiveTurn(null);
+    try {
+      await clearTurnSettings();
+    } catch {
+      setError(t("Релеят е изключен за тази сесия, но записът не можа да бъде изтрит. Опитай отново."));
+      return;
+    }
+    setForm(DEFAULT_TURN_SETTINGS);
     setError(null);
     setStatus(t("Релеят и данните му са изтрити."));
   }

@@ -43,11 +43,16 @@ export async function loadTurnSettings(historyKey: Uint8Array): Promise<TurnSett
   }
 }
 
+/**
+ * Deletes the saved relay. The in-memory config is dropped first and unconditionally, so new
+ * connections stop using the relay even if the IndexedDB delete then fails; the rejection
+ * reaches the caller, which must not report success.
+ */
 export async function clearTurnSettings(): Promise<void> {
+  setActiveTurn(null);
   await withStore(STORE_IDENTITY, "readwrite", (s) => {
     s.delete(ROW_KEY);
   });
-  setActiveTurn(null);
 }
 
 /** After unlock: decrypt and make the settings active for new connections. */

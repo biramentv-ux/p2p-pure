@@ -436,4 +436,6 @@ export const EN_DICTIONARY: Record<string, string> = {
   "Внимание: turn: не е обвит в TLS, затова мрежата вижда, че ползваш релей. Предпочети turns:. Съдържанието остава криптирано.": "Warning: turn: is not wrapped in TLS, so the network can see you use a relay. Prefer turns:. The content stays encrypted.",
   "Запази": "Save",
   "Изтрий релея": "Delete relay",
+  "Релеят е изключен за тази сесия, но записът не можа да бъде изтрит. Опитай отново.":
+    "The relay is off for this session, but the saved entry could not be deleted. Try again.",
 };
