@@ -11,6 +11,8 @@ import {
 import { canStore, deleteFilesFor, loadFile, saveFile } from "../../history/fileStore";
 import { FileTransfers, MAX_FILE_BYTES, type FileMeta } from "../../p2p/fileTransfer";
 import { FileBubble, TransferList, type ActiveTransfer } from "../components/FileBubble";
+import { PastePreview } from "../components/PastePreview";
+import { usePasteImage } from "../pasteImage";
 import { decodeControl, encodeControl, isControlMessage, type ControlMessage } from "../../p2p/control";
 import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
@@ -73,6 +75,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const filesRef = useRef<FileTransfers | null>(null);
   const [active, setActive] = useState<ActiveTransfer[]>([]);
   const [preparing, setPreparing] = useState<string | null>(null);
+  /** A picture pasted with Ctrl+V, waiting for "Send". */
+  const [pasted, setPasted] = useState<File | null>(null);
   const urlsRef = useRef(new Map<string, string>());
 
   function upsertActive(item: ActiveTransfer) {
@@ -436,6 +440,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     }
   }
 
+  usePasteImage(connected, setPasted);
+
   return (
     <div className="chat">
       <header className="chat-header">
@@ -631,6 +637,19 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           e.target.value = "";
         }}
       />
+
+      {pasted && (
+        <PastePreview
+          file={pasted}
+          busy={!!transfer}
+          onCancel={() => setPasted(null)}
+          onSend={() => {
+            const file = pasted;
+            setPasted(null);
+            void onPickPhoto(file);
+          }}
+        />
+      )}
 
       <form className="composer" onSubmit={onSend}>
         <button
