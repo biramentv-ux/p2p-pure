@@ -11,10 +11,14 @@ import { VitePWA } from 'vite-plugin-pwa'
  */
 function contentSecurityPolicy(): Plugin {
   let inviteOrigin = 'https://tg.dyrakarmy.online'
+  // Desktop (Tauri) build only: the window talks to its two Windows Hello commands over
+  // Tauri's IPC protocol. Without these sources the call is blocked and falls back.
+  let tauriIpc = ''
   return {
     name: 'csp-meta',
     apply: 'build',
     configResolved(config) {
+      if (config.mode === 'desktop') tauriIpc = ' ipc: http://ipc.localhost'
       const env = loadEnv(config.mode, config.envDir ?? process.cwd(), 'VITE_')
       if (env.VITE_INVITE_API) inviteOrigin = new URL(env.VITE_INVITE_API).origin
     },
@@ -30,7 +34,7 @@ function contentSecurityPolicy(): Plugin {
           "font-src 'self' data:",
           // Demo signalling also uses a WebSocket to the same host (wss:// or ws://).
           // GIPHY search and the chosen GIF's download, from the sender's device only.
-          `connect-src 'self' ${inviteOrigin} ${inviteOrigin.replace(/^http/, 'ws')} https://api.giphy.com https://*.giphy.com`,
+          `connect-src 'self' ${inviteOrigin} ${inviteOrigin.replace(/^http/, 'ws')} https://api.giphy.com https://*.giphy.com${tauriIpc}`,
           "worker-src 'self'",
           "manifest-src 'self'",
           "media-src 'self' blob:",

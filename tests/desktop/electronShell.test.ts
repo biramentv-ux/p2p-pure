@@ -1,19 +1,22 @@
 // @vitest-environment node
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { mimeFor, resolveAppFile } from "../../electron/appFiles.mjs";
 
 const ROOT = "/opt/app-dist";
+// The same checks run on the Windows CI runner, where resolve() gives "D:\\opt\\app-dist\\…".
+const BASE = resolve(ROOT);
+const inBase = (...parts: string[]) => join(BASE, ...parts);
 const read = (p: string) => readFileSync(resolve(__dirname, "../..", p), "utf8");
 
 describe("Linux shell: which files a request may read", () => {
   it("maps the app's own addresses into the bundle folder", () => {
-    expect(resolveAppFile(ROOT, "app://p2p/")).toBe("/opt/app-dist/index.html");
-    expect(resolveAppFile(ROOT, "app://p2p")).toBe("/opt/app-dist/index.html");
-    expect(resolveAppFile(ROOT, "app://p2p/index.html")).toBe("/opt/app-dist/index.html");
-    expect(resolveAppFile(ROOT, "app://p2p/assets/app-abc123.js?x=1#y")).toBe("/opt/app-dist/assets/app-abc123.js");
-    expect(resolveAppFile(ROOT, "app://p2p/icons/icon-192.png")).toBe("/opt/app-dist/icons/icon-192.png");
+    expect(resolveAppFile(ROOT, "app://p2p/")).toBe(inBase("index.html"));
+    expect(resolveAppFile(ROOT, "app://p2p")).toBe(inBase("index.html"));
+    expect(resolveAppFile(ROOT, "app://p2p/index.html")).toBe(inBase("index.html"));
+    expect(resolveAppFile(ROOT, "app://p2p/assets/app-abc123.js?x=1#y")).toBe(inBase("assets", "app-abc123.js"));
+    expect(resolveAppFile(ROOT, "app://p2p/icons/icon-192.png")).toBe(inBase("icons", "icon-192.png"));
   });
 
   it.each([
@@ -33,7 +36,7 @@ describe("Linux shell: which files a request may read", () => {
     const tricks = ["/a", "/a/b/../c", "//x", "/./y", "/assets//z.js", "/../etc/passwd", "/assets/../../etc/passwd", "/%2e%2e/%2e%2e/etc/passwd", "/%2E%2E%2fetc/passwd", "/..%2f..%2fetc/passwd", "/%2e%2e%2f%2e%2e%2fetc/passwd"];
     for (const path of tricks) {
       const file = resolveAppFile(ROOT, `app://p2p${path}`);
-      expect(file === null || file.startsWith(ROOT + "/")).toBe(true);
+      expect(file === null || file.startsWith(BASE + sep)).toBe(true);
     }
   });
 

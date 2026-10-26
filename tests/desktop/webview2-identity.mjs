@@ -8,7 +8,10 @@
  *   2. passkey without PRF -> the app must fall back to a device password: create,
  *                           wrong password rejected, unlock, restart, unlock again;
  *   3. passkey refused (like a cancelled Windows Hello prompt) -> the app must offer a
- *                           password and create the identity with it.
+ *                           password and create the identity with it;
+ *   4. Windows Hello unlock commands (Tauri): status answers, foreign names and bad challenges
+ *                           are refused, other Tauri commands are blocked by the capability,
+ *                           and with Hello unavailable (CI) the method stays hidden (INFO).
  *
  * Facts (origin, secure context, WebAuthn availability, unlock method, persistence) are
  * printed as GitHub annotations, because run logs are not always readable from outside.
@@ -633,6 +636,58 @@ try {
       `refusing authenticator -> ${outcome} after ${facts.cancelled.seconds}s, password offered=${offered}, ` +
         `storedMethod=${facts.cancelled.storedMethod ?? "n/a"}`,
     );
+  }
+
+  // ---- scenario 4: Windows Hello unlock (Tauri command). A CI runner has no Windows Hello,
+  // so this checks what it can: the command answers, the capability lets only the two Hello
+  // commands through, foreign credential names are refused before any prompt, and with Hello
+  // unavailable the unlock screen stays a plain password screen (no Hello button/checkbox).
+  facts.hello = await page.evaluate(async () => {
+    const t = window.__TAURI_INTERNALS__;
+    if (!t?.invoke) return { tauri: false };
+    const tryInvoke = async (cmd, args) => {
+      try {
+        return { ok: true, value: await t.invoke(cmd, args) };
+      } catch (e) {
+        return { ok: false, error: String(e?.message ?? e) };
+      }
+    };
+    return {
+      tauri: true,
+      status: await tryInvoke("windows_hello_status"),
+      foreignName: await tryInvoke("windows_hello_sign", { name: "other-app-0123456789abcdef", challenge: Array(32).fill(0), create: false }),
+      shortChallenge: await tryInvoke("windows_hello_sign", { name: "p2p-messenger-0123456789abcdef", challenge: [1, 2, 3], create: false }),
+      notAllowed: await tryInvoke("plugin:app|version"),
+    };
+  });
+  const h = facts.hello;
+  if (!h.tauri) {
+    annotate("notice", "windows-hello", "INFO: not running in the Tauri shell (local Chromium run); Hello checks skipped");
+  } else {
+    const helloStatus = h.status.ok ? h.status.value : `error: ${h.status.error}`;
+    check("windows_hello_status answers", h.status.ok && ["available", "unavailable"].includes(h.status.value), helloStatus);
+    check("windows_hello_sign refuses foreign credential names", !h.foreignName.ok, h.foreignName.error ?? "accepted");
+    check("windows_hello_sign refuses non-32-byte challenges", !h.shortChallenge.ok, h.shortChallenge.error ?? "accepted");
+    check("capability blocks other Tauri commands", !h.notAllowed.ok, h.notAllowed.error ?? "allowed");
+    if (helloStatus !== "available") {
+      annotate("notice", "windows-hello", `INFO: Windows Hello is not available here (${helloStatus}); checking that the method stays hidden`);
+      const rec = await storedRecord(page);
+      if (rec) {
+        await page.reload();
+        const st = await waitState(page, ["unlock-password", "unlock-passkey", "main"], 30_000);
+        if (st === "unlock-password") {
+          const helloUi = await page.evaluate(
+            () => document.querySelectorAll('main input[type="checkbox"]').length +
+              [...document.querySelectorAll("main button")].filter((b) => /Windows Hello/.test(b.textContent ?? "")).length,
+          );
+          check("Hello unavailable: unlock screen has no Hello button or checkbox", helloUi === 0, `${helloUi} Hello control(s)`);
+          await unlockWithPassword(page, PASSWORD);
+          check("Hello unavailable: password unlock still works", (await waitState(page, ["main"], 60_000)) === "main");
+        }
+      }
+    } else {
+      annotate("notice", "windows-hello", "INFO: Windows Hello reports available; enrolment needs a real user and is not automated");
+    }
   }
   await closeApp();
 } catch (err) {
