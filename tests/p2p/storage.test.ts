@@ -11,6 +11,8 @@ import {
   listContacts,
   renameContact,
   saveContact,
+  unlockContacts,
+  lockContacts,
   type Contact,
 } from "../../src/contacts/contacts";
 import { appendMessage, deriveHistoryKey, loadHistory } from "../../src/history/messageStore";
@@ -36,8 +38,10 @@ function contact(seed: UnlockedIdentity, name: string, addedAt: number): Contact
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   freshDb();
+  lockContacts();
+  await unlockContacts(crypto.getRandomValues(new Uint8Array(32)));
 });
 
 describe("contacts", () => {

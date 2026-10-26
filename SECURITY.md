@@ -1,0 +1,34 @@
+# Security notes
+
+## Data at rest (IndexedDB `p2p-messenger`, version 5)
+
+Every store except `identity` holds only AES-256-GCM ciphertext (WebCrypto, random 12-byte IV,
+associated data that binds each record to its store and key). The keys exist only in memory
+after unlock; they are derived from the identity seed (`deriveHistoryKey`), which is itself
+stored encrypted under the passkey PRF or the password.
+
+| Store | Visible in plaintext | Encrypted |
+|---|---|---|
+| `identity` | DID, public key, unlock method, credential id | seed |
+| `contactsSealed` | `id` = HMAC-SHA-256(contact MAC key, DID), row count | DID, public key, name, verified flag, timestamps |
+| `contacts` (legacy, pre-v5) | empty after first unlock on v5 | — |
+| `messages` | peer DID, direction, timestamp | content |
+| `files` | owner, id | file bytes and metadata |
+| `groups` / `groupMessages` | owner tag, random group id, timestamps | group state, keys, members, messages |
+
+### Contacts (since v5)
+- Keys: HKDF-SHA-256 from the history key, info `p2p-messenger/contacts/aes/v1` (AES-GCM) and
+  `p2p-messenger/contacts/id-mac/v1` (HMAC), non-extractable `CryptoKey`s.
+- The index is HMAC(DID), not the DID: every lookup starts from a DID the app already holds,
+  so nothing needs the plaintext key. The DID still appears in the `messages` store's
+  `peerDid` index, so this hides the contact list itself, not who you have chatted with.
+- AAD = `p2p-contacts/v1|contactsSealed|<id>`; after decrypting, HMAC(DID) must equal the row id.
+- While locked, every contact call throws `ContactsLockedError`.
+
+### Migration v4 → v5
+The upgrade only adds the `contactsSealed` store (no key is available inside `onupgradeneeded`).
+On the first unlock, `unlockContacts` reads the plaintext rows, encrypts them, then in ONE
+readwrite transaction over both stores writes the sealed rows and deletes the plaintext rows.
+Either both happen or neither does. Malformed legacy rows are left untouched rather than lost.
+If the migration fails the app still unlocks, and the next unlock retries.
+Note: deleted IndexedDB rows may survive in the browser's storage files until compaction.
