@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getUnlockMethod } from "./identity";
 import type { UnlockedIdentity, UnlockMethod } from "./identity";
-import { getContact, type Contact } from "./contacts/contacts";
+import { getContact, lockContacts, unlockContacts, type Contact } from "./contacts/contacts";
 import { deriveHistoryKey } from "./history/messageStore";
 import type { PeerLink } from "./p2p/peer";
 import type { SecureSession } from "./p2p/secureSession";
@@ -83,11 +83,21 @@ function App() {
     if (current.k === "chat") current.link.close();
     groupRef.current?.closeAll();
     groupRef.current = null;
+    lockContacts();
     setScreen({ k: "identity" });
     getUnlockMethod()
       .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
       .catch(() => setState({ kind: "no-identity" }));
   });
+
+  // The contact book is encrypted with a key derived from the history key, so it is opened
+  // (and pre-v5 plaintext contacts migrated) before any screen can read it. If the migration
+  // fails the keys are still set and the plaintext rows stay for the next unlock to retry.
+  const enter = (identity: UnlockedIdentity) => {
+    unlockContacts(deriveHistoryKey(identity))
+      .catch(() => undefined)
+      .finally(() => setState({ kind: "unlocked", identity }));
+  };
 
   const historyKey = useMemo(
     () => (state.kind === "unlocked" ? deriveHistoryKey(state.identity) : null),
@@ -129,7 +139,7 @@ function App() {
     return (
       <Frame>
         <CreateIdentityScreen
-          onIdentityCreated={(identity) => setState({ kind: "unlocked", identity })}
+          onIdentityCreated={enter}
         />
       </Frame>
     );
@@ -140,7 +150,7 @@ function App() {
       <Frame>
         <UnlockScreen
           method={state.method}
-          onUnlocked={(identity) => setState({ kind: "unlocked", identity })}
+          onUnlocked={enter}
         />
       </Frame>
     );
