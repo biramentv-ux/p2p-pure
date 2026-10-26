@@ -6,6 +6,11 @@ const clamp = (v: number) => Math.min(1, Math.max(0, Math.round(v * 10) / 10));
 
 /** Volume is shared by every player on the screen, so changing it once is enough. */
 let sharedVolume = 1;
+const volumeListeners = new Set<(v: number) => void>();
+function setSharedVolume(v: number) {
+  sharedVolume = v;
+  for (const listener of volumeListeners) listener(v);
+}
 /** Only one track plays at a time: starting one stops the one before it. */
 let playing: HTMLAudioElement | null = null;
 
@@ -33,6 +38,18 @@ export function AudioPlayer({ src, name, autoPlay = false }: AudioPlayerProps) {
   const [volume, setVolume] = useState(sharedVolume);
   const [failed, setFailed] = useState(false);
 
+  // Every mounted player follows the shared volume, not only the one whose button was pressed.
+  useEffect(() => {
+    const follow = (v: number) => {
+      setVolume(v);
+      if (audio.current) audio.current.volume = v;
+    };
+    volumeListeners.add(follow);
+    return () => {
+      volumeListeners.delete(follow);
+    };
+  }, []);
+
   useEffect(() => {
     const el = audio.current;
     if (!el) return;
@@ -53,14 +70,26 @@ export function AudioPlayer({ src, name, autoPlay = false }: AudioPlayerProps) {
   }
 
   function change(delta: number) {
-    const next = clamp(volume + delta);
-    sharedVolume = next;
-    setVolume(next);
-    if (audio.current) audio.current.volume = next;
+    setSharedVolume(clamp(volume + delta));
   }
 
   const percent = Math.round(volume * 100);
-  if (failed) return <span className="msg-file">{t("Този звук не може да се пусне.")}</span>;
+  // The file stays downloadable, also when this browser cannot play its codec.
+  const download = (
+    <a className="file-download" href={src} download={name}>
+      {t("Изтегли")}
+    </a>
+  );
+  if (failed)
+    return (
+      <span className="msg-file">
+        <span className="file-meta">
+          <strong>{name}</strong>
+          <small>{t("Този звук не може да се пусне.")}</small>
+        </span>
+        {download}
+      </span>
+    );
   return (
     <span className="audio-player" role="group" aria-label={name}>
       <audio
@@ -112,6 +141,7 @@ export function AudioPlayer({ src, name, autoPlay = false }: AudioPlayerProps) {
         <button type="button" className="secondary" onClick={() => change(STEP)} disabled={volume >= 1} aria-label={t("По-силно")}>
           +
         </button>
+        {download}
       </span>
     </span>
   );

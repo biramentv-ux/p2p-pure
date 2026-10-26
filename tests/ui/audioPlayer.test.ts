@@ -33,6 +33,8 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  // Players share one volume; put it back for the next test.
+  if (root) for (let i = 0; i < 12; i++) act(() => button(/По-силно|Volume up/)?.click());
   if (root) act(() => root!.unmount());
   host?.remove();
   root = null;
@@ -64,6 +66,31 @@ describe("AudioPlayer", () => {
     for (let i = 0; i < 12; i++) act(() => button(/По-силно|Volume up/).click());
     expect(el.volume).toBe(1);
     expect((button(/По-силно|Volume up/) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("a volume change reaches every player already on the screen", () => {
+    mount("one.mp3");
+    const second = document.createElement("div");
+    document.body.append(second);
+    const root2 = createRoot(second);
+    act(() => root2.render(createElement(AudioPlayer, { src: "blob:two", name: "two.mp3" })));
+    for (let i = 0; i < 5; i++) act(() => button(/По-тихо|Volume down/).click());
+    expect(host!.querySelector("audio")!.volume).toBeCloseTo(0.5, 5);
+    expect(second.querySelector("audio")!.volume).toBeCloseTo(0.5, 5);
+    expect(second.textContent).toMatch(/50%/);
+    act(() => root2.unmount());
+    second.remove();
+  });
+
+  it("keeps a download link, also when the sound cannot be played", () => {
+    mount("odd.mp3");
+    const link = () => host!.querySelector<HTMLAnchorElement>("a.file-download");
+    expect(link()?.getAttribute("download")).toBe("odd.mp3");
+    act(() => {
+      host!.querySelector("audio")!.dispatchEvent(new Event("error"));
+    });
+    expect(host!.textContent).toMatch(/не може да се пусне|cannot be played/);
+    expect(link()?.getAttribute("href")).toBe("blob:test");
   });
 
   it("starts a second track only after stopping the first", () => {
