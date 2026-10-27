@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error plain ES modules, shared with the browser
 import { detectOS, formatSize, pickDownloads, versionOf } from "../../site/downloads.js";
 // @ts-expect-error plain ES module script
-import { FONT_FILES, assemble, injectReleases, killSwitchWorker } from "../../scripts/site/build.mjs";
+import { FONT_FILES, applyMode, assemble, injectReleases, killSwitchWorker, releasesRepo } from "../../scripts/site/build.mjs";
 // @ts-expect-error plain ES module
 import { BG_EXTRA, EN } from "../../site/i18n.js";
 
@@ -117,6 +117,44 @@ describe("site assembly", () => {
     expect(html).toContain("Писмата ти");
     expect(html).toMatch(/id="releases">\{"windowsSetup":\{"name":"P2P-Messenger-Setup-x64\.exe"/);
     expect(existsSync(`${dist}-app`)).toBe(false);
+  });
+
+  it("with a separate public releases repository, the page and the buttons point there", async () => {
+    const dist = fakeDist();
+    await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: false });
+    const html = readFileSync(join(dist, "index.html"), "utf8");
+    expect(html).toContain("https://github.com/o/pub/releases");
+    expect(html).not.toContain("github.com/biramentv-ux/p2p-pure/releases");
+    expect(html).toContain("blob/main/SECURITY.md"); // open source: the footer still links to the code
+    expect(readFileSync(join(dist, "downloads.js"), "utf8")).toContain('REPO = "o/pub"');
+  });
+
+  it("with private source, no page claims open code or links to files that only the private repository has", async () => {
+    const dist = fakeDist();
+    await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true });
+    const html = readFileSync(join(dist, "index.html"), "utf8");
+    const en = readFileSync(join(dist, "i18n.js"), "utf8");
+    for (const text of [html, en]) {
+      expect(text).not.toMatch(/Отворен код|Open source|code is open|Кодът е отворен|public code|публичния код/);
+      expect(text).not.toContain("<!--when:");
+    }
+    expect(html).not.toContain("/blob/main/");
+    expect(html).not.toContain("biramentv-ux/p2p-pure");
+    expect(html).toContain("https://github.com/o/pub/releases");
+    expect(html).toContain("Подписани издания");
+    expect(en).toContain("Signed releases");
+  });
+
+  it("keeps one variant of a when-block and drops the other", () => {
+    const src = "a<!--when:open-->OPEN<!--/when--><!--when:closed-->CLOSED<!--/when-->b";
+    expect(applyMode(src, { closed: false, lang: "bg" })).toBe("aOPENb");
+    expect(applyMode(src, { closed: true, lang: "bg" })).toBe("aCLOSEDb");
+  });
+
+  it("reads the releases repository from RELEASES_REPO and rejects anything that is not owner/repo", () => {
+    expect(releasesRepo({})).toBe("biramentv-ux/p2p-pure");
+    expect(releasesRepo({ RELEASES_REPO: "o/pub" })).toBe("o/pub");
+    expect(() => releasesRepo({ RELEASES_REPO: "o/pub; rm -rf /" })).toThrow(/owner\/repo/);
   });
 
   it("refuses to assemble without a built app", async () => {
@@ -236,6 +274,12 @@ describe("publishing", () => {
   });
   it("rebuilds after every release workflow, so the download buttons show the newest files", () => {
     for (const name of ["Linux desktop", "Windows desktop", "Android APK"]) expect(wf).toContain(`"${name}"`);
+  });
+  it("publishes to a public repository only when PAGES_PUBLISH_REPO is set, keeping hidden files", () => {
+    expect(wf).toContain("vars.PAGES_PUBLISH_REPO != ''");
+    expect(wf).toContain("include-hidden-files: true");
+    expect(wf).toMatch(/if: vars\.PAGES_PUBLISH_REPO == ''/);
+    expect(wf).not.toMatch(/RELEASES_TOKEN\s*\}\}\s*\n\s*run:[^\n]*echo/);
   });
   it("leaves the desktop and mobile packages on a plain app build", () => {
     const pkg = JSON.parse(read("package.json"));

@@ -9,15 +9,19 @@
 #       block until the release is published (the install checks need public download links).
 #
 # Needs GH_TOKEN and GITHUB_REPOSITORY. REQUIRED_ASSETS is a space-separated list of file names.
+# RELEASES_REPO (optional, "owner/name"): where the releases live. Unset = this repository. Set it
+# to a separate public repository when the source repository is private; GH_TOKEN must then be a
+# token that can write releases there (the workflow's own token cannot). See docs/PRIVATE-REPO.md.
 set -euo pipefail
 
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+REL_REPO="${RELEASES_REPO:-$GITHUB_REPOSITORY}"
 REQUIRED_ASSETS="${REQUIRED_ASSETS:-P2P-Messenger-Setup-x64.exe SHA256SUMS-linux.txt}"
 
 # "<id> <draft>" of the release with this tag, or nothing. Drafts are not found by tag in the REST
 # API, so the list is searched.
 find_release() {
-  gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+  gh api "repos/$REL_REPO/releases" --paginate \
     --jq ".[] | select(.tag_name == \"$1\") | \"\(.id) \(.draft)\"" | sed -n 1p
 }
 
@@ -30,15 +34,19 @@ attach() {
     exit 1
   fi
   if [ -z "$info" ]; then
-    gh release create "$tag" --draft --prerelease --target "$sha" --title "P2P Messenger $tag" --notes-file "$notes"
+    # A commit of another repository cannot be a target, so a separate releases repo tags its own
+    # default branch; the tag in the source repository is what names the source commit.
+    local target=(--target "$sha")
+    [ "$REL_REPO" = "$GITHUB_REPOSITORY" ] || target=()
+    gh release create "$tag" --draft --prerelease ${target[@]+"${target[@]}"} --title "P2P Messenger $tag" --notes-file "$notes" --repo "$REL_REPO"
   fi
-  gh release upload "$tag" "$dir"/* --clobber
+  gh release upload "$tag" "$dir"/* --clobber --repo "$REL_REPO"
 
   info="$(find_release "$tag")"
   id="${info%% *}"; draft="${info#* }"
   [ -n "$id" ] || { echo "::error::release $tag disappeared"; exit 1; }
   local names missing=""
-  names="$(gh api "repos/$GITHUB_REPOSITORY/releases/$id" --jq '.assets[].name')"
+  names="$(gh api "repos/$REL_REPO/releases/$id" --jq '.assets[].name')"
   for a in $REQUIRED_ASSETS; do
     printf '%s\n' "$names" | grep -qxF "$a" || missing="$missing $a"
   done
@@ -48,7 +56,7 @@ attach() {
     return 0
   fi
   if [ "$draft" = "true" ]; then
-    gh release edit "$tag" --draft=false
+    gh release edit "$tag" --draft=false --repo "$REL_REPO"
   fi
   echo "::notice title=release-published::$tag published with every required file"
   echo "published=true" >> "${GITHUB_OUTPUT:-/dev/null}"
