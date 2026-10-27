@@ -32,13 +32,21 @@ $ErrorActionPreference = "Stop"
 function Say($t) { Write-Host "`n=== $t ===" -ForegroundColor Cyan }
 function Ok($t) { Write-Host "    OK: $t" -ForegroundColor Green }
 function Warn($t) { Write-Host "    ! $t" -ForegroundColor Yellow }
-function Gh {
+function RunGh {   # NOT named Gh: PowerShell names are case-insensitive and would call itself forever
     & gh @args
     if ($LASTEXITCODE -ne 0) { throw "gh $($args[0..([Math]::Min(2, $args.Count - 1))] -join ' ') ... завърши с грешка ($LASTEXITCODE)" }
 }
 function GhQuiet {   # връща $true/$false, без да хвърля и без да печата
+    # Windows PowerShell 5.1 прави от stderr на външна програма грешка, която спира скрипта при "Stop".
+    $ErrorActionPreference = "Continue"
     $null = & gh @args 2>&1
     return ($LASTEXITCODE -eq 0)
+}
+function GhOut {     # изход на gh или $null при грешка; без шум
+    $ErrorActionPreference = "Continue"
+    $o = & gh @args 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return $o
 }
 function Confirm-Step($q) {
     $a = Read-Host "$q (д/н)"
@@ -52,15 +60,15 @@ function Wait-Run($workflow, $branch, $event) {
         $args2 = @("run", "list", "--repo", $Source, "--workflow", $workflow, "--limit", "1", "--json", "databaseId")
         if ($branch) { $args2 += @("--branch", $branch) }
         if ($event) { $args2 += @("--event", $event) }
-        $id = & gh @args2 --jq ".[0].databaseId" 2>$null
+        $id = GhOut @args2 --jq ".[0].databaseId"
     }
     if (-not $id) { throw "Не намирам пускане на $workflow." }
     Write-Host "    чакам $workflow (пускане $id)..."
-    Gh run watch $id --repo $Source --exit-status --interval 30
+    RunGh run watch $id --repo $Source --exit-status --interval 30
 }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "Липсва GitHub CLI (winget install GitHub.cli), после gh auth login." }
-Gh auth status | Out-Null
+RunGh auth status | Out-Null
 $ver = $Tag -replace '^desktop-v', ''
 if ($ver -notmatch '^\d+\.\d+\.\d+$') { throw "Тагът трябва да е като desktop-v0.7.1, а е $Tag" }
 $ownerRel = $Releases.Split("/")[0].ToLower()
@@ -77,7 +85,7 @@ if ($From -le 1) {
         if ($vis -ne "PUBLIC") { throw "$Releases съществува, но е $vis. Трябва да е публично." }
         Ok "$Releases вече съществува и е публично"
     } else {
-        Gh repo create $Releases --public --add-readme --description "Releases and website of P2P Messenger (the source code is private)"
+        RunGh repo create $Releases --public --add-readme --description "Releases and website of P2P Messenger (the source code is private)"
         Ok "създадено $Releases"
     }
 }
@@ -101,23 +109,23 @@ if ($From -le 2) {
     $old = $env:GH_TOKEN
     try {
         $env:GH_TOKEN = $plain
-        $push = & gh api "repos/$Releases" --jq ".permissions.push" 2>$null
+        $push = GhOut api "repos/$Releases" --jq ".permissions.push"
     } finally { $env:GH_TOKEN = $old }
     if ($push -ne "true") { $plain = $null; throw "Токенът не може да пише в $Releases. Провери репото и правата (Contents: Read and write)." }
     Ok "токенът може да пише в $Releases"
 
-    Gh secret set RELEASES_TOKEN --repo $Source --body $plain
+    RunGh secret set RELEASES_TOKEN --repo $Source --body $plain
     $plain = $null
     Ok "secret RELEASES_TOKEN е записан в $Source"
 
-    Gh variable set RELEASES_REPO --repo $Source --body $Releases
-    Gh variable set SOURCE_CLOSED --repo $Source --body "1"
-    Gh variable set PAGES_PUBLISH_REPO --repo $Source --body $Releases
+    RunGh variable set RELEASES_REPO --repo $Source --body $Releases
+    RunGh variable set SOURCE_CLOSED --repo $Source --body "1"
+    RunGh variable set PAGES_PUBLISH_REPO --repo $Source --body $Releases
     if ($SkipDomain) {
-        Gh variable set PAGES_BASE --repo $Source --body "/$($Releases.Split('/')[1])/"
+        RunGh variable set PAGES_BASE --repo $Source --body "/$($Releases.Split('/')[1])/"
     } else {
-        Gh variable set PAGES_BASE --repo $Source --body "/"
-        Gh variable set PAGES_DOMAIN --repo $Source --body $Domain
+        RunGh variable set PAGES_BASE --repo $Source --body "/"
+        RunGh variable set PAGES_DOMAIN --repo $Source --body $Domain
     }
     Ok "променливите са зададени"
 }
@@ -125,12 +133,12 @@ if ($From -le 2) {
 # ---------------------------------------------------------------- 3
 if ($From -le 3) {
     Say "3. Сайтът в gh-pages на публичното репо"
-    Gh workflow run pages.yml --repo $Source
+    RunGh workflow run pages.yml --repo $Source
     Wait-Run "pages.yml" "" "workflow_dispatch"
     if (GhQuiet api "repos/$Releases/pages") {
         Ok "Pages в $Releases вече е включен"
     } else {
-        Gh api -X POST "repos/$Releases/pages" -f "source[branch]=gh-pages" -f "source[path]=/" | Out-Null
+        RunGh api -X POST "repos/$Releases/pages" -f "source[branch]=gh-pages" -f "source[path]=/" | Out-Null
         Ok "Pages в ${Releases}: gh-pages / root"
     }
 }
@@ -158,14 +166,14 @@ if ($From -le 5) {
     } else {
         if (-not (GhQuiet api "repos/$Source/git/ref/tags/$Tag")) {
             $sha = & gh api "repos/$Source/git/ref/heads/main" --jq .object.sha
-            Gh api -X POST "repos/$Source/git/refs" -f "ref=refs/tags/$Tag" -f "sha=$sha" | Out-Null
+            RunGh api -X POST "repos/$Source/git/refs" -f "ref=refs/tags/$Tag" -f "sha=$sha" | Out-Null
             Ok "таг $Tag върху main ($($sha.Substring(0, 7)))"
         } else { Ok "тагът $Tag вече съществува" }
         Write-Host "    Windows и Linux билдовете траят около 20-40 минути."
         Wait-Run "windows-desktop.yml" $Tag "push"
         Wait-Run "linux-desktop.yml" $Tag "push"
         # между репа събитието "release: published" не се задейства: SBOM се пуска на ръка
-        Gh workflow run release-sbom.yml --repo $Source -f "tag=$Tag"
+        RunGh workflow run release-sbom.yml --repo $Source -f "tag=$Tag"
         Wait-Run "release-sbom.yml" "" "workflow_dispatch"
     }
 }
@@ -202,7 +210,7 @@ if ($From -le 7) {
     Warn "Публичните форкове остават публични; клонинги и кешове на досегашния код не се изтриват."
     $t = Read-Host "Напиши PRIVATE, за да направя $Source частно (всичко друго = не)"
     if ($t -ceq "PRIVATE") {
-        Gh repo edit $Source --visibility private --accept-visibility-change-consequences
+        RunGh repo edit $Source --visibility private --accept-visibility-change-consequences
         Ok "$Source е частно. Изданията и сайтът остават в $Releases."
     } else {
         Write-Host "    Оставям $Source публично. Пусни със -From 7, когато си готов."
