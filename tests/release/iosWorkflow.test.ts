@@ -74,3 +74,31 @@ describe('go-private.ps1', () => {
     expect(read('src-tauri/Cargo.toml')).toContain('version = "0.7.1"')
   })
 })
+
+describe('continue-private.ps1', () => {
+  const full = readFileSync(resolve(root, 'scripts/windows/continue-private.ps1'), 'utf8')
+  const ps = full.slice(full.indexOf('$ErrorActionPreference'))
+  it('is saved with a BOM, so Windows PowerShell 5.1 reads the Cyrillic text', () => {
+    expect(full.charCodeAt(0)).toBe(0xfeff)
+  })
+  it('has no function named like an external command it calls', () => {
+    for (const [, name] of ps.matchAll(/^function\s+([\w-]+)/gm)) expect(['gh', 'git']).not.toContain(name.toLowerCase())
+  })
+  it('deletes the release tag only when the release is not published, and only after asking', () => {
+    const del = ps.indexOf('-X DELETE')
+    expect(del).toBeGreaterThan(0)
+    const before = ps.slice(0, del)
+    expect(before).toContain('$tagSha -and -not $published')
+    expect(before.lastIndexOf('Read-Host')).toBeGreaterThan(before.lastIndexOf('$tagSha -and -not $published'))
+    expect(ps.match(/-X DELETE/g)).toHaveLength(1)
+  })
+  it('never makes the repository private itself: that stays the typed step of go-private.ps1', () => {
+    expect(ps).not.toContain('--visibility')
+    expect(ps).toContain('& $go @params')
+  })
+  it('makes go-private.ps1 wait only for runs that started after a new tag', () => {
+    const go = readFileSync(resolve(root, 'scripts/windows/go-private.ps1'), 'utf8')
+    expect(go).toMatch(/Wait-Run "windows-desktop\.yml" \$Tag "push" \$since/)
+    expect(go).toContain('function Wait-Run($workflow, $branch, $event, $Since = $null)')
+  })
+})
