@@ -101,7 +101,7 @@ try {
   await scan(page, `[en/${scheme}] connect`);
 
   // Same screens in Bulgarian, switched on the page.
-  await page.getByRole("button", { name: "Български" }).click();
+  await page.locator("select.lang-select").first().selectOption("bg");
   await page.getByRole("button", { name: "Покажи моята покана" }).waitFor({ timeout: 5_000 });
   // Let the switch's colour transition (180 ms) finish, so axe measures the settled colours.
   await page.waitForTimeout(400);

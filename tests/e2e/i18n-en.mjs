@@ -60,14 +60,14 @@ try {
   check("English browser starts in English", (await page.getAttribute("html", "lang")) === "en");
 
   // Switch to Bulgarian, then back, and check the page text changes with it.
-  await page.getByRole("button", { name: "Български" }).click();
+  await page.locator("select.lang-select").first().selectOption("bg");
   await page.getByRole("button", { name: "Създай идентичност" }).waitFor({ timeout: 5_000 });
   check("switch to Bulgarian updates the page", (await page.getAttribute("html", "lang")) === "bg");
   await page.reload();
   await page.getByRole("button", { name: "Създай идентичност" }).waitFor({ timeout: 20_000 });
   check("Bulgarian choice survives a reload", (await page.getAttribute("html", "lang")) === "bg");
 
-  await page.getByRole("button", { name: "English" }).click();
+  await page.locator("select.lang-select").first().selectOption("en");
   await page.getByRole("button", { name: "Create identity" }).waitFor({ timeout: 5_000 });
   check("switch back to English updates the page", (await page.getAttribute("html", "lang")) === "en");
 
