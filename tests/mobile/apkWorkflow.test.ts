@@ -14,7 +14,7 @@ describe("Android APK build", () => {
     for (const line of wf.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l))) {
       expect(line, line).toMatch(/@[0-9a-f]{40}\b/);
     }
-    expect(wf.match(/^permissions:\n  contents: read/m)).not.toBeNull();
+    expect(wf.match(/^permissions:\r?\n  contents: read/m)).not.toBeNull();
     expect(wf.match(/contents: write/g)?.length).toBe(1);
   });
 
