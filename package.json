@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:desktop": "tsc -b && vite build --mode desktop",
+    "build:site": "node scripts/site/build.mjs --build",
     "tauri": "tauri",
     "lint": "oxlint",
     "preview": "vite preview",

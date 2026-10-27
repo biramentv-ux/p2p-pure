@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="bg" data-theme="auto">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>P2P Messenger · Писмата ти, запечатани</title>
+    <meta name="description" content="Месинджър без сървър, без телефонен номер и без облак. Съобщенията, файловете и разговорите вървят директно между устройствата, шифровани от край до край. Windows, Linux, Android, iPhone и браузър." />
+    <meta name="theme-color" content="#0b1220" />
+    <meta property="og:title" content="P2P Messenger · Писмата ти, запечатани" />
+    <meta property="og:description" content="Без сървър, без телефон, без облак. Директно и шифровано от край до край." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/png" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="preload" href="fonts/ibm-plex-serif-cyrillic-500-italic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="site.css" />
+    <!-- Installed app or an old link to the app: straight to the messenger, before anything is drawn. -->
+    <script src="boot.js"></script>
+    <script type="module" src="site.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main" data-i18n="skip">Към съдържанието</a>
+
+    <!-- living background: two aurora fields that follow the palette, a star grid and film grain -->
+    <div class="aurora" aria-hidden="true">
+      <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span>
+    </div>
+    <div class="grid-bg" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="progress" aria-hidden="true"><span></span></div>
+
+    <header class="bar" id="top">
+      <a class="brand" href="#top" aria-label="P2P Messenger">
+        <span class="seal" aria-hidden="true">
+          <svg viewBox="0 0 48 48"><defs><linearGradient id="sealg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--a)"/><stop offset="1" stop-color="var(--b)"/></linearGradient></defs><circle cx="24" cy="24" r="19" fill="url(#sealg)"/><circle cx="24" cy="24" r="14.5" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1.2" stroke-dasharray="2 2.6"/><path d="M17 22.5h14v10.5H17z M19.8 22.5v-3.2a4.2 4.2 0 0 1 8.4 0v3.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="brand-name">P2P <em>Messenger</em></span>
+      </a>
+      <nav class="nav" aria-label="Основно меню" data-i18n-aria="navLabel">
+        <a href="#features" data-i18n="navFeatures">Какво може</a>
+        <a href="#how" data-i18n="navHow">Как работи</a>
+        <a href="#security" data-i18n="navSecurity">Сигурност</a>
+        <a href="#download" data-i18n="navDownload">Изтегли</a>
+        <a href="#faq" data-i18n="navFaq">Въпроси</a>
+      </nav>
+      <div class="bar-tools">
+        <button class="chip lang" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
+        <button class="chip theme" type="button" data-theme-toggle aria-label="Светла или тъмна тема" data-i18n-aria="themeLabel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="sun" d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+        </button>
+        <a class="btn btn-ghost bar-open" href="app/" data-i18n="openApp">Отвори в браузъра</a>
+        <button class="burger" type="button" aria-expanded="false" aria-controls="menu" data-menu-toggle aria-label="Меню" data-i18n-aria="menuLabel">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- full-screen menu (phones, and the "Меню" button on any size) -->
+    <div class="menu" id="menu" hidden>
+      <nav aria-label="Меню" data-i18n-aria="menuLabel">
+        <a href="#features"><small>01</small><span data-i18n="navFeatures">Какво може</span></a>
+        <a href="#how"><small>02</small><span data-i18n="navHow">Как работи</span></a>
+        <a href="#security"><small>03</small><span data-i18n="navSecurity">Сигурност</span></a>
+        <a href="#download"><small>04</small><span data-i18n="navDownload">Изтегли</span></a>
+        <a href="#faq"><small>05</small><span data-i18n="navFaq">Въпроси</span></a>
+      </nav>
+      <div class="menu-quick">
+        <p data-i18n="menuQuick">Направо към файла за</p>
+        <div class="menu-os">
+          <a href="#dl-windows" data-os-jump="windows">Windows</a>
+          <a href="#dl-linux" data-os-jump="linux">Linux</a>
+          <a href="#dl-android" data-os-jump="android">Android</a>
+          <a href="#dl-ios" data-os-jump="ios">iPhone</a>
+          <a href="app/" data-i18n="osWeb">Браузър</a>
+        </div>
+      </div>
+    </div>
+
+    <main id="main">
+      <!-- ================= HERO ================= -->
+      <section class="hero" data-palette="0">
+        <div class="hero-copy">
+          <p class="kicker reveal" data-i18n="heroKicker">Без сървър · без телефонен номер · без облак</p>
+          <h1 class="reveal" data-i18n-html="heroTitle">Писмата ти.<br /><em>Запечатани.</em></h1>
+          <p class="lead reveal" data-i18n="heroLead">Месинджър, в който съобщенията, снимките, файловете и разговорите вървят директно от твоето устройство до другия човек. Шифровани още преди да тръгнат. Никой по пътя не може да ги прочете, защото по пътя няма никой.</p>
+          <div class="cta reveal">
+            <a class="btn btn-main magnet" href="#download" data-primary-download>
+              <span class="btn-glow" aria-hidden="true"></span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"/></svg>
+              <span data-primary-label data-i18n="ctaDownload">Изтегли безплатно</span>
+            </a>
+            <a class="btn btn-ghost" href="app/">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H4zM8 20h8M12 16v4"/></svg>
+              <span data-i18n="openApp">Отвори в браузъра</span>
+            </a>
+          </div>
+          <p class="cta-note reveal" data-primary-note data-i18n="ctaNote">Отворен код · Windows, Linux, Android, iPhone и браузър</p>
+        </div>
+
+        <!-- the live demo: a message is sealed, travels with nobody in between, and is opened -->
+        <div class="demo reveal" aria-label="Демонстрация: съобщение се шифрова, пътува директно и се разшифрова" data-i18n-aria="demoLabel" role="img">
+          <div class="device left">
+            <div class="device-top"><span class="avatar a1">А</span><b data-i18n="demoA">Ани</b><i class="dot"></i></div>
+            <div class="bubble out" data-demo-out>Здрасти! Тук никой не чете. 🔒</div>
+            <div class="cipher" data-demo-cipher aria-hidden="true"></div>
+            <div class="device-foot mono" data-i18n="demoSealed">запечатано с Double Ratchet</div>
+          </div>
+          <div class="wire" aria-hidden="true">
+            <svg viewBox="0 0 200 60" preserveAspectRatio="none"><path id="wirepath" d="M0 30 C 60 0, 140 60, 200 30"/></svg>
+            <span class="packet" data-demo-packet></span>
+            <span class="no-server"><s data-i18n="demoServer">сървър</s><b data-i18n="demoNone">няма</b></span>
+          </div>
+          <div class="device right">
+            <div class="device-top"><span class="avatar a2">П</span><b data-i18n="demoB">Петър</b><i class="dot"></i></div>
+            <div class="bubble in" data-demo-in aria-live="off"></div>
+            <div class="words mono" aria-hidden="true"><span>луна</span><span>кедър</span><span>пясък</span><span>фенер</span></div>
+            <div class="device-foot mono" data-i18n="demoVerified">думите съвпадат ✓</div>
+          </div>
+        </div>
+        <a class="scroll-hint" href="#numbers" aria-label="Надолу" data-i18n-aria="scrollDown"><span></span></a>
+      </section>
+
+      <!-- ================= MARQUEE ================= -->
+      <div class="marquee" aria-hidden="true">
+        <div class="track" data-marquee data-i18n-html="marquee">
+          <span>0 акаунта</span><span>✦</span><span>0 телефонни номера</span><span>✦</span><span>Double Ratchet</span><span>✦</span><span>WebRTC</span><span>✦</span><span>Passkey</span><span>✦</span><span>12 думи за възстановяване</span><span>✦</span><span>AES-GCM на устройството</span><span>✦</span><span>отворен код</span><span>✦</span>
+        </div>
+      </div>
+
+      <!-- ================= NUMBERS ================= -->
+      <section class="numbers" id="numbers" data-palette="1" aria-label="С числа" data-i18n-aria="numbersLabel">
+        <div class="stat reveal"><b data-count="0">0</b><span data-i18n="stat0">сървъра, които пазят съобщенията ти</span></div>
+        <div class="stat reveal"><b data-count="100" data-suffix=" MB">100 MB</b><span data-i18n="stat1">файл директно, без облак</span></div>
+        <div class="stat reveal"><b data-count="9">9</b><span data-i18n="stat2">души в шифрована група</span></div>
+        <div class="stat reveal"><b data-count="12">12</b><span data-i18n="stat3">думи пазят целия ти профил</span></div>
+      </section>
+
+      <!-- ================= FEATURES ================= -->
+      <section class="features" id="features" data-palette="2">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="featKicker">Какво може</p>
+          <h2 data-i18n-html="featTitle">Всичко от един месинджър.<br /><em>Без посредника.</em></h2>
+        </header>
+        <div class="bento">
+          <article class="card big reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></div>
+            <h3 data-i18n="f1t">Шифровано от край до край</h3>
+            <p data-i18n="f1p">Всяко съобщение получава нов ключ (Double Ratchet). Дори някой да вземе един ключ, старите и следващите съобщения остават заключени.</p>
+            <div class="card-art ratchet" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </article>
+          <article class="card reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><path d="M11 11l9 9m-4-4 2-2m-5-1 2-2"/></svg></div>
+            <h3 data-i18n="f2t">Профил без регистрация</h3>
+            <p data-i18n="f2p">Passkey или парола на устройството. Без имейл, без телефон, без SMS код.</p>
+          </article>
+          <article class="card reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z"/></svg></div>
+            <h3 data-i18n="f3t">Контакт с QR</h3>
+            <p data-i18n="f3p">Покажи кода, другият го сканира. Или кратък код от 10 знака, който важи 10 минути.</p>
+          </article>
+          <article class="card reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M12 10v6m-3-3 3 3 3-3"/></svg></div>
+            <h3 data-i18n="f4t">Файлове до 100 MB</h3>
+            <p data-i18n="f4p">Видео, документи, музика с вграден плеър. Поставяш снимка с Ctrl+V и тя е готова за пращане.</p>
+          </article>
+          <article class="card reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg></div>
+            <h3 data-i18n="f5t">Аудио и видео разговори</h3>
+            <p data-i18n="f5p">По същата директна връзка. Медията е шифрована (DTLS-SRTP).</p>
+          </article>
+          <article class="card wide reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M3 20a6 6 0 0 1 12 0M14.5 20a4.5 4.5 0 0 1 7-3.8"/></svg></div>
+            <h3 data-i18n="f6t">Групи до 9 души</h3>
+            <p data-i18n="f6p">Админ, име и снимка на групата, GIF-ове. Новият член не вижда старата история, а махнатият губи достъп, дори да е офлайн.</p>
+            <div class="card-art orbit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          </article>
+          <article class="card reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+            <h3 data-i18n="f7t">12 думи и си обратно</h3>
+            <p data-i18n="f7p">Записваш ги веднъж. На ново устройство профилът се връща с тях.</p>
+          </article>
+          <article class="card reveal" data-tilt>
+            <div class="card-ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="11" height="16" rx="2"/><rect x="15" y="8" width="6" height="12" rx="1.5"/><path d="M8 17h1"/></svg></div>
+            <h3 data-i18n="f8t">Местене на ново устройство</h3>
+            <p data-i18n="f8p">Сканираш QR от стария телефон и профилът ти се пренася шифровано.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ================= HOW ================= -->
+      <section class="how" id="how" data-palette="3">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="howKicker">Как работи</p>
+          <h2 data-i18n-html="howTitle">Три стъпки.<br /><em>Нула акаунти.</em></h2>
+        </header>
+        <ol class="steps">
+          <li class="step reveal">
+            <span class="step-n">1</span>
+            <h3 data-i18n="s1t">Създай профил</h3>
+            <p data-i18n="s1p">Едно натискане. Ключовете се правят на твоето устройство и не го напускат. Записваш 12-те думи.</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-n">2</span>
+            <h3 data-i18n="s2t">Свържи се</h3>
+            <p data-i18n="s2p">Покажи QR кода или прати кратък код. Връзката между двете устройства е директна (WebRTC).</p>
+          </li>
+          <li class="step reveal">
+            <span class="step-n">3</span>
+            <h3 data-i18n="s3t">Сравнете думите</h3>
+            <p data-i18n="s3p">Двамата виждате едни и същи думи. Ако съвпадат, никой не стои по средата. Готово, пишете си.</p>
+          </li>
+        </ol>
+        <div class="versus reveal">
+          <div class="vs-col old">
+            <p class="vs-h" data-i18n="vsOld">Обикновен месинджър</p>
+            <div class="vs-diagram" aria-hidden="true"><span class="node">📱</span><span class="line"></span><span class="node srv">🗄️</span><span class="line"></span><span class="node">📱</span></div>
+            <ul>
+              <li data-i18n="vsOld1">акаунт с телефонен номер</li>
+              <li data-i18n="vsOld2">съобщенията минават през сървъра им</li>
+              <li data-i18n="vsOld3">кой с кого и кога остава при тях</li>
+            </ul>
+          </div>
+          <div class="vs-col new">
+            <p class="vs-h" data-i18n="vsNew">P2P Messenger</p>
+            <div class="vs-diagram" aria-hidden="true"><span class="node">📱</span><span class="line live"></span><span class="node">📱</span></div>
+            <ul>
+              <li data-i18n="vsNew1">без номер и без имейл</li>
+              <li data-i18n="vsNew2">директно от устройство до устройство</li>
+              <li data-i18n="vsNew3">историята е само при вас, шифрована</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= SECURITY ================= -->
+      <section class="security" id="security" data-palette="4">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="secKicker">Сигурност без хвалби</p>
+          <h2 data-i18n-html="secTitle">Казваме какво правим.<br /><em>И какво още не.</em></h2>
+        </header>
+        <div class="sec-grid">
+          <div class="sec-item reveal"><b data-i18n="sec1t">Отворен код</b><p data-i18n="sec1p">Всеки ред е в GitHub. Всяко издание има подписан списък на зависимостите (SBOM) и контролни суми.</p></div>
+          <div class="sec-item reveal"><b data-i18n="sec2t">Повторими билдове</b><p data-i18n="sec2p">Два чисти билда от един и същи код дават еднакви файлове. Проверява се автоматично.</p></div>
+          <div class="sec-item reveal"><b data-i18n="sec3t">Проверен спрямо еталон</b><p data-i18n="sec3p">Double Ratchet минава тестове срещу независима еталонна реализация. Платен външен одит още няма и ние го казваме.</p></div>
+          <div class="sec-item reveal"><b data-i18n="sec4t">Сигналният сървър е сляп</b><p data-i18n="sec4p">В режим „стая“ малък Worker само препраща подписани покани за 10 минути. Не вижда съобщения, не пише логове. Режимът с QR не ползва сървър изобщо.</p></div>
+          <div class="sec-item reveal"><b data-i18n="sec5t">Шифровано и на диска</b><p data-i18n="sec5p">Историята и контактите се пазят на устройството, шифровани с AES-GCM. Ключът не излиза от него.</p></div>
+          <div class="sec-item reveal warn"><b data-i18n="sec6t">Честно предупреждение</b><p data-i18n="sec6p">Връзката е директна, затова някои мобилни мрежи я блокират. Тогава първото свързване мини през една Wi‑Fi мрежа или през твой собствен TURN сървър.</p></div>
+        </div>
+      </section>
+
+      <!-- ================= DOWNLOAD ================= -->
+      <section class="download" id="download" data-palette="5">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="dlKicker">Изтегли</p>
+          <h2 data-i18n-html="dlTitle">Избери устройството.<br /><em>Файлът е директно тук.</em></h2>
+          <p class="sec-lead" data-i18n="dlLead">Файловете идват от изданията в GitHub. До всеки има контролна сума SHA-256.</p>
+        </header>
+        <div class="os-tabs reveal" role="tablist" aria-label="Система" data-i18n-aria="osLabel">
+          <button role="tab" type="button" data-tab="windows" id="tab-windows" aria-controls="dl-windows">Windows</button>
+          <button role="tab" type="button" data-tab="linux" id="tab-linux" aria-controls="dl-linux">Linux</button>
+          <button role="tab" type="button" data-tab="android" id="tab-android" aria-controls="dl-android">Android</button>
+          <button role="tab" type="button" data-tab="ios" id="tab-ios" aria-controls="dl-ios">iPhone · iPad</button>
+          <button role="tab" type="button" data-tab="web" id="tab-web" aria-controls="dl-web" data-i18n="osWeb">Браузър</button>
+          <span class="tab-ink" aria-hidden="true"></span>
+        </div>
+
+        <div class="panels reveal">
+          <div class="panel" role="tabpanel" id="dl-windows" aria-labelledby="tab-windows" data-panel="windows">
+            <div class="panel-head"><h3>Windows 10 · 11</h3><span class="badge" data-badge="windows"></span></div>
+            <div class="files">
+              <a class="file main" data-kind="windowsSetup" data-fallback><b data-i18n="winSetup">Инсталатор</b><small data-i18n="winSetupNote">без админ права · .exe</small><span class="meta"></span></a>
+              <a class="file" data-kind="windowsPortable" data-fallback><b data-i18n="winPortable">Portable</b><small data-i18n="winPortableNote">разархивираш и пускаш · .zip</small><span class="meta"></span></a>
+              <a class="file" data-kind="windowsSums" data-fallback><b>SHA256SUMS.txt</b><small data-i18n="sums">контролни суми</small><span class="meta"></span></a>
+            </div>
+            <p class="hint" data-i18n="winHint">Windows SmartScreen може да попита веднъж, защото програмата е нова. Избери „Още информация“ → „Изпълни въпреки това“.</p>
+          </div>
+
+          <div class="panel" role="tabpanel" id="dl-linux" aria-labelledby="tab-linux" data-panel="linux" hidden>
+            <div class="panel-head"><h3>Linux x86_64</h3><span class="badge" data-badge="linux"></span></div>
+            <div class="files">
+              <a class="file main" data-kind="deb" data-fallback><b>.deb</b><small>Debian · Ubuntu · Mint</small><span class="meta"></span></a>
+              <a class="file" data-kind="rpm" data-fallback><b>.rpm</b><small>Fedora · openSUSE</small><span class="meta"></span></a>
+              <a class="file" data-kind="appimage" data-fallback><b>AppImage</b><small data-i18n="appimageNote">навсякъде, без инсталация</small><span class="meta"></span></a>
+              <a class="file" data-kind="flatpak" data-fallback><b>Flatpak</b><small data-i18n="flatpakNote">в изолирана среда</small><span class="meta"></span></a>
+            </div>
+            <div class="code-line" data-install-line hidden><span class="mono" data-install-cmd>curl -fsSLO …/install.sh &amp;&amp; bash install.sh</span><button class="copy" type="button" data-copy-from="[data-install-cmd]" data-i18n="copy">Копирай</button></div>
+            <p class="hint" data-i18n="linuxHint">install.sh проверява контролните суми преди да инсталира.</p>
+          </div>
+
+          <div class="panel" role="tabpanel" id="dl-android" aria-labelledby="tab-android" data-panel="android" hidden>
+            <div class="panel-head"><h3>Android 7+</h3><span class="badge" data-badge="android"></span></div>
+            <div class="files">
+              <a class="file main" data-kind="apk" data-fallback><b>APK</b><small data-i18n="apkNote">директна инсталация</small><span class="meta"></span></a>
+              <a class="file" data-kind="androidSums" data-fallback><b>SHA256SUMS-android.txt</b><small data-i18n="sums">контролни суми</small><span class="meta"></span></a>
+            </div>
+            <ol class="mini-steps">
+              <li data-i18n="apk1">Изтегли файла на телефона.</li>
+              <li data-i18n="apk2">Отвори го и разреши „Инсталиране от този източник“.</li>
+              <li data-i18n="apk3">Готово. Или ползвай браузъра: Chrome → ⋮ → „Инсталиране на приложението“.</li>
+            </ol>
+          </div>
+
+          <div class="panel" role="tabpanel" id="dl-ios" aria-labelledby="tab-ios" data-panel="ios" hidden>
+            <div class="panel-head"><h3>iPhone · iPad</h3><span class="badge soft" data-i18n="iosBadge">през Safari</span></div>
+            <ol class="mini-steps big">
+              <li data-i18n-html="ios1">Отвори <a href="app/">приложението</a> в Safari.</li>
+              <li data-i18n="ios2">Натисни „Сподели“ (квадратчето със стрелка).</li>
+              <li data-i18n="ios3">Избери „Към началния екран“. Работи на цял екран, като истинско приложение.</li>
+            </ol>
+            <p class="hint" data-i18n="iosHint">Приложение в App Store още няма. Уеб версията е същият код и има всичко.</p>
+          </div>
+
+          <div class="panel" role="tabpanel" id="dl-web" aria-labelledby="tab-web" data-panel="web" hidden>
+            <div class="panel-head"><h3 data-i18n="webTitle">Направо в браузъра</h3><span class="badge soft" data-i18n="webBadge">без инсталация</span></div>
+            <p class="panel-lead" data-i18n="webLead">Chrome, Edge, Firefox или Safari, на компютър или телефон. След първото отваряне работи и без интернет за заредените части.</p>
+            <a class="btn btn-main" href="app/"><span data-i18n="openApp">Отвори в браузъра</span></a>
+          </div>
+        </div>
+        <p class="all-releases reveal"><a href="https://github.com/biramentv-ux/p2p-pure/releases" rel="noopener" data-i18n="allReleases">Всички издания и бележки в GitHub →</a></p>
+      </section>
+
+      <!-- ================= FAQ ================= -->
+      <section class="faq" id="faq" data-palette="6">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="faqKicker">Въпроси</p>
+          <h2 data-i18n-html="faqTitle">Питат ни.<br /><em>Отговаряме направо.</em></h2>
+        </header>
+        <div class="qa">
+          <details class="reveal"><summary data-i18n="q1">Наистина ли няма сървър?</summary><p data-i18n="a1">За съобщенията и файловете – няма. Те вървят директно. Малък сървър се ползва само за „стая“, когато сте далеч и не можете да сканирате QR: той препраща подписаната покана за 10 минути и толкова. Публични STUN сървъри помагат на двете устройства да се намерят, без да виждат съдържание.</p></details>
+          <details class="reveal"><summary data-i18n="q2">Какво става, ако загубя телефона?</summary><p data-i18n="a2">С 12-те думи възстановяваш профила на ново устройство. Затова ги запиши на хартия. Без тях никой не може да го възстанови, включително ние.</p></details>
+          <details class="reveal"><summary data-i18n="q3">Трябва ли двамата да сме онлайн?</summary><p data-i18n="a3">Да. Понеже няма сървър, който да пази съобщенията, те се доставят, когато и двамата сте свързани. Това е цената на това никой да не ги пази вместо вас.</p></details>
+          <details class="reveal"><summary data-i18n="q4">Защо понякога не се свързва?</summary><p data-i18n="a4">Някои мобилни мрежи блокират директните връзки. Пробвайте една Wi‑Fi мрежа за първото свързване или добавете свой TURN сървър в настройките. Чужд сървър по подразбиране не ползваме.</p></details>
+          <details class="reveal"><summary data-i18n="q5">Колко струва?</summary><p data-i18n="a5">Нищо. Няма реклами, няма абонамент, няма акаунт, който да се продава. Кодът е отворен.</p></details>
+          <details class="reveal"><summary data-i18n="q6">Безопасно ли е да сваля .exe или .apk отвън?</summary><p data-i18n="a6">Файловете се правят автоматично в GitHub от публичния код. До всеки има SHA-256 сума, а изданията имат подписан SBOM. Ако сумата съвпада, файлът е точно този, който е билднат.</p></details>
+        </div>
+      </section>
+
+      <!-- ================= FINAL CTA ================= -->
+      <section class="final" data-palette="7">
+        <div class="final-inner reveal">
+          <h2 data-i18n-html="finalTitle">Следващото ти съобщение<br /><em>може да е само ваше.</em></h2>
+          <div class="cta">
+            <a class="btn btn-main magnet" href="#download" data-primary-download><span class="btn-glow" aria-hidden="true"></span><span data-primary-label data-i18n="ctaDownload">Изтегли безплатно</span></a>
+            <a class="btn btn-ghost" href="app/"><span data-i18n="openApp">Отвори в браузъра</span></a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="foot-brand"><b>P2P Messenger</b><span data-i18n="footTag">Личен. Децентрализиран. Запечатан.</span></div>
+      <nav class="foot-links" aria-label="Връзки" data-i18n-aria="footLabel">
+        <a href="https://github.com/biramentv-ux/p2p-pure" rel="noopener">GitHub</a>
+        <a href="https://github.com/biramentv-ux/p2p-pure/blob/main/SECURITY.md" rel="noopener" data-i18n="footSecurity">Сигурност</a>
+        <a href="https://github.com/biramentv-ux/p2p-pure/blob/main/docs/RATCHET-AUDIT.md" rel="noopener" data-i18n="footAudit">Проверка на шифроването</a>
+        <a href="https://github.com/biramentv-ux/p2p-pure/blob/main/docs/SUPPLY-CHAIN.md" rel="noopener">SBOM</a>
+        <a href="https://github.com/biramentv-ux/p2p-pure/blob/main/LICENSE" rel="noopener" data-i18n="footLicense">Лиценз</a>
+      </nav>
+      <p class="foot-small" data-i18n="footSmall">Сайтът не ползва бисквитки, проследяване или външни шрифтове. Нищо не се изпраща, докато го разглеждаш.</p>
+    </footer>
+
+    <!-- Filled in by the build (scripts/site/build.mjs) from the GitHub releases. -->
+    <script type="application/json" id="releases">{}</script>
+  </body>
+</html>

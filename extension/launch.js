@@ -5,7 +5,7 @@
  * is kept in memory between events. The tab is found again on every call.
  */
 
-export const APP_URL = "https://dyrakarmy.online/";
+export const APP_URL = "https://dyrakarmy.online/app/";
 const APP_URL_PATTERN = `${APP_URL}*`;
 
 /** True when a tab already runs the messenger. Uses only the host permission. */
