@@ -17,7 +17,7 @@ import { join, resolve } from "node:path";
 
 const CHROME_PATH = process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 const EXTENSION = resolve("extension");
-const APP_URL = "https://dyrakarmy.online/";
+const APP_URL = "https://dyrakarmy.online/app/";
 const require = createRequire(import.meta.url);
 const AXE_SOURCE = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 
