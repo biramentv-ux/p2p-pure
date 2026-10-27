@@ -1,5 +1,8 @@
 # iOS overlay: passkeys in WKWebView (Associated Domains)
 
+The entitlement is already wired into `ios/App/App/App.entitlements`, and the Team ID is put into the
+association file by the Pages build (variable `APPLE_TEAM_ID`). Full guide: `docs/IOS.md`.
+
 Passkeys in a Capacitor app (WKWebView) work only when the app is allowed to use the
 domain. Apple checks two files:
 
