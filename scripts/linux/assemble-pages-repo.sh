@@ -13,7 +13,7 @@
 set -euo pipefail
 
 DEST="${1:?usage: assemble-pages-repo.sh DEST_DIR}"
-REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is not set}"
+REPO="${RELEASES_REPO:-${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is not set}}"  # the releases repository
 ASSET=p2p-messenger-linux-repo.tar.gz
 
 tag="$(gh api "repos/$REPO/releases?per_page=30" \

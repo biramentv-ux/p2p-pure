@@ -155,8 +155,11 @@ jobs:
           path: out
       - name: Attach to the release
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          # The releases live here: this repository, or a separate public one when the source is
+          # private (variable RELEASES_REPO, token secret RELEASES_TOKEN; docs/PRIVATE-REPO.md).
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
+          GH_REPO: ${{ vars.RELEASES_REPO || github.repository }}
+          SOURCE_REPO: ${{ github.repository }}
         run: |
           case "$RELEASE_TAG" in android-v*) ;; *) echo "::error::release tag must start with android-v"; exit 1 ;; esac
           # Releases in this repository are immutable once published: files can only be added
@@ -166,7 +169,10 @@ jobs:
             exit 1
           fi
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --draft --target "${{ github.sha }}" --title "P2P Messenger for Android $RELEASE_TAG" --prerelease \
+            # a commit of the source repository cannot be the target in another repository
+            target=(--target "${{ github.sha }}")
+            [ "$GH_REPO" = "$SOURCE_REPO" ] || target=()
+            gh release create "$RELEASE_TAG" --draft ${target[@]+"${target[@]}"} --title "P2P Messenger for Android $RELEASE_TAG" --prerelease \
               --notes "Android APK. Install: allow installing from this source, open the .apk. SHA-256 is in SHA256SUMS-android.txt. See docs/ANDROID-APK.md."
           fi
           gh release upload "$RELEASE_TAG" out/* --clobber

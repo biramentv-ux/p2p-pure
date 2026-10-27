@@ -14,15 +14,17 @@ const FAKE_GH = `#!/usr/bin/env bash
 S="$FAKE_STATE"
 args="$*"
 case "$1 $2" in
-  "api repos/o/r/releases")
+  "api repos/o/r/releases"|"api repos/o/pub/releases")
     tag="$(printf '%s' "$args" | sed -n 's/.*tag_name == "\\([^"]*\\)".*/\\1/p')"
     [ -f "$S/tag" ] && [ "$(cat "$S/tag")" = "$tag" ] && echo "7 $(cat "$S/draft")"
     exit 0 ;;
-  "api repos/o/r/releases/7") cat "$S/assets" 2>/dev/null; exit 0 ;;
-  "release create") echo "$3" > "$S/tag"; echo true > "$S/draft"; : > "$S/assets"; echo created >> "$S/log"; exit 0 ;;
+  "api repos/o/r/releases/7"|"api repos/o/pub/releases/7") cat "$S/assets" 2>/dev/null; exit 0 ;;
+  "release create") echo "$3" > "$S/tag"; echo true > "$S/draft"; : > "$S/assets"; echo created >> "$S/log"; echo "$args" > "$S/create-args"; exit 0 ;;
   "release upload")
     shift 3
-    for f in "$@"; do basename "$f" >> "$S/assets"; done
+    while [ $# -gt 0 ]; do
+      case "$1" in --repo) echo "$2" > "$S/repo"; shift 2 ;; --*) shift ;; *) basename "$1" >> "$S/assets"; shift ;; esac
+    done
     sort -u "$S/assets" -o "$S/assets"; echo upload >> "$S/log"; exit 0 ;;
   "release edit") echo false > "$S/draft"; echo published >> "$S/log"; exit 0 ;;
 esac
@@ -57,6 +59,7 @@ describe("desktop release script (draft -> upload -> publish)", () => {
       PATH: `${bin}:${process.env.PATH}`,
       FAKE_STATE: state,
       GITHUB_REPOSITORY: "o/r",
+      RELEASES_REPO: "", // CI workflows export it; the tests choose their own
       GH_TOKEN: "x",
       GITHUB_OUTPUT: out(),
       WAIT_SLEEP: "0",
@@ -79,6 +82,27 @@ describe("desktop release script (draft -> upload -> publish)", () => {
     const log = readFileSync(join(state, "log"), "utf8").trim().split("\n");
     expect(log.filter((l) => l === "created")).toHaveLength(1);
     expect(log.filter((l) => l === "published")).toHaveLength(1);
+  });
+
+  it("with RELEASES_REPO, works on that repository and sets no target commit (it is not in that repository)", () => {
+    env = { ...env, RELEASES_REPO: "o/pub" };
+    const win = files("win", ["P2P-Messenger-Setup-x64.exe"]);
+    const lin = files("lin", ["SHA256SUMS-linux.txt"]);
+    for (const d of [win, lin]) {
+      const r = run("attach", "desktop-v0.7.0", d, "abc123", join(dir, "notes.md"));
+      expect(r.status, r.stderr + r.stdout).toBe(0);
+    }
+    expect(readFileSync(join(state, "draft"), "utf8").trim()).toBe("false");
+    expect(readFileSync(join(state, "repo"), "utf8").trim()).toBe("o/pub");
+    const created = readFileSync(join(state, "create-args"), "utf8");
+    expect(created).toContain("--repo o/pub");
+    expect(created).not.toContain("--target");
+  });
+
+  it("without RELEASES_REPO the release is created on the built commit, as before", () => {
+    const r = run("attach", "desktop-v0.7.0", files("win", ["P2P-Messenger-Setup-x64.exe"]), "abc123", join(dir, "notes.md"));
+    expect(r.status, r.stderr + r.stdout).toBe(0);
+    expect(readFileSync(join(state, "create-args"), "utf8")).toContain("--target abc123");
   });
 
   it("refuses to add files to a release that is already published (immutable)", () => {
