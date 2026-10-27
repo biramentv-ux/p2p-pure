@@ -34,6 +34,12 @@ function GhOut {     # изходът на gh или $null при грешка
     if ($LASTEXITCODE -ne 0) { return $null }
     return $o
 }
+function GhJson {    # JSON от gh като масив от обекти. Без --jq с кавички вътре: Windows PowerShell 5.1
+                     # маха вътрешните " при подаване на аргументи на външна програма.
+    $o = GhOut @args
+    if (-not $o) { return @() }
+    return @((($o -join "`n") | ConvertFrom-Json) | ForEach-Object { $_ })
+}
 function Show($n, $done, $text) {
     if ($done) { Write-Host ("  [x] {0}. {1}" -f $n, $text) -ForegroundColor Green }
     else { Write-Host ("  [ ] {0}. {1}" -f $n, $text) -ForegroundColor Yellow }
@@ -53,9 +59,7 @@ $s1 = ($vis -eq "PUBLIC")
 # 2. secret + променливи в изходното репо
 $secrets = @(GhOut secret list --repo $Source --json name --jq ".[].name" | Where-Object { $_ })
 $vars = @{}
-foreach ($line in @(GhOut variable list --repo $Source --json name,value --jq '.[] | .name + "=" + .value')) {
-    if ($line -match '^([^=]+)=(.*)$') { $vars[$Matches[1]] = $Matches[2] }
-}
+foreach ($v in (GhJson variable list --repo $Source --json name,value)) { $vars[$v.name] = $v.value }
 $s2 = ($secrets -contains "RELEASES_TOKEN") -and ($vars["RELEASES_REPO"] -eq $Releases) -and
       ($vars["SOURCE_CLOSED"] -eq "1") -and ($vars["PAGES_PUBLISH_REPO"] -eq $Releases)
 
@@ -104,7 +108,8 @@ if ($from -eq 5) {
     if ($tagSha -and -not $published) {
         $states = @()
         foreach ($wf in @("windows-desktop.yml", "linux-desktop.yml")) {
-            $r = GhOut run list --repo $Source --workflow $wf --branch $Tag --limit 1 --json status,conclusion --jq '.[0] | .status + "/" + (.conclusion // "")'
+            $runs = GhJson run list --repo $Source --workflow $wf --branch $Tag --limit 1 --json status,conclusion
+            $r = if ($runs.Count -gt 0) { "$($runs[0].status)/$($runs[0].conclusion)" } else { $null }
             $states += "${wf}: $(if ($r) { $r } else { 'няма пускане' })"
         }
         $failed = ($states -join " ") -match "failure|cancelled|timed_out|няма пускане"
