@@ -122,9 +122,11 @@ async function launch(extraArgs = []) {
 const state = (page) =>
   page.evaluate(() => {
     if (document.querySelector("ol.mnemonic-grid")) return "mnemonic";
+    // The identity screen has password fields of its own (the optional TURN settings), so the
+    // identity text decides before any password field is looked at.
+    if (document.querySelector(".did-text")) return "main";
     if (document.querySelector('input[autocomplete="current-password"]')) return "unlock-password";
     if (document.querySelector('input[type="password"]')) return "create-password";
-    if (document.querySelector(".did-text")) return "main";
     return "other";
   });
 
@@ -232,12 +234,20 @@ try {
     await page.locator('input[type="password"]').nth(0).fill(PASSWORD);
     await page.locator('input[type="password"]').nth(1).fill(PASSWORD);
     await page.locator("form button[type=submit]").click();
-    await waitState(page, ["mnemonic"], 60_000);
+    await waitState(page, ["mnemonic"], 60_000).catch(async (e) => {
+      await page.screenshot({ path: join(OUT, "electron-password.png") });
+      console.log("BODY", (await page.locator("main").innerText()).slice(0, 600));
+      throw e;
+    });
   }
   const words = await page.locator("ol.mnemonic-grid li").count();
   await page.locator('main > .screen input[type="checkbox"]').check();
   await page.locator("main > .screen > button").first().click();
-  await waitState(page, ["main"]);
+  await waitState(page, ["main"]).catch(async (e) => {
+    await page.screenshot({ path: join(OUT, "electron-after-words.png") });
+    console.log("BODY", (await page.locator("main").innerText()).slice(0, 600));
+    throw e;
+  });
   const did = (await page.locator(".did-text").innerText()).trim();
   check("identity created (12 words, did:key)", words === 12 && did.startsWith("did:key:z6Mk"), `${words} words, ${did.slice(0, 20)}…`);
   await page.screenshot({ path: join(OUT, "electron-main.png") });
