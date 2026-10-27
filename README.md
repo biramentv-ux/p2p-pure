@@ -197,7 +197,7 @@ npm run build
 npx cap add android      # или ios, веднъж
 npm run mobile:sync
 npx cap sync
-npx cap open android     # отваря Android Studio; или ios за Xcode
+npx cap open android     # отваря Android Studio; или ios за Xcode (TestFlight и App Store: docs/IOS.md)
 ```
 
 Нужни са Android Studio или Xcode. Преди публикуване: SHA-256 отпечатъкът в `assetlinks.json`, Apple Team ID в AASA файла и тест на разрешенията на реално устройство.
