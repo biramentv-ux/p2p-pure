@@ -10,7 +10,7 @@
   root.classList.add("js");
 
   var theme = "";
-  try { theme = localStorage.getItem("site-theme") || ""; } catch (_e) { /* private mode */ }
+  try { theme = localStorage.getItem("site-theme") || ""; } catch { /* private mode */ }
   if (theme !== "light" && theme !== "dark") {
     theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
   }
@@ -19,7 +19,7 @@
   var standalone = false;
   try {
     standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
-  } catch (_e) { /* ignore */ }
+  } catch { /* ignore */ }
   var forced = /[?&]site=1(?:&|$)/.test(location.search);
   if (standalone && !forced) {
     location.replace("app/" + location.search + location.hash);
