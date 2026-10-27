@@ -52,19 +52,35 @@ function Confirm-Step($q) {
     $a = Read-Host "$q (д/н)"
     return ($a -match '^(д|y|yes|да)$')
 }
-# Намира последното пускане на workflow за таг/клон и чака да приключи. Връща при успех, хвърля при провал.
-function Wait-Run($workflow, $branch, $event) {
+# Намира пускане на workflow за таг/клон и чака да приключи. $Since (UTC): взима само пускане, започнало
+# след този момент (иначе след нов таг със старо име можем да хванем предишното, вече паднало пускане).
+# При провал казва коя стъпка е паднала и дава линк.
+function Wait-Run($workflow, $branch, $event, $Since = $null) {
     $id = $null
-    for ($i = 0; $i -lt 20 -and -not $id; $i++) {
+    for ($i = 0; $i -lt 30 -and -not $id; $i++) {
         Start-Sleep -Seconds 10
-        $args2 = @("run", "list", "--repo", $Source, "--workflow", $workflow, "--limit", "1", "--json", "databaseId")
+        $args2 = @("run", "list", "--repo", $Source, "--workflow", $workflow, "--limit", "5", "--json", "databaseId,createdAt")
         if ($branch) { $args2 += @("--branch", $branch) }
         if ($event) { $args2 += @("--event", $event) }
-        $id = GhOut @args2 --jq ".[0].databaseId"
+        $runs = GhOut @args2
+        if ($runs) {
+            # една JSON стойност от всички редове; ForEach-Object разгъва масива (Windows PowerShell 5.1)
+            $list = @((($runs -join "`n") | ConvertFrom-Json) | ForEach-Object { $_ })
+            if ($Since) { $list = @($list | Where-Object { ([datetime]$_.createdAt).ToUniversalTime() -ge $Since.AddSeconds(-30) }) }
+            if ($list.Count -gt 0) { $id = $list[0].databaseId }
+        }
     }
     if (-not $id) { throw "Не намирам пускане на $workflow." }
     Write-Host "    чакам $workflow (пускане $id)..."
-    RunGh run watch $id --repo $Source --exit-status --interval 30
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & gh run watch $id --repo $Source --exit-status --interval 30
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    if ($code -ne 0) {
+        $failed = GhOut run view $id --repo $Source --json jobs --jq '[.jobs[] | select(.conclusion == "failure") | .name + " -> " + ([.steps[] | select(.conclusion == "failure") | .name] | join(", "))] | join("; ")'
+        throw "$workflow падна ($failed). Подробности: https://github.com/$Source/actions/runs/$id"
+    }
 }
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "Липсва GitHub CLI (winget install GitHub.cli), после gh auth login." }
@@ -133,8 +149,9 @@ if ($From -le 2) {
 # ---------------------------------------------------------------- 3
 if ($From -le 3) {
     Say "3. Сайтът в gh-pages на публичното репо"
+    $pagesSince = (Get-Date).ToUniversalTime()
     RunGh workflow run pages.yml --repo $Source
-    Wait-Run "pages.yml" "" "workflow_dispatch"
+    Wait-Run "pages.yml" "" "workflow_dispatch" $pagesSince
     if (GhQuiet api "repos/$Releases/pages") {
         Ok "Pages в $Releases вече е включен"
     } else {
@@ -164,17 +181,20 @@ if ($From -le 5) {
     if (GhQuiet api "repos/$Releases/releases/tags/$Tag") {
         Ok "изданието $Tag вече съществува в $Releases"
     } else {
+        $since = $null
         if (-not (GhQuiet api "repos/$Source/git/ref/tags/$Tag")) {
+            $since = (Get-Date).ToUniversalTime()
             $sha = & gh api "repos/$Source/git/ref/heads/main" --jq .object.sha
             RunGh api -X POST "repos/$Source/git/refs" -f "ref=refs/tags/$Tag" -f "sha=$sha" | Out-Null
             Ok "таг $Tag върху main ($($sha.Substring(0, 7)))"
         } else { Ok "тагът $Tag вече съществува" }
         Write-Host "    Windows и Linux билдовете траят около 20-40 минути."
-        Wait-Run "windows-desktop.yml" $Tag "push"
-        Wait-Run "linux-desktop.yml" $Tag "push"
+        Wait-Run "windows-desktop.yml" $Tag "push" $since
+        Wait-Run "linux-desktop.yml" $Tag "push" $since
         # между репа събитието "release: published" не се задейства: SBOM се пуска на ръка
+        $sbomSince = (Get-Date).ToUniversalTime()
         RunGh workflow run release-sbom.yml --repo $Source -f "tag=$Tag"
-        Wait-Run "release-sbom.yml" "" "workflow_dispatch"
+        Wait-Run "release-sbom.yml" "" "workflow_dispatch" $sbomSince
     }
 }
 
