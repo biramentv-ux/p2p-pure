@@ -1,4 +1,5 @@
-# Publishes the web app to GitHub Pages: https://biramentv-ux.github.io/p2p-pure/
+# Publishes the site to GitHub Pages: https://biramentv-ux.github.io/p2p-pure/
+# The landing page (menu, downloads, info) is at "/", the messenger at "/app/" (scripts/site/build.mjs).
 # Always online, independent of the owner's computer and of any Cloudflare credentials.
 #
 # One-time setup by the repository owner: Settings -> Pages -> Build and deployment ->
@@ -9,9 +10,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  # A finished Linux release may carry a new signed update channel (<site>/linux/).
+  # A finished release may carry a new signed Linux update channel (<site>/linux/), and every
+  # release adds files the download buttons should offer (the page is rebuilt with the newest ones).
   workflow_run:
-    workflows: ["Linux desktop"]
+    workflows: ["Linux desktop", "Windows desktop", "Android APK"]
     types: [completed]
 
 permissions:
@@ -23,7 +25,7 @@ concurrency:
 
 jobs:
   build:
-    # After "Linux desktop" only when it succeeded on a release (tag or manual run), not on PRs.
+    # After a release workflow only when it succeeded on a release (tag or manual run), not on PRs.
     if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -43,15 +45,17 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Build
+      - name: Build the app (/app/) and the site (/)
         env:
           # "/" when the site is served from its own domain (scripts/windows/point-domain-to-pages.ps1
           # sets the variable PAGES_BASE); otherwise the project path.
-          BASE_PATH: ${{ vars.PAGES_BASE || '/p2p-pure/' }}
+          PAGES_BASE: ${{ vars.PAGES_BASE || '/p2p-pure/' }}
           # Public GIPHY client key (Settings -> Secrets and variables -> Actions -> Variables).
           # Empty: the GIF button is hidden.
           VITE_GIPHY_API_KEY: ${{ vars.GIPHY_API_KEY }}
-        run: npm run build
+          # Only to read the public releases list without hitting the anonymous rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/site/build.mjs --build --base "$PAGES_BASE"
 
       # The signed APT + dnf repository from the newest signed desktop release, next to the web
       # app (Pages serves one artifact, so the channel must be part of it). No key here: the
