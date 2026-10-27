@@ -609,8 +609,10 @@ try {
     const t0 = Date.now();
     const outcome = await clickCreate(page);
     facts.cancelled = { createOutcome: outcome, seconds: Math.round((Date.now() - t0) / 1000) };
-    const fallback = page.locator("main > .screen > button.secondary");
-    const offered = outcome.startsWith("error") && (await fallback.count()) === 1;
+    // The intro screen also has "I have another device" (transfer), so there can be two secondary
+    // buttons; the password fallback is the one after it.
+    const fallback = page.locator("main > .screen > button.secondary").last();
+    const offered = outcome.startsWith("error") && (await page.locator("main > .screen > button.secondary").count()) >= 1;
     check("passkey cancelled: the app offers a password", offered, outcome);
     if (offered) {
       await cdp.send("WebAuthn.removeVirtualAuthenticator", { authenticatorId: refusing });
