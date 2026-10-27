@@ -274,7 +274,7 @@ jobs:
     needs: [build, rpm-fedora, flatpak]
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -344,16 +344,58 @@ jobs:
           test ! -e /etc/apt/sources.list.d/p2p-messenger.sources
           docker run --rm -v /srv/p2p-repo:/srv/p2p-repo:ro -v "$PWD/out:/out:ro" fedora:latest \
             bash -c 'bash /out/install.sh --add-repo --repo-url file:///srv/p2p-repo/linux && rpm -q p2p-messenger && rpm -q gpg-pubkey --qf "%{SUMMARY}\n"'
-      - name: Attach to the release (created by whichever desktop workflow comes first)
+      # The finished (and, with a key, signed) files, for the jobs that publish and check them.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: p2p-messenger-linux-release
+          path: out
+          if-no-files-found: error
+          retention-days: 7
+
+  # The only job here that can write to the repository. Releases are immutable once published, so
+  # files go into a draft, and the draft is published by whichever desktop workflow (this one or
+  # Windows) adds its files last. The group serialises the two, so they cannot both create the draft.
+  attach:
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: desktop-release-${{ inputs.release_tag || github.ref_name }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: p2p-messenger-linux-release
+          path: out
+      - name: Attach to the draft release, publish when Windows is there too
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --target "${{ github.sha }}" --title "P2P Messenger $RELEASE_TAG" --notes-file docs/DESKTOP-RELEASE.md --prerelease \
-              || gh release view "$RELEASE_TAG" >/dev/null   # the Windows workflow created it a moment earlier
-          fi
-          gh release upload "$RELEASE_TAG" out/* --clobber
+        run: bash scripts/release/desktop-release.sh attach "$RELEASE_TAG" out "${{ github.sha }}" docs/DESKTOP-RELEASE.md
+
+  # Needs the public download links, so it waits for the release to be published.
+  release-verify:
+    needs: attach
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: p2p-messenger-linux-release
+          path: out
+      - name: Wait until the release is published (Windows adds its files too)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/release/desktop-release.sh wait "$RELEASE_TAG" 40
       - name: Install from the release with install.sh
         run: |
           set -euo pipefail
