@@ -45,6 +45,18 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # Passkeys in the iOS app: the domain must name the app as "<Team ID>.<bundle id>"
+      # (docs/IOS.md). Variable APPLE_TEAM_ID = the 10 characters of the Apple Developer team.
+      - name: Apple Team ID in apple-app-site-association
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_TEAM_ID" ]; then
+            [[ "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error::APPLE_TEAM_ID must be 10 letters/digits"; exit 1; }
+            sed -i "s/TEAMID\./${APPLE_TEAM_ID}./" public/.well-known/apple-app-site-association
+            grep -q "\"${APPLE_TEAM_ID}\.bg\.p2pmessenger\.app\"" public/.well-known/apple-app-site-association
+          fi
+
       - name: Build the app (/app/) and the site (/)
         env:
           # "/" when the site is served from its own domain (scripts/windows/point-domain-to-pages.ps1
