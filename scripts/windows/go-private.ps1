@@ -131,7 +131,7 @@ if ($From -le 3) {
         Ok "Pages в $Releases вече е включен"
     } else {
         Gh api -X POST "repos/$Releases/pages" -f "source[branch]=gh-pages" -f "source[path]=/" | Out-Null
-        Ok "Pages в $Releases: gh-pages / root"
+        Ok "Pages в ${Releases}: gh-pages / root"
     }
 }
 
