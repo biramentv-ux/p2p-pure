@@ -430,21 +430,16 @@
   padding: 3px;
 }
 
-:root[data-theme="loud"] .lang-option {
+:root[data-theme="loud"] .lang-code {
+  background: #ff2e93;
   color: #0a0a0a;
   font-weight: 800;
   border-radius: 10px;
-}
-
-:root[data-theme="loud"] .lang-option:hover {
-  background: #ffe14d;
-  color: #0a0a0a;
-}
-
-:root[data-theme="loud"] .lang-option.active {
-  background: #ff2e93;
-  color: #0a0a0a;
   box-shadow: inset 0 0 0 2px #0a0a0a;
+}
+
+:root[data-theme="loud"] .lang-switch:focus-within {
+  outline: 4px solid #0a0a0a;
 }
 
 /* ---- chat ---- */

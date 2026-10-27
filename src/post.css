@@ -233,16 +233,16 @@ textarea {
   display: none;
 }
 .tabs .tab,
-.lang-option {
+.lang-code {
   transition: none;
 }
 .lang-switch {
   border-radius: var(--radius);
   padding: 0.25rem;
 }
-.lang-option {
+.lang-code {
   min-width: 32px;
-  padding: 0 0.3rem;
+  padding: 0 0.45rem;
   font-size: 0.72rem;
   border-radius: var(--radius-s);
   font-family: var(--mono);
@@ -485,7 +485,7 @@ textarea {
 
 /* The language switch keeps the same shape in the chat header as in the top bar. */
 .chat-header .lang-switch,
-.chat-header .lang-option {
+.chat-header .lang-code {
   border-radius: var(--radius-s);
 }
 

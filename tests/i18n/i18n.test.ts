@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { EN_DICTIONARY } from "../../src/i18n/en";
-import { detectLang, localeFor, saveLang, translate } from "../../src/i18n";
+import { RU_DICTIONARY } from "../../src/i18n/ru";
+import { DE_DICTIONARY } from "../../src/i18n/de";
+import { ES_DICTIONARY } from "../../src/i18n/es";
+import { PT_DICTIONARY } from "../../src/i18n/pt";
+import { LANGS, LANG_NAMES, detectLang, localeFor, saveLang, translate } from "../../src/i18n";
 
 const CYRILLIC = /[Ѐ-ӿ]/;
 const PLACEHOLDER = /\{(\w+)\}/g;
@@ -78,6 +82,15 @@ describe("detectLang", () => {
     expect(detectLang(memory(null), undefined)).toBe("en");
   });
 
+  it("picks every offered language from the browser, whatever the region", () => {
+    expect(detectLang(memory(null), "ru-RU")).toBe("ru");
+    expect(detectLang(memory(null), "de-AT")).toBe("de");
+    expect(detectLang(memory(null), "es-MX")).toBe("es");
+    expect(detectLang(memory(null), "pt-PT")).toBe("pt");
+    expect(detectLang(memory(null), "fr-FR")).toBe("en");
+    expect(detectLang(memory("de"), "bg-BG")).toBe("de");
+  });
+
   it("does not throw when storage is blocked", () => {
     const blocked = {
       getItem: () => {
@@ -96,6 +109,11 @@ describe("locale", () => {
   it("maps each language to a date and time locale", () => {
     expect(localeFor("bg")).toBe("bg-BG");
     expect(localeFor("en")).toBe("en-GB");
+    for (const lang of LANGS) expect(localeFor(lang)).toMatch(/^[a-z]{2}-[A-Z]{2}$/);
+  });
+
+  it("names every language in itself", () => {
+    expect(Object.keys(LANG_NAMES).sort()).toEqual([...LANGS].sort());
   });
 });
 
@@ -127,5 +145,42 @@ describe("English dictionary", () => {
     ];
     const missing = [...literalTKeys(uiFiles)].filter((key) => !(key in EN_DICTIONARY));
     expect(missing, "UI strings without an English entry").toEqual([]);
+  });
+});
+
+describe.each([
+  ["Russian", "ru", RU_DICTIONARY, true],
+  ["German", "de", DE_DICTIONARY, false],
+  ["Spanish", "es", ES_DICTIONARY, false],
+  ["Portuguese", "pt", PT_DICTIONARY, false],
+] as const)("%s dictionary", (_name, lang, dict, cyrillic) => {
+  const entries = Object.entries(dict);
+
+  it("has exactly the keys of the English package (nothing missing, nothing stale)", () => {
+    expect(Object.keys(dict).sort()).toEqual(Object.keys(EN_DICTIONARY).sort());
+  });
+
+  it("has no empty values and keeps the placeholders", () => {
+    for (const [key, value] of entries) {
+      expect(value.trim(), `empty value for "${key}"`).not.toBe("");
+      expect(placeholders(value), `placeholders differ for "${key}"`).toEqual(placeholders(key));
+    }
+  });
+
+  it(cyrillic ? "is written in Cyrillic" : "contains no Cyrillic text", () => {
+    for (const [key, value] of entries) {
+      if (cyrillic) continue;
+      expect(CYRILLIC.test(value), `Cyrillic left in "${key}"`).toBe(false);
+    }
+    if (cyrillic) expect(entries.filter(([, v]) => CYRILLIC.test(v)).length).toBeGreaterThan(entries.length * 0.9);
+  });
+
+  it("is used by translate()", () => {
+    expect(translate(lang, "Контакти")).toBe(dict["Контакти"]);
+    expect(translate(lang, "Паролата трябва да е поне {n} символа.", { n: 12 })).toContain("12");
+  });
+
+  it("falls back to English for a key it does not have", () => {
+    expect(translate(lang, "Текст без превод")).toBe("Текст без превод");
   });
 });
