@@ -48,6 +48,12 @@ function GhOut {     # изход на gh или $null при грешка; бе
     if ($LASTEXITCODE -ne 0) { return $null }
     return $o
 }
+function GhJson {    # JSON от gh като масив от обекти. Без --jq с кавички вътре: Windows PowerShell 5.1
+                     # маха вътрешните " при подаване на аргументи на външна програма.
+    $o = GhOut @args
+    if (-not $o) { return @() }
+    return @((($o -join "`n") | ConvertFrom-Json) | ForEach-Object { $_ })
+}
 function Confirm-Step($q) {
     $a = Read-Host "$q (д/н)"
     return ($a -match '^(д|y|yes|да)$')
@@ -78,7 +84,9 @@ function Wait-Run($workflow, $branch, $event, $Since = $null) {
     $code = $LASTEXITCODE
     $ErrorActionPreference = $prev
     if ($code -ne 0) {
-        $failed = GhOut run view $id --repo $Source --json jobs --jq '[.jobs[] | select(.conclusion == "failure") | .name + " -> " + ([.steps[] | select(.conclusion == "failure") | .name] | join(", "))] | join("; ")'
+        $failed = (@(GhJson run view $id --repo $Source --json jobs | ForEach-Object { $_.jobs }) |
+            Where-Object { $_.conclusion -eq "failure" } |
+            ForEach-Object { $_.name + " -> " + ((@($_.steps) | Where-Object { $_.conclusion -eq "failure" } | ForEach-Object { $_.name }) -join ", ") }) -join "; "
         throw "$workflow падна ($failed). Подробности: https://github.com/$Source/actions/runs/$id"
     }
 }
@@ -130,7 +138,16 @@ if ($From -le 2) {
     if ($push -ne "true") { $plain = $null; throw "Токенът не може да пише в $Releases. Провери репото и правата (Contents: Read and write)." }
     Ok "токенът може да пише в $Releases"
 
-    RunGh secret set RELEASES_TOKEN --repo $Source --body $plain
+    # GitHub понякога връща HTTP 500 при запис на secret: до 4 опита
+    $saved = $false
+    for ($i = 1; $i -le 4 -and -not $saved; $i++) {
+        $prev = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+        & gh secret set RELEASES_TOKEN --repo $Source --body $plain 2>&1 | Out-Null
+        $saved = ($LASTEXITCODE -eq 0)
+        $ErrorActionPreference = $prev
+        if (-not $saved) { Warn "записът на secret не успя (опит $i от 4), опитвам пак след 10 s"; Start-Sleep -Seconds 10 }
+    }
+    if (-not $saved) { $plain = $null; throw "GitHub не прие secret RELEASES_TOKEN (4 опита). Опитай пак след малко: continue-private.ps1" }
     $plain = $null
     Ok "secret RELEASES_TOKEN е записан в $Source"
 
