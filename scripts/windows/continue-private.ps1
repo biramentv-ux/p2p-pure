@@ -94,10 +94,12 @@ if ($s7) { Write-Host "Всичко е готово: кодът е частен,
 $from = if (-not $s1) { 1 } elseif (-not $s2) { 2 } elseif (-not $s3) { 3 } elseif (-not $s4) { 4 } elseif (-not $s5) { 5 } else { 6 }
 
 # ---- стъпка 5: оправя засядането с тага
-if ($from -eq 5) {
+# Тагът се проверява винаги, когато изданието не е готово, дори да започваме от по-ранна стъпка:
+# иначе go-private.ps1 стига до стъпка 5 и чака старото, вече паднало пускане.
+if (-not $s5) {
     $mainSha = GhOut api "repos/$Source/git/ref/heads/main" --jq .object.sha
     $tagSha = GhOut api "repos/$Source/git/ref/tags/$Tag" --jq .object.sha
-    if ($published -and -not $hasSbom) {
+    if ($published -and -not $hasSbom -and $from -eq 5) {
         Write-Host "Изданието е публикувано, липсва само SBOM: пускам го." -ForegroundColor Cyan
         if (-not $DryRun) {
             & gh workflow run release-sbom.yml --repo $Source -f "tag=$Tag"
