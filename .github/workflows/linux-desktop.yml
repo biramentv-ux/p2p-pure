@@ -31,6 +31,9 @@ permissions:
 
 env:
   RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name) || '' }}
+  # Where the releases live: this repository, or a separate public one when the source is private
+  # (variable RELEASES_REPO, token secret RELEASES_TOKEN; docs/PRIVATE-REPO.md).
+  RELEASES_REPO: ${{ vars.RELEASES_REPO || github.repository }}
 
 jobs:
   build:
@@ -68,6 +71,8 @@ jobs:
           npm --prefix electron run dist
 
       - name: Collect files and checksums
+        env:
+          LINUX_REPO_URL: ${{ vars.LINUX_REPO_URL }}
         run: |
           set -euo pipefail
           version="$(node -p "require('./electron/package.json').version")"
@@ -78,6 +83,14 @@ jobs:
           mkdir -p out
           cp electron/release/P2P-Messenger-"$version"-amd64.deb electron/release/P2P-Messenger-"$version"-x86_64.rpm electron/release/P2P-Messenger-"$version"-x86_64.AppImage out/
           cp scripts/linux/install.sh out/install.sh
+          # The installer downloads from the releases repository (checksummed below, so edit it first).
+          sed -i "s#REPO=\"\${P2P_REPO:-[^}]*}\"#REPO=\"\${P2P_REPO:-$RELEASES_REPO}\"#" out/install.sh
+          grep -q "P2P_REPO:-$RELEASES_REPO}" out/install.sh
+          # The APT/dnf channel is served from the site; with the source private that is not this repository's Pages.
+          if [ -n "$LINUX_REPO_URL" ]; then
+            sed -i "s#^REPO_URL=\"\${P2P_REPO_URL:-[^}]*}\"#REPO_URL=\"\${P2P_REPO_URL:-${LINUX_REPO_URL%/}}\"#" out/install.sh
+            grep -q "P2P_REPO_URL:-${LINUX_REPO_URL%/}}" out/install.sh
+          fi
           (cd out && sha256sum P2P-Messenger-* install.sh > SHA256SUMS-linux.txt && cat SHA256SUMS-linux.txt)
           ls -la out
           echo "VERSION=$version" >> "$GITHUB_ENV"
@@ -374,7 +387,7 @@ jobs:
           path: out
       - name: Attach to the draft release, publish when Windows is there too
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
         run: bash scripts/release/desktop-release.sh attach "$RELEASE_TAG" out "${{ github.sha }}" docs/DESKTOP-RELEASE.md
 
   # Needs the public download links, so it waits for the release to be published.

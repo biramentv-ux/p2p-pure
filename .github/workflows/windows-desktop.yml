@@ -22,6 +22,9 @@ permissions:
 # (then GitHub creates the tag on the built commit when the release is made).
 env:
   RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/desktop-v') && github.ref_name) || '' }}
+  # Where the releases live: this repository, or a separate public one when the source is private
+  # (variable RELEASES_REPO, token secret RELEASES_TOKEN; docs/PRIVATE-REPO.md).
+  RELEASES_REPO: ${{ vars.RELEASES_REPO || github.repository }}
 
 jobs:
   build:
@@ -248,10 +251,10 @@ jobs:
             if (-not $env:RELEASE_TAG.StartsWith("desktop-v")) { Write-Output "::error::release tag must start with desktop-v"; exit 1 }
             $tagVersion = $env:RELEASE_TAG.Substring("desktop-v".Length)
             if ($tagVersion -ne $version) { Write-Output "::error::tag $tagVersion does not match tauri.conf.json version $version"; exit 1 }
-            $url = "https://github.com/${{ github.repository }}/releases/download/$($env:RELEASE_TAG)/P2P-Messenger-Setup-x64.exe"
+            $url = "https://github.com/$($env:RELEASES_REPO)/releases/download/$($env:RELEASE_TAG)/P2P-Messenger-Setup-x64.exe"
           } else {
             # Manual runs have no release yet: the url is a placeholder, good for validation only.
-            $url = "https://github.com/${{ github.repository }}/releases/download/desktop-v$version/P2P-Messenger-Setup-x64.exe"
+            $url = "https://github.com/$($env:RELEASES_REPO)/releases/download/desktop-v$version/P2P-Messenger-Setup-x64.exe"
           }
           $dir = node scripts/windows/winget-manifest.mjs --version $version --url $url --sha256 $sha --out winget
           Compress-Archive -Path winget/manifests -DestinationPath out/P2P-Messenger-winget-manifests.zip
@@ -320,7 +323,7 @@ jobs:
 
       - name: Attach to the draft release, publish when Linux is there too
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
         run: bash scripts/release/desktop-release.sh attach "$RELEASE_TAG" out "${{ github.sha }}" docs/DESKTOP-RELEASE.md
 
   # Needs the public download links, so it waits for the release to be published.

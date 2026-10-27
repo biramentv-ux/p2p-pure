@@ -48,7 +48,7 @@ export const EN = {
   iosBadge: "via Safari", ios1: "Open the <a href=\"app/\">app</a> in Safari.", ios2: "Tap “Share” (the square with an arrow).", ios3: "Choose “Add to Home Screen”. It runs full screen, like a real app.",
   iosHint: "There is no App Store app yet. The web version is the same code and has everything.",
   webTitle: "Right in the browser", webBadge: "no install", webLead: "Chrome, Edge, Firefox or Safari, on a computer or phone. After the first visit the parts already loaded work offline.",
-  allReleases: "All releases and notes on GitHub →",
+  allReleases: "All releases and notes on GitHub →", footReleases: "Releases",
   soon: "on the releases page", badgePreview: "test build", badgeSoon: "coming soon",
   faqKicker: "FAQ", faqTitle: "People ask.<br /><em>We answer plainly.</em>",
   q1: "Is there really no server?", a1: "Not for messages and files. They travel directly. A small server is used only for “rooms”, when you are far apart and cannot scan a QR: it relays the signed invitation for 10 minutes and that is all. Public STUN servers help the two devices find each other without seeing any content.",

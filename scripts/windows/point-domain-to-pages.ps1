@@ -15,11 +15,15 @@
 [CmdletBinding()]
 param(
     [string]$Repo = "biramentv-ux/p2p-pure",
+    # Private source: the PUBLIC repository whose gh-pages branch serves the site (variable PAGES_PUBLISH_REPO).
+    # Empty: Pages of $Repo itself.
+    [string]$PagesRepo = "",
     [string]$Domain = "dyrakarmy.online"
 )
 $ErrorActionPreference = "Stop"
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "Липсва GitHub CLI (winget install GitHub.cli), после gh auth login." }
-$owner = $Repo.Split("/")[0].ToLower()
+if (-not $PagesRepo) { $PagesRepo = $Repo }
+$owner = $PagesRepo.Split("/")[0].ToLower()
 
 $s = Read-Host "Cloudflare API token (Zone - DNS - Edit) (скрито)" -AsSecureString
 $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
@@ -43,7 +47,8 @@ $token = $null
 
 Write-Host "`n=== 2. GitHub Pages ===" -ForegroundColor Cyan
 gh variable set PAGES_BASE --repo $Repo --body "/"
-gh api -X PUT "repos/$Repo/pages" -f "cname=$Domain" 2>&1 | Out-Null
+if ($PagesRepo -ne $Repo) { gh variable set PAGES_DOMAIN --repo $Repo --body $Domain }
+gh api -X PUT "repos/$PagesRepo/pages" -f "cname=$Domain" 2>&1 | Out-Null
 Write-Host "    Домейнът е зададен. GitHub проверява DNS и издава HTTPS сертификат (до 15 минути)."
 gh workflow run pages.yml --repo $Repo
 Write-Host "    Публикувам сайта наново (Actions -> GitHub Pages)."

@@ -6,6 +6,8 @@ name: Release SBOM
 #
 # Note: a release created by another workflow with the default GITHUB_TOKEN does not fire
 # `release: published`; run this workflow by hand (workflow_dispatch) with the tag in that case.
+# With a separate releases repository (variable RELEASES_REPO) the event never fires here either:
+# always run it by hand. The tag must also exist in this (source) repository.
 
 on:
   release:
@@ -127,9 +129,12 @@ jobs:
 
       - name: Attach to the release
         env:
-          GH_TOKEN: ${{ github.token }}
+          # RELEASES_REPO/RELEASES_TOKEN: the releases live in a separate public repository when the
+          # source is private (docs/PRIVATE-REPO.md). The signature identity stays this workflow.
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
+          RELEASES_REPO: ${{ vars.RELEASES_REPO || github.repository }}
         run: |
-          gh release upload "$TAG" release-sbom/* --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" release-sbom/* --clobber --repo "$RELEASES_REPO"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
