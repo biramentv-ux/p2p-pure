@@ -48,7 +48,22 @@ $token = $null
 Write-Host "`n=== 2. GitHub Pages ===" -ForegroundColor Cyan
 gh variable set PAGES_BASE --repo $Repo --body "/"
 if ($PagesRepo -ne $Repo) { gh variable set PAGES_DOMAIN --repo $Repo --body $Domain }
-gh api -X PUT "repos/$PagesRepo/pages" -f "cname=$Domain" 2>&1 | Out-Null
+# A custom domain can belong to one Pages site only: free it in the old repository first,
+# otherwise GitHub answers "Invalid cname (HTTP 400)".
+$prev = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+if ($PagesRepo -ne $Repo) {
+    '{"cname":null}' | gh api -X PUT "repos/$Repo/pages" --input - 2>&1 | Out-Null
+    Write-Host "    Домейнът е освободен в $Repo."
+}
+$set = $false
+for ($i = 1; $i -le 4 -and -not $set; $i++) {
+    gh api -X PUT "repos/$PagesRepo/pages" -f "cname=$Domain" 2>&1 | Out-Null
+    $set = ($LASTEXITCODE -eq 0)
+    if (-not $set) { Write-Host "    опит $i от 4 не успя, чакам..."; Start-Sleep -Seconds 10 }
+}
+$ErrorActionPreference = $prev
+if (-not $set) { throw "GitHub не прие домейна $Domain за $PagesRepo. Провери: Settings -> Pages в $PagesRepo (Pages трябва да е включено от gh-pages) и че домейнът не е зададен в друго репо или организация." }
 Write-Host "    Домейнът е зададен. GitHub проверява DNS и издава HTTPS сертификат (до 15 минути)."
 gh workflow run pages.yml --repo $Repo
 Write-Host "    Публикувам сайта наново (Actions -> GitHub Pages)."
