@@ -59,6 +59,7 @@ describe("desktop release script (draft -> upload -> publish)", () => {
       PATH: `${bin}:${process.env.PATH}`,
       FAKE_STATE: state,
       GITHUB_REPOSITORY: "o/r",
+      RELEASES_REPO: "", // CI workflows export it; the tests choose their own
       GH_TOKEN: "x",
       GITHUB_OUTPUT: out(),
       WAIT_SLEEP: "0",
