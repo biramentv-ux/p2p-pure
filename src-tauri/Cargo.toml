@@ -1,6 +1,6 @@
 [package]
 name = "p2p-messenger"
-version = "0.7.0"
+version = "0.7.1"
 description = "P2P Secure Messenger: end-to-end encrypted, peer-to-peer, no servers for messages"
 edition = "2021"
 publish = false
