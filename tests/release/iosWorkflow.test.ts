@@ -102,3 +102,12 @@ describe('continue-private.ps1', () => {
     expect(go).toContain('function Wait-Run($workflow, $branch, $event, $Since = $null)')
   })
 })
+
+describe('Windows PowerShell 5.1 quoting', () => {
+  it('passes no jq filter with inner double quotes to gh (5.1 strips them and the filter breaks)', () => {
+    for (const f of ['go-private.ps1', 'continue-private.ps1']) {
+      const text = readFileSync(resolve(root, 'scripts/windows', f), 'utf8')
+      expect(text, f).not.toMatch(/--jq '[^'\n]*"/)
+    }
+  })
+})
