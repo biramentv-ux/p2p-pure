@@ -53,11 +53,15 @@ describe('go-private.ps1', () => {
   const full = readFileSync(resolve(root, 'scripts/windows/go-private.ps1'), 'utf8')
   const ps = full.slice(full.indexOf('$ErrorActionPreference')) // without the comment header
   it('does every step in order and changes the source repo only after the typed word', () => {
-    const order = ['Gh repo create', 'RELEASES_TOKEN', 'pages.yml', 'point-domain-to-pages.ps1', 'refs/tags/', 'release-sbom.yml', 'PRIVATE']
+    const order = ['RunGh repo create', 'RELEASES_TOKEN', 'pages.yml', 'point-domain-to-pages.ps1', 'refs/tags/', 'release-sbom.yml', 'PRIVATE']
     let at = -1
     for (const t of order) { const i = ps.indexOf(t, at + 1); expect(i, t).toBeGreaterThan(at); at = i }
     expect(ps.match(/--visibility private/g)).toHaveLength(1)
     expect(ps).toContain('-ceq "PRIVATE"')
+  })
+  it('has no function named like an external command it calls (case-insensitive recursion)', () => {
+    for (const [, name] of ps.matchAll(/^function\s+([\w-]+)/gm)) expect(name.toLowerCase(), name).not.toBe('gh')
+    expect(ps).not.toMatch(/^\s*Gh\s/m)
   })
   it('never prints or stores the token', () => {
     expect(ps).not.toMatch(/Write-Host[^\n]*\$plain/)
