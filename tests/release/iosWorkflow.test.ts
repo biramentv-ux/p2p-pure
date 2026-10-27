@@ -48,3 +48,25 @@ describe('iOS project and workflow', () => {
     expect(wf).toContain("VITE_PASSKEY_RP_ID: ${{ vars.PASSKEY_RP_ID || 'dyrakarmy.online' }}")
   })
 })
+
+describe('go-private.ps1', () => {
+  const full = readFileSync(resolve(root, 'scripts/windows/go-private.ps1'), 'utf8')
+  const ps = full.slice(full.indexOf('$ErrorActionPreference')) // without the comment header
+  it('does every step in order and changes the source repo only after the typed word', () => {
+    const order = ['Gh repo create', 'RELEASES_TOKEN', 'pages.yml', 'point-domain-to-pages.ps1', 'refs/tags/', 'release-sbom.yml', 'PRIVATE']
+    let at = -1
+    for (const t of order) { const i = ps.indexOf(t, at + 1); expect(i, t).toBeGreaterThan(at); at = i }
+    expect(ps.match(/--visibility private/g)).toHaveLength(1)
+    expect(ps).toContain('-ceq "PRIVATE"')
+  })
+  it('never prints or stores the token', () => {
+    expect(ps).not.toMatch(/Write-Host[^\n]*\$plain/)
+    expect(ps).not.toMatch(/(Out-File|Set-Content|>>?\s)[^\n]*\$plain/)
+    expect(ps).toContain('$plain = $null')
+  })
+  it('matches the version files it waits for', () => {
+    expect(read('electron/package.json')).toContain('"version": "0.7.1"')
+    expect(read('src-tauri/tauri.conf.json')).toContain('"version": "0.7.1"')
+    expect(read('src-tauri/Cargo.toml')).toContain('version = "0.7.1"')
+  })
+})
