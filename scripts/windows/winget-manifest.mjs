@@ -16,7 +16,8 @@ import { join } from "node:path";
 export const PACKAGE_ID = "DyrakArmy.P2PMessenger";
 // 1.10.0, not the newest 1.12.0: winget 1.11 (still common, and on the CI runner) cannot read 1.12 manifests.
 export const MANIFEST_VERSION = "1.10.0";
-const REPO = "https://github.com/biramentv-ux/p2p-pure";
+// RELEASES_REPO: the public repository that holds the releases when the source is private.
+const REPO = `https://github.com/${process.env.RELEASES_REPO || "biramentv-ux/p2p-pure"}`;
 
 /** Every scalar is written as a JSON string, which is valid YAML and needs no escaping rules. */
 const q = (v) => JSON.stringify(String(v));

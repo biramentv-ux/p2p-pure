@@ -85,7 +85,7 @@ flowchart LR
 
 | Начин | За кого | Какво трябва |
 |---|---|---|
-| **Сайтът** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Информация и сваляне на всички версии с един бутон, според устройството | Само браузър. Винаги онлайн, обновява се при всяка промяна в `main` и при ново издание ([docs/SITE.md](docs/SITE.md)). |
+| **Сайтът** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Информация и сваляне на всички версии с един бутон, според устройството | Само браузър. Винаги онлайн, обновява се при всяка промяна в `main` и при ново издание ([docs/SITE.md](docs/SITE.md)). Кодът може да е частен, а изданията и сайтът публични: [docs/PRIVATE-REPO.md](docs/PRIVATE-REPO.md). |
 | **Онлайн версията** `…/app/` | Месинджърът направо в браузъра, на телефон или компютър | Само браузър. На собствения домейн: `https://dyrakarmy.online/app/`. |
 | **Windows** | Компютър с Windows 10/11 | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
 | **Linux** | Компютър с Linux (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `.deb`, `.rpm`, `AppImage` или `install.sh` |
