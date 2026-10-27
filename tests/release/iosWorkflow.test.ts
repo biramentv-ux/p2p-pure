@@ -92,6 +92,10 @@ describe('continue-private.ps1', () => {
     expect(before.lastIndexOf('Read-Host')).toBeGreaterThan(before.lastIndexOf('$tagSha -and -not $published'))
     expect(ps.match(/-X DELETE/g)).toHaveLength(1)
   })
+  it('repairs a stale tag whenever the release is not done, not only when starting at step 5', () => {
+    expect(ps).toContain('if (-not $s5) {')
+    expect(ps).not.toContain('if ($from -eq 5) {')
+  })
   it('never makes the repository private itself: that stays the typed step of go-private.ps1', () => {
     expect(ps).not.toContain('--visibility')
     expect(ps).toContain('& $go @params')
