@@ -131,7 +131,7 @@ const state = (page) =>
   });
 
 // The app follows the system language; the checks below name buttons in Bulgarian.
-const bulgarian = (page) => page.getByRole("button", { name: /^БГ/ }).click({ timeout: 3000 }).catch(() => {});
+const bulgarian = (page) => page.locator("select.lang-select").first().selectOption("bg", { timeout: 3000 }).catch(() => {});
 
 async function waitState(page, wanted, ms = 45_000) {
   const end = Date.now() + ms;

@@ -92,7 +92,7 @@ async function connect(errors) {
 }
 
 /** The app follows the system language (English on a fresh emulator); the test uses Bulgarian names. */
-const bulgarian = (page) => page.getByRole("button", { name: /^БГ/ }).first().click({ timeout: 5000 }).catch(() => {});
+const bulgarian = (page) => page.locator("select.lang-select").first().selectOption("bg", { timeout: 5000 }).catch(() => {});
 
 async function readDid(page) {
   const loc = page.locator(".did-text").first();
