@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error plain ES modules, shared with the browser
 import { detectOS, formatSize, pickDownloads, versionOf } from "../../site/downloads.js";
 // @ts-expect-error plain ES module script
-import { FONT_FILES, applyMode, assemble, injectReleases, killSwitchWorker, releasesRepo } from "../../scripts/site/build.mjs";
+import { FONT_FILES, OPEN_CLAIM, applyMode, assemble, injectReleases, killSwitchWorker, releasesRepo, siteUrl } from "../../scripts/site/build.mjs";
 // @ts-expect-error plain ES module
 import { BG_EXTRA, EN } from "../../site/i18n.js";
 
@@ -135,14 +135,90 @@ describe("site assembly", () => {
     const html = readFileSync(join(dist, "index.html"), "utf8");
     const en = readFileSync(join(dist, "i18n.js"), "utf8");
     for (const text of [html, en]) {
-      expect(text).not.toMatch(/Отворен код|Open source|code is open|Кодът е отворен|public code|публичния код/);
+      expect(text).not.toMatch(OPEN_CLAIM);
+      expect(text).not.toMatch(/open source|отворен код/i); // the facts strip is lower case
       expect(text).not.toContain("<!--when:");
     }
-    expect(html).not.toContain("/blob/main/");
-    expect(html).not.toContain("biramentv-ux/p2p-pure");
+    expect(html).not.toContain("github.com/biramentv-ux/p2p-pure/"); // the private repository
+    expect(html).not.toContain("github.com/biramentv-ux/p2p-pure\""); // its front page
+    for (const [, href] of html.matchAll(/href="(https:\/\/github\.com\/[^"]*\/blob\/[^"]*)"/g)) expect(href).toMatch(/^https:\/\/github\.com\/o\/pub\/blob\/main\/(SECURITY|LICENSE)/);
     expect(html).toContain("https://github.com/o/pub/releases");
     expect(html).toContain("Подписани издания");
     expect(en).toContain("Signed releases");
+  });
+
+  it("builds the English page as its own address, readable without JavaScript", async () => {
+    const dist = fakeDist();
+    await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true, url: "" });
+    const en = readFileSync(join(dist, "en/index.html"), "utf8");
+    expect(en).toMatch(/<html lang="en"/);
+    expect(en).toContain("<title>Messenger without a phone number or server · P2P Messenger</title>");
+    expect(en).toContain("Your letters.");
+    expect(en).not.toContain("Писмата ти");
+    expect(en).toMatch(/<a class="chip lang" href="\.\.\/" hreflang="bg"/);
+    expect(en).toContain('href="../site.css"');
+    expect(en).toContain('href="../app/"');
+    expect(en).toContain('href="#features"'); // in-page links stay on this page
+    expect(en).toContain("https://github.com/o/pub/blob/main/SECURITY.md");
+    expect(en).toContain("https://github.com/o/pub/blob/main/LICENSE\"");
+    expect(en).not.toMatch(OPEN_CLAIM);
+    const bg = readFileSync(join(dist, "index.html"), "utf8");
+    expect(bg).toMatch(/<a class="chip lang" href="en\/" hreflang="en"/);
+    expect(bg).toContain("https://github.com/o/pub/blob/main/SECURITY.bg.md");
+    expect(bg).not.toContain("{{PUBLIC_REPO}}");
+    expect(bg).not.toContain("<!--seo:");
+  });
+
+  it("with SITE_URL: canonical, both language versions, share images, robots and a sitemap", async () => {
+    const dist = fakeDist();
+    await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true, url: "https://example.test/", now: new Date("2026-10-28T10:00:00Z") });
+    const bg = readFileSync(join(dist, "index.html"), "utf8");
+    const en = readFileSync(join(dist, "en/index.html"), "utf8");
+    expect(bg).toContain('<link rel="canonical" href="https://example.test/">');
+    expect(en).toContain('<link rel="canonical" href="https://example.test/en/">');
+    for (const page of [bg, en]) {
+      expect(page).toContain('<link rel="alternate" hreflang="bg" href="https://example.test/">');
+      expect(page).toContain('<link rel="alternate" hreflang="en" href="https://example.test/en/">');
+      expect(page).toContain('<link rel="alternate" hreflang="x-default" href="https://example.test/">');
+    }
+    expect(bg).toContain('<meta property="og:image" content="https://example.test/og-bg.png">');
+    expect(en).toContain('<meta property="og:image" content="https://example.test/og-en.png">');
+    expect(existsSync(join(dist, "og-bg.png")) && existsSync(join(dist, "og-en.png"))).toBe(true);
+    expect(readFileSync(join(dist, "robots.txt"), "utf8")).toContain("Sitemap: https://example.test/sitemap.xml");
+    const map = readFileSync(join(dist, "sitemap.xml"), "utf8");
+    expect(map).toContain("<loc>https://example.test/</loc>");
+    expect(map).toContain("<loc>https://example.test/en/</loc>");
+    expect(map).toContain("<lastmod>2026-10-28</lastmod>");
+  });
+
+  it("without SITE_URL no absolute address is invented", async () => {
+    const dist = fakeDist();
+    await assemble({ dist, site: join(root, "site"), releases: [], url: "" });
+    expect(readFileSync(join(dist, "index.html"), "utf8")).not.toContain('rel="canonical"');
+    expect(existsSync(join(dist, "sitemap.xml"))).toBe(false);
+    expect(readFileSync(join(dist, "robots.txt"), "utf8")).toBe("User-agent: *\nAllow: /\n");
+  });
+
+  it("structured data repeats the questions and answers shown on each page", async () => {
+    const dist = fakeDist();
+    await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true, url: "https://example.test/" });
+    for (const [file, lang] of [["index.html", "bg"], ["en/index.html", "en"]]) {
+      const page = readFileSync(join(dist, file), "utf8");
+      const json = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)?.[1] ?? "";
+      const data = JSON.parse(json);
+      expect(data[0]["@type"]).toBe("SoftwareApplication");
+      expect(data[0].inLanguage).toBe(lang);
+      const shown = [...page.matchAll(/<summary data-i18n="q\d">([^<]+)<\/summary>/g)].map((m) => m[1]);
+      expect(shown.length).toBeGreaterThan(3);
+      expect(data[1].mainEntity.map((q: { name: string }) => q.name)).toEqual(shown);
+    }
+  });
+
+  it("rejects a SITE_URL that is not an absolute https address", () => {
+    expect(siteUrl({})).toBe("");
+    expect(siteUrl({ SITE_URL: "https://dyrakarmy.online" })).toBe("https://dyrakarmy.online/");
+    expect(() => siteUrl({ SITE_URL: "http://x.test/" })).toThrow(/https/);
+    expect(() => siteUrl({ SITE_URL: "x.test" })).toThrow(/https/);
   });
 
   it("keeps one variant of a when-block and drops the other", () => {
@@ -260,13 +336,24 @@ describe("the page", () => {
   it("sends an installed app straight to the messenger, and keeps the saved theme before the first paint", () => {
     const boot = read("site/boot.js");
     expect(boot).toMatch(/display-mode: standalone/);
-    expect(boot).toMatch(/location\.replace\("app\/"/);
+    expect(boot).toMatch(/location\.replace\(base \+ "app\/"/);
     expect(boot).toMatch(/site-theme/);
+  });
+
+  it("opens the other language only when the visitor chose it before, never from a browser guess", () => {
+    const boot = read("site/boot.js");
+    expect(boot).toMatch(/localStorage\.getItem\("site-lang"\)/);
+    expect(boot).not.toMatch(/navigator\.language/);
+    expect(js).not.toMatch(/navigator\.language/);
+    expect(read("site/index.html")).toMatch(/<html lang="bg"[^>]*data-other="en\/"/);
   });
 });
 
 describe("publishing", () => {
   const wf = read(".github/workflows/pages.yml");
+  it("passes the public address to the build when the site has its own domain", () => {
+    expect(wf).toContain("SITE_URL: ${{ vars.PAGES_DOMAIN != '' && format('https://{0}/', vars.PAGES_DOMAIN) || '' }}");
+  });
   it("builds through the site script, so the app lands under /app/", () => {
     expect(wf).toMatch(/node scripts\/site\/build\.mjs --build --base "\$PAGES_BASE"/);
     expect(wf).not.toMatch(/run: npm run build\b/);

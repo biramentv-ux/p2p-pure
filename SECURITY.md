@@ -1,5 +1,7 @@
 # Security and privacy
 
+> Български: [SECURITY.bg.md](SECURITY.bg.md). License: [LICENSE](LICENSE) ([на български](LICENSE.bg.md)).
+
 ## Data on the device (IndexedDB `p2p-messenger`, version 5)
 
 Every store except `identity` holds only AES-256-GCM ciphertext (WebCrypto, random 12-byte IV,

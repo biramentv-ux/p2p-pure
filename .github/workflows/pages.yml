@@ -71,6 +71,9 @@ jobs:
           # SOURCE_CLOSED=1 drops the "open source" wording. Both empty: nothing changes.
           RELEASES_REPO: ${{ vars.RELEASES_REPO }}
           SOURCE_CLOSED: ${{ vars.SOURCE_CLOSED }}
+          # The public address, for the canonical links, the two language versions, the share images
+          # and sitemap.xml (they need absolute addresses). Empty without a domain: they are left out.
+          SITE_URL: ${{ vars.PAGES_DOMAIN != '' && format('https://{0}/', vars.PAGES_DOMAIN) || '' }}
         run: node scripts/site/build.mjs --build --base "$PAGES_BASE"
 
       # The signed APT + dnf repository from the newest signed desktop release, next to the web
