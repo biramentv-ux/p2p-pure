@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { notifyIncoming, previewText } from "../../notify/notifier";
 import type { Contact } from "../../contacts/contacts";
 import {
   appendMessage,
@@ -162,6 +163,19 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     callRef.current = controller;
     setCall(controller.state);
 
+    // A sound and, with the window in the background, a system notification (src/notify).
+    const alertIncoming = (preview: string) =>
+      notifyIncoming(
+        {
+          chatId: `chat:${contact.did}`,
+          known: contact.verified,
+          title: contact.name,
+          preview,
+          hidden: tRef.current("Ново съобщение"),
+        },
+        true,
+      );
+
     const files = new FileTransfers(
       {
         sendControl: (plaintext) =>
@@ -171,7 +185,11 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         sendBinary: (bytes) => link.sendBinary(bytes),
       },
       {
-        offered: (m) => alive && upsertActive({ id: m.id, name: m.name, size: m.size, direction: "in", phase: "offer", done: 0 }),
+        offered: (m) => {
+          if (!alive) return;
+          upsertActive({ id: m.id, name: m.name, size: m.size, direction: "in", phase: "offer", done: 0 });
+          alertIncoming(tRef.current("Файл: {name}", { name: m.name }));
+        },
         outgoing: (m) => {
           if (!alive) return;
           setPreparing(null);
@@ -236,6 +254,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             const located: ChatMessage = { text: "", location: control.fix, direction: "in", timestamp: Date.now() };
             await appendMessage(historyKey, contact.did, located);
             if (alive) setMessages((prev) => [...prev, located]);
+            alertIncoming(tRef.current("Местоположение"));
             return;
           }
           if (filesRef.current?.handleControl(plaintext)) return;
@@ -261,6 +280,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             setTransfer(null);
             setMessages((prev) => [...prev, msg]);
           }
+          alertIncoming(msg.image ? tRef.current("Снимка") : previewText(msg.text));
         } catch (err) {
           if (alive) setNotice(tRef.current(err instanceof Error ? err.message : "Съобщението не можа да се разшифрова."));
         }

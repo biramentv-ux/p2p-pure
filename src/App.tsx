@@ -20,6 +20,7 @@ import { TransferReceiveScreen, TransferSendScreen } from "./ui/screens/Transfer
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
 import { LanguageSwitch } from "./ui/components/LanguageSwitch";
 import { useAutoLock } from "./ui/useAutoLock";
+import { installNotifier, notifyIncoming, previewText } from "./notify/notifier";
 import "./App.css";
 
 type AppState =
@@ -65,9 +66,39 @@ function App() {
   // The group lives across screens. It is closed only when the device locks, and it is
   // saved encrypted, so it comes back after unlock.
   const groupRef = useRef<GroupSession | null>(null);
+  // Sounds and notifications for the group: it runs behind every screen, so it is watched here.
+  const groupWatch = useRef<{ group: GroupSession; off: () => void } | null>(null);
   const [, setGroupRestored] = useState(0);
   // New device without an identity: receiving one from another device (src/transfer).
   const [receiving, setReceiving] = useState(false);
+
+  useEffect(() => installNotifier(), []);
+
+  const tRef = useRef(t);
+  tRef.current = t;
+  /** Watches the current group for messages from other members (once per group object). */
+  function watchGroup(group: GroupSession | null): void {
+    if (groupWatch.current?.group === group) return;
+    groupWatch.current?.off();
+    groupWatch.current = null;
+    if (!group) return;
+    const off = group.onIncoming((m) => {
+      const tr = tRef.current;
+      const who = m.fromName || tr("Участник");
+      notifyIncoming(
+        {
+          chatId: `group:${m.groupId ?? "current"}`,
+          // only members reach the group mesh; a message without a sender name is still a member's
+          known: true,
+          title: m.groupName ? tr("{group} · {name}", { group: m.groupName, name: who }) : who,
+          preview: m.file ? tr("Файл: {name}", { name: m.file.name }) : previewText(m.text),
+          hidden: tr("Ново съобщение"),
+        },
+        screenRef.current.k === "group",
+      );
+    });
+    groupWatch.current = { group, off };
+  }
 
   useEffect(() => {
     getUnlockMethod()
@@ -88,6 +119,7 @@ function App() {
     if (current.k === "chat") current.link.close();
     groupRef.current?.closeAll();
     groupRef.current = null;
+    watchGroup(null);
     lockContacts();
     deactivateTurn();
     setScreen({ k: "identity" });
@@ -127,6 +159,7 @@ function App() {
         }
         current?.closeAll();
         groupRef.current = restored;
+        watchGroup(restored);
         setGroupRestored((n) => n + 1);
       })
       .catch(() => undefined);
@@ -192,6 +225,7 @@ function App() {
   function ensureGroup(): GroupSession {
     if (!groupRef.current) {
       groupRef.current = new GroupSession(identity.keyPair, { historyKey, linkFactory: webrtcLinks, findContact: getContact });
+      watchGroup(groupRef.current);
     }
     return groupRef.current;
   }
@@ -260,6 +294,7 @@ function App() {
             // The group is stopped and its queued saves drained BEFORE the wipe (transfer/wipe.ts).
             const group = groupRef.current;
             groupRef.current = null;
+            watchGroup(null);
             return [group];
           }}
           onMoved={() => {
@@ -299,6 +334,7 @@ function App() {
               linkFactory: webrtcLinks,
               findContact: getContact,
             });
+            watchGroup(groupRef.current);
             setScreen({ k: "group" });
           }}
           onLink={(contact) => setScreen({ k: "connect", expected: contact, forGroup: true })}

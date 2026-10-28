@@ -1097,3 +1097,16 @@
 @media (prefers-reduced-motion: reduce) {
   .lang-code { transition: none; }
 }
+
+/* Contact book size (max 99) and the note when it is full. */
+.contact-count { margin: -0.4rem 0 0.8rem; font-size: 0.85rem; color: var(--muted, #5b6b82); }
+.contact-count.full, .limit-note { color: var(--warn, #b45309); font-weight: 600; }
+
+/* Notification settings: one card per sound, a play button beside each. */
+.notify-settings .sound-list { display: grid; gap: 0.4rem; margin: 0.6rem 0; padding: 0; border: 0; min-width: 0; }
+.notify-settings .sound-list legend { padding: 0; margin-bottom: 0.3rem; font-weight: 600; }
+.notify-settings .sound-row { display: flex; align-items: stretch; gap: 0.5rem; }
+.notify-settings .sound-row label.confirm-row { flex: 1; margin: 0; padding: 0.5rem 0.75rem; }
+.notify-settings .sound-row label.confirm-row:has(input:checked) { border-color: var(--ember); }
+.notify-settings .sound-row button { flex: 0 0 2.8rem; margin: 0; padding: 0; }
+.notify-settings input[type="range"] { width: 100%; }

@@ -116,6 +116,8 @@ export default defineConfig(({ mode }) => ({
         // App shell only in MVP — no network caching strategy for P2P
         // traffic (WebRTC data channels bypass the service worker anyway).
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        // A tap on a message notification focuses the app (src/notify/notifier.ts).
+        importScripts: ['notification-click.js'],
       },
     })]),
   ],

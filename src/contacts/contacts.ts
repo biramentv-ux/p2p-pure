@@ -29,6 +29,19 @@ export interface Contact {
   addedAt: number;
 }
 
+/** At most this many contacts in the book. Updating a saved contact is always allowed. */
+export const MAX_CONTACTS = 99;
+
+/** Bulgarian source text; the UI translates it with t(err.message). */
+export const CONTACT_LIMIT_MESSAGE = "Списъкът с контакти е пълен: най-много 99. Изтрий контакт, за да добавиш нов.";
+
+export class ContactLimitError extends Error {
+  constructor() {
+    super(CONTACT_LIMIT_MESSAGE);
+    this.name = "ContactLimitError";
+  }
+}
+
 export class ContactsLockedError extends Error {
   constructor() {
     super("Contacts are locked: unlock the identity first.");
@@ -217,11 +230,31 @@ export function contactsUnlocked(): boolean {
   return keys !== null;
 }
 
-export async function saveContact(contact: Contact): Promise<void> {
-  const row = await seal(need(), contact);
+/**
+ * Saves a contact. A new one is refused with ContactLimitError when the book already holds
+ * MAX_CONTACTS; changing a contact that is already there always works.
+ * `allowOverLimit`: only for moving a whole book to a new device (src/transfer), where the book
+ * was made on the old device and nothing new is added.
+ */
+export async function saveContact(contact: Contact, options: { allowOverLimit?: boolean } = {}): Promise<void> {
+  const k = need();
+  if (!options.allowOverLimit && !(await getContact(contact.did)) && (await countContacts()) >= MAX_CONTACTS) {
+    throw new ContactLimitError();
+  }
+  const row = await seal(k, contact);
   await withStore(STORE_CONTACTS_SEALED, "readwrite", (s) => {
     s.put(row);
   });
+}
+
+/** How many contacts this identity has (rows of another identity on the device are not counted). */
+export async function countContacts(): Promise<number> {
+  return (await listContacts()).length;
+}
+
+/** False when the book is full, so a screen can say so before a connection is even started. */
+export async function canAddContact(): Promise<boolean> {
+  return (await countContacts()) < MAX_CONTACTS;
 }
 
 export async function getContact(did: string): Promise<Contact | null> {

@@ -2,6 +2,7 @@ import { QrCode } from "../components/QrCode";
 import type { UnlockedIdentity } from "../../identity";
 import { useI18n } from "../../i18n";
 import { TurnSettings } from "../components/TurnSettings";
+import { NotificationSettings } from "../components/NotificationSettings";
 
 interface ShowQrScreenProps {
   identity: UnlockedIdentity;
@@ -24,6 +25,7 @@ export function ShowQrScreen({ identity, onMove }: ShowQrScreenProps) {
           {t("Премести на ново устройство")}
         </button>
       )}
+      <NotificationSettings />
       <TurnSettings identity={identity} />
     </div>
   );
