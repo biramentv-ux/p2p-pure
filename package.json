@@ -40,6 +40,7 @@
     "test:demo": "node tests/e2e/demo-signaling.mjs",
     "test:pages": "node tests/e2e/pages-smoke.mjs",
     "test:files": "node tests/e2e/files.mjs",
+    "test:notify": "node tests/e2e/notify.mjs",
     "build:linux": "npm run build:desktop && npm --prefix electron ci && npm --prefix electron run dist",
     "test:linux": "node tests/desktop/electron-linux.mjs"
   },

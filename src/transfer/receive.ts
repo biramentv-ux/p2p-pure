@@ -46,7 +46,8 @@ export async function completeReceive(
   const identity = progress.identity;
   if (!progress.contactsSaved) {
     await unlockContacts(deriveHistoryKey(identity));
-    for (const c of bundle.contacts) await saveContact(c);
+    // the whole book of the old device moves: nothing new is added, so the limit does not apply
+    for (const c of bundle.contacts) await saveContact(c, { allowOverLimit: true });
     progress.contactsSaved = true;
   }
   try {
