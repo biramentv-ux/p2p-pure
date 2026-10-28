@@ -1,16 +1,20 @@
 <!doctype html>
-<html lang="bg" data-theme="auto">
+<html lang="bg" data-theme="auto" data-root="" data-other="en/">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'; worker-src 'self'; manifest-src 'self'" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <title>P2P Messenger · Писмата ти, запечатани</title>
-    <meta name="description" content="Месинджър без сървър, без телефонен номер и без облак. Съобщенията, файловете и разговорите вървят директно между устройствата, шифровани от край до край. Windows, Linux, Android, iPhone и браузър." />
+    <title>Месинджър без телефонен номер и без сървър · P2P Messenger</title>
+    <meta name="description" content="Пиши, говори и пращай файлове без номер, имейл и облак. Директно и шифровано. Windows, Linux, Android, iPhone и браузър." />
     <meta name="theme-color" content="#0b1220" />
-    <meta property="og:title" content="P2P Messenger · Писмата ти, запечатани" />
+    <meta property="og:title" content="P2P Messenger · Писмата ти. Запечатани." />
     <meta property="og:description" content="Без сървър, без телефон, без облак. Директно и шифровано от край до край." />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="P2P Messenger" />
+    <meta property="og:locale" content="bg_BG" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!--seo: canonical, language versions, share image and structured data are added by scripts/site/build.mjs-->
     <link rel="icon" type="image/png" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
     <link rel="preload" href="fonts/ibm-plex-serif-cyrillic-500-italic.woff2" as="font" type="font/woff2" crossorigin />
@@ -45,7 +49,7 @@
         <a href="#faq" data-i18n="navFaq">Въпроси</a>
       </nav>
       <div class="bar-tools">
-        <button class="chip lang" type="button" data-lang-toggle aria-label="Switch to English">EN</button>
+        <a class="chip lang" href="en/" hreflang="en" lang="en" data-lang-toggle aria-label="Switch to English">EN</a>
         <button class="chip theme" type="button" data-theme-toggle aria-label="Светла или тъмна тема" data-i18n-aria="themeLabel">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path class="sun" d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
         </button>
@@ -101,7 +105,7 @@
         <!-- the live demo: a message is sealed, travels with nobody in between, and is opened -->
         <div class="demo reveal" aria-label="Демонстрация: съобщение се шифрова, пътува директно и се разшифрова" data-i18n-aria="demoLabel" role="img">
           <div class="device left">
-            <div class="device-top"><span class="avatar a1">А</span><b data-i18n="demoA">Ани</b><i class="dot"></i></div>
+            <div class="device-top"><span class="avatar a1" data-i18n="demoInitA">А</span><b data-i18n="demoA">Ани</b><i class="dot"></i></div>
             <div class="bubble out" data-demo-out>Здрасти! Тук никой не чете. 🔒</div>
             <div class="cipher" data-demo-cipher aria-hidden="true"></div>
             <div class="device-foot mono" data-i18n="demoSealed">запечатано с Double Ratchet</div>
@@ -112,9 +116,9 @@
             <span class="no-server"><s data-i18n="demoServer">сървър</s><b data-i18n="demoNone">няма</b></span>
           </div>
           <div class="device right">
-            <div class="device-top"><span class="avatar a2">П</span><b data-i18n="demoB">Петър</b><i class="dot"></i></div>
+            <div class="device-top"><span class="avatar a2" data-i18n="demoInitB">П</span><b data-i18n="demoB">Петър</b><i class="dot"></i></div>
             <div class="bubble in" data-demo-in aria-live="off"></div>
-            <div class="words mono" aria-hidden="true"><span>луна</span><span>кедър</span><span>пясък</span><span>фенер</span></div>
+            <div class="words mono" aria-hidden="true" data-i18n-html="demoWords"><span>луна</span><span>кедър</span><span>пясък</span><span>фенер</span></div>
             <div class="device-foot mono" data-i18n="demoVerified">думите съвпадат ✓</div>
           </div>
         </div>
@@ -360,6 +364,8 @@
 <!--/when-->
 <!--when:closed-->
         <a href="https://github.com/biramentv-ux/p2p-pure/releases" rel="noopener" data-i18n="footReleases">Издания</a>
+        <a href="https://github.com/{{PUBLIC_REPO}}/blob/main/SECURITY.bg.md" rel="noopener" data-i18n="footSecurity">Сигурност</a>
+        <a href="https://github.com/{{PUBLIC_REPO}}/blob/main/LICENSE.bg.md" rel="noopener" data-i18n="footLicense">Лиценз</a>
 <!--/when-->
       </nav>
       <p class="foot-small" data-i18n="footSmall">Сайтът не ползва бисквитки, проследяване или външни шрифтове. Нищо не се изпраща, докато го разглеждаш.</p>

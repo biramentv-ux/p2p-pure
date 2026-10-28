@@ -108,6 +108,30 @@ describe("desktop release script (draft -> upload -> publish)", () => {
     expect(created).not.toContain("--target");
   });
 
+  it("with RELEASES_REPO, links in the notes to the private repository point to the public copies", () => {
+    env = { ...env, RELEASES_REPO: "o/pub" };
+    writeFileSync(join(dir, "notes.md"), "[g](https://github.com/o/r/blob/main/docs/WINDOWS.md) [all](https://github.com/o/r/releases)");
+    const r = run("attach", "desktop-v0.7.0", files("win", ["P2P-Messenger-Setup-x64.exe"]), "abc123", join(dir, "notes.md"));
+    expect(r.status, r.stderr + r.stdout).toBe(0);
+    const body = readFileSync(join(state, "body"), "utf8");
+    expect(body).toContain("https://github.com/o/pub/blob/main/docs/WINDOWS.md");
+    expect(body).toContain("https://github.com/o/pub/releases");
+    expect(body).not.toContain("github.com/o/r/");
+  });
+
+  it("the public docs workflow copies every file the release notes and the site link to", () => {
+    const wf = read(".github/workflows/public-docs.yml");
+    for (const line of wf.split("\n").filter((l) => /^\s*-?\s*uses:/.test(l))) expect(line, line).toMatch(/@[0-9a-f]{40}\b/);
+    const notes = read("docs/DESKTOP-RELEASE.md");
+    for (const [, file] of notes.matchAll(/github\.com\/biramentv-ux\/p2p-pure\/blob\/main\/([^)\s]+)/g)) {
+      expect(wf, file).toContain(`src/${file}`);
+    }
+    for (const f of ["LICENSE", "LICENSE.bg.md", "SECURITY.md", "SECURITY.bg.md", "docs/public/README.md"]) {
+      expect(existsSync(join(root, f)), f).toBe(true);
+      expect(wf, f).toContain(`src/${f}`);
+    }
+  });
+
   it("without RELEASES_REPO the release is created on the built commit, as before", () => {
     const r = run("attach", "desktop-v0.7.0", files("win", ["P2P-Messenger-Setup-x64.exe"]), "abc123", join(dir, "notes.md"));
     expect(r.status, r.stderr + r.stdout).toBe(0);
