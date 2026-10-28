@@ -19,7 +19,9 @@ for (const el of $$("[data-i18n]")) bg.set(el, el.textContent);
 for (const el of $$("[data-i18n-html]")) bg.set(el, el.innerHTML);
 for (const el of $$("[data-i18n-aria]")) bg.set(el, el.getAttribute("aria-label"));
 
-let lang = store.get("site-lang") || ((navigator.language || "bg").toLowerCase().startsWith("bg") ? "bg" : "en");
+// Each language is its own page ("/" Bulgarian, "/en/" English, built by scripts/site/build.mjs), so
+// search engines can find both. The page says which one it is; the switch is a link to the other.
+const lang = root.lang === "en" ? "en" : "bg";
 let releases = {};
 
 const t = (key) => (lang === "en" ? EN[key] : BG_EXTRA[key]) ?? "";
@@ -48,9 +50,8 @@ function applyLang() {
   placeInk();
 }
 $("[data-lang-toggle]").addEventListener("click", () => {
-  lang = lang === "en" ? "bg" : "en";
-  store.set("site-lang", lang);
-  applyLang();
+  // remembered, so the next visit opens in this language (boot.js); the link itself does the switch
+  store.set("site-lang", lang === "en" ? "bg" : "en");
 });
 
 /* ------------------------------------------------------------------ theme */

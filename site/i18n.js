@@ -1,6 +1,9 @@
 /** English texts. The Bulgarian ones live in index.html itself and are read from there. */
 export const EN = {
-  title: "P2P Messenger · Your letters, sealed",
+  title: "Messenger without a phone number or server · P2P Messenger",
+  metaDescription: "Chat, call and send files with no number, email or cloud. Direct and end-to-end encrypted. Windows, Linux, Android, iPhone and browser.",
+  ogTitle: "P2P Messenger · Your letters. Sealed.",
+  ogDescription: "No server, no phone number, no cloud. Direct and end-to-end encrypted.",
   skip: "Skip to content",
   navLabel: "Main menu", menuLabel: "Menu", themeLabel: "Light or dark theme", footLabel: "Links",
   navFeatures: "Features", navHow: "How it works", navSecurity: "Security", navDownload: "Download", navFaq: "FAQ",
@@ -11,6 +14,7 @@ export const EN = {
   ctaDownload: "Download free", ctaNote: "Open source · Windows, Linux, Android, iPhone and browser",
   ctaFor: "Download for {os}", ctaOpenFor: "Open on {os}", ctaWebFor: "Open in browser",
   demoLabel: "Demo: a message is encrypted, travels directly and is decrypted",
+  demoInitA: "A", demoInitB: "P", demoWords: "<span>moon</span><span>cedar</span><span>sand</span><span>lantern</span>",
   demoA: "Ann", demoB: "Peter", demoSealed: "sealed with Double Ratchet", demoServer: "server", demoNone: "none", demoVerified: "words match ✓",
   scrollDown: "Scroll down", numbersLabel: "In numbers",
   marquee: "<span>0 accounts</span><span>✦</span><span>0 phone numbers</span><span>✦</span><span>Double Ratchet</span><span>✦</span><span>WebRTC</span><span>✦</span><span>Passkey</span><span>✦</span><span>12 recovery words</span><span>✦</span><span>AES-GCM on your device</span><span>✦</span><span>open source</span><span>✦</span>",
@@ -65,7 +69,7 @@ export const EN = {
 };
 
 export const BG_EXTRA = {
-  title: "P2P Messenger · Писмата ти, запечатани",
+  title: "Месинджър без телефонен номер и без сървър · P2P Messenger",
   copied: "Копирано ✓",
   soon: "в страницата с изданията", badgePreview: "тестова версия", badgeSoon: "скоро",
   ctaFor: "Изтегли за {os}", ctaOpenFor: "Отвори на {os}", ctaWebFor: "Отвори в браузъра",

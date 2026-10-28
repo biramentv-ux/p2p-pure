@@ -34,6 +34,15 @@ draft_commit() {
   gh api "repos/$REL_REPO/releases/$1" --jq '.body // ""' | sed -n 's/.*<!-- source-commit: \([0-9a-f]*\) -->.*/\1/p' | sed -n 1p
 }
 
+# With a separate public releases repository the source repository is private, so a link to one of
+# its files would be a 404 for everyone else. The guides (docs/WINDOWS.md, LINUX.md, SIGNING.md) and
+# LICENSE/SECURITY are copied to the public repository by public-docs.yml: point the links there.
+public_notes() {
+  if [ "$REL_REPO" = "$GITHUB_REPOSITORY" ]; then cat; return; fi
+  sed -e "s#github.com/${GITHUB_REPOSITORY}/blob/#github.com/${REL_REPO}/blob/#g" \
+      -e "s#github.com/${GITHUB_REPOSITORY}/releases#github.com/${REL_REPO}/releases#g"
+}
+
 attach() {
   local tag="$1" dir="$2" sha="$3" notes="$4" info id draft made
   case "$tag" in desktop-v*) ;; *) echo "::error::release tag must start with desktop-v"; exit 1 ;; esac
@@ -53,7 +62,7 @@ attach() {
   if [ -z "$info" ]; then
     local full
     full="$(mktemp)"
-    { cat "$notes"; printf '\n\n<!-- source-commit: %s -->\n' "$sha"; } > "$full"
+    { public_notes < "$notes"; printf '\n\n<!-- source-commit: %s -->\n' "$sha"; } > "$full"
     notes="$full"
     # A commit of another repository cannot be a target, so a separate releases repo tags its own
     # default branch; the tag in the source repository is what names the source commit.

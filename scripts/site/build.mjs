@@ -23,6 +23,7 @@ import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { JSDOM } from "jsdom";
 import { pickDownloads, REPO } from "../../site/downloads.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -65,7 +66,12 @@ export const CLOSED_TEXT = [
   ["Всеки ред е в GitHub. Всяко издание има", "Всяко издание има", "Every line is on GitHub. Each release has", "Each release has"],
   [" Кодът е отворен.</p>", "</p>", " The code is open.", ""],
   ["от публичния код.", "от изходния код.", "from the public code.", "from the source code."],
+  // the moving facts strip under the hero (lower case, so the check below ignores case)
+  ["<span>отворен код</span>", "<span>SHA-256 + SBOM</span>", "<span>open source</span>", "<span>SHA-256 + SBOM</span>"],
 ];
+
+/** Any of these left on a closed-source page is a claim that is no longer true (case-insensitive). */
+export const OPEN_CLAIM = /open[ -]source|отворен код|code is open|кодът е отворен|public code|публичния код/i;
 
 /**
  * Keeps one side of <!--when:open-->…<!--/when--> and <!--when:closed-->…<!--/when--> blocks, so a page
@@ -84,6 +90,126 @@ export function applyMode(text, { closed, lang }) {
     }
   }
   return out;
+}
+
+/**
+ * The public address of the site, ending in "/", or "" when it is not known (then no canonical link,
+ * no sitemap and no share image: those need absolute addresses). SITE_URL, e.g. https://dyrakarmy.online/
+ */
+export function siteUrl(env = process.env) {
+  const v = (env.SITE_URL ?? "").trim();
+  if (!v) return "";
+  let u;
+  try { u = new URL(v); } catch { throw new Error(`SITE_URL must be an absolute https address, got "${v}"`); }
+  if (u.protocol !== "https:" || u.search || u.hash) throw new Error(`SITE_URL must be an absolute https address, got "${v}"`);
+  return u.href.endsWith("/") ? u.href : `${u.href}/`;
+}
+
+/** The two language versions of the landing page: path under the site, html lang, og:locale, share image. */
+export const PAGES = {
+  bg: { path: "", locale: "bg_BG", image: "og-bg.png" },
+  en: { path: "en/", locale: "en_US", image: "og-en.png" },
+};
+
+/** A relative href/src on the Bulgarian page ("site.css", "app/") seen from /en/. */
+const fromEn = (v) => (!v || /^(#|[a-z][a-z0-9+.-]*:|\/|\.\.\/)/i.test(v) ? v : `../${v}`);
+
+/**
+ * The English page, rendered at build time from the Bulgarian one and the EN texts, so it exists
+ * without JavaScript and search engines see it (it used to be swapped in by the browser only).
+ */
+export function renderEnglish(bgHtml, EN) {
+  const dom = new JSDOM(bgHtml);
+  const d = dom.window.document;
+  const html = d.documentElement;
+  html.lang = "en";
+  html.setAttribute("data-root", "../");
+  html.setAttribute("data-other", "../");
+  d.title = EN.title;
+  const meta = (sel, value) => { const m = d.querySelector(sel); if (m && value) m.setAttribute("content", value); };
+  meta('meta[name="description"]', EN.metaDescription);
+  meta('meta[property="og:title"]', EN.ogTitle);
+  meta('meta[property="og:description"]', EN.ogDescription);
+  meta('meta[property="og:locale"]', PAGES.en.locale);
+  for (const el of d.querySelectorAll("[data-i18n]")) { const v = EN[el.getAttribute("data-i18n")]; if (v != null) el.textContent = v; }
+  for (const el of d.querySelectorAll("[data-i18n-html]")) { const v = EN[el.getAttribute("data-i18n-html")]; if (v != null) el.innerHTML = v; }
+  for (const el of d.querySelectorAll("[data-i18n-aria]")) { const v = EN[el.getAttribute("data-i18n-aria")]; if (v != null) el.setAttribute("aria-label", v); }
+  const toggle = d.querySelector("[data-lang-toggle]");
+  if (toggle) {
+    toggle.textContent = "БГ";
+    toggle.setAttribute("hreflang", "bg");
+    toggle.setAttribute("lang", "bg");
+    toggle.setAttribute("aria-label", "Превключи на български");
+  }
+  for (const el of d.querySelectorAll("[href], [src]")) {
+    for (const a of ["href", "src"]) if (el.hasAttribute(a)) el.setAttribute(a, fromEn(el.getAttribute(a)));
+  }
+  if (toggle) toggle.setAttribute("href", "../");
+  // the public documents have an English original; the Bulgarian page links the translations
+  for (const a of d.querySelectorAll('a[href*="/blob/main/"]')) {
+    a.setAttribute("href", a.getAttribute("href").replace(/SECURITY\.bg\.md$/, "SECURITY.md").replace(/LICENSE\.bg\.md$/, "LICENSE"));
+  }
+  return dom.serialize();
+}
+
+/**
+ * Canonical address, the two language versions, the share image and structured data (the app and
+ * its questions and answers, read from the page itself so they always match what is shown).
+ * Without SITE_URL only the structured data is added.
+ */
+export function addSeo(html, { lang, url }) {
+  const dom = new JSDOM(html);
+  const d = dom.window.document;
+  const head = d.head;
+  const add = (tag, attrs) => { const el = d.createElement(tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); head.appendChild(el); return el; };
+  const page = PAGES[lang];
+  if (url) {
+    add("link", { rel: "canonical", href: url + page.path });
+    for (const [l, p] of Object.entries(PAGES)) add("link", { rel: "alternate", hreflang: l, href: url + p.path });
+    add("link", { rel: "alternate", hreflang: "x-default", href: url + PAGES.bg.path });
+    add("meta", { property: "og:url", content: url + page.path });
+    add("meta", { property: "og:image", content: url + page.image });
+    add("meta", { property: "og:image:width", content: "1200" });
+    add("meta", { property: "og:image:height", content: "630" });
+    add("meta", { property: "og:image:alt", content: d.querySelector('meta[property="og:title"]')?.getAttribute("content") ?? "P2P Messenger" });
+    for (const [l, p] of Object.entries(PAGES)) if (l !== lang) add("meta", { property: "og:locale:alternate", content: p.locale });
+  }
+  const faq = [...d.querySelectorAll("details")].map((x) => [x.querySelector("summary")?.textContent?.trim(), x.querySelector("p")?.textContent?.trim()]).filter(([q, a]) => q && a);
+  const data = [
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      name: "P2P Messenger",
+      applicationCategory: "CommunicationApplication",
+      operatingSystem: "Windows, Linux, Android, iOS, Web",
+      description: d.querySelector('meta[name="description"]')?.getAttribute("content") ?? "",
+      inLanguage: lang,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+      ...(url ? { url: url + page.path, image: url + page.image } : {}),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      inLanguage: lang,
+      mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
+    },
+  ];
+  const ld = d.createElement("script");
+  ld.setAttribute("type", "application/ld+json");
+  // data, never code: "<" escaped so the text cannot close the tag
+  ld.textContent = JSON.stringify(data).replaceAll("<", "\\u003c");
+  head.appendChild(ld);
+  return dom.serialize().replace(/\s*<!--seo:[^>]*-->/, "");
+}
+
+export function robotsTxt(url) {
+  return `User-agent: *\nAllow: /\n${url ? `\nSitemap: ${url}sitemap.xml\n` : ""}`;
+}
+
+export function sitemapXml(url, lastmod) {
+  const alts = Object.entries(PAGES).map(([l, p]) => `    <xhtml:link rel="alternate" hreflang="${l}" href="${url}${p.path}"/>`).join("\n");
+  const entries = Object.values(PAGES).map((p) => `  <url>\n    <loc>${url}${p.path}</loc>\n    <lastmod>${lastmod}</lastmod>\n${alts}\n    <xhtml:link rel="alternate" hreflang="x-default" href="${url}"/>\n  </url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${entries}\n</urlset>\n`;
 }
 
 export function injectReleases(html, picked) {
@@ -134,7 +260,7 @@ function run(cmd, args, env) {
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(" ")} failed (${r.status})`);
 }
 
-export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "site"), releases, closed = isClosed(), repo = releasesRepo() } = {}) {
+export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "site"), releases, closed = isClosed(), repo = releasesRepo(), url = siteUrl(), now = new Date() } = {}) {
   if (!existsSync(join(dist, "index.html"))) throw new Error(`${dist}/index.html is missing: build the app first`);
   const appTmp = `${dist}-app`;
   rmSync(appTmp, { recursive: true, force: true });
@@ -164,15 +290,22 @@ export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "s
   writeFileSync(join(dist, ".nojekyll"), "");
 
   // releases (and, when the source is private, the wording) of the public page
-  const toRepo = (t) => t.replaceAll(`github.com/${REPO}/releases`, `github.com/${repo}/releases`);
-  const html = applyMode(toRepo(readFileSync(join(dist, "index.html"), "utf8")), { closed, lang: "bg" });
-  writeFileSync(join(dist, "index.html"), injectReleases(html, pickDownloads(releases ?? [])));
+  const toRepo = (t) => t.replaceAll(`github.com/${REPO}/releases`, `github.com/${repo}/releases`).replaceAll("{{PUBLIC_REPO}}", repo);
+  const html = injectReleases(applyMode(toRepo(readFileSync(join(dist, "index.html"), "utf8")), { closed, lang: "bg" }), pickDownloads(releases ?? []));
   const dl = join(dist, "downloads.js");
   writeFileSync(dl, readFileSync(dl, "utf8").replace(`REPO = "${REPO}"`, `REPO = "${repo}"`));
   const i18n = join(dist, "i18n.js");
   writeFileSync(i18n, applyMode(readFileSync(i18n, "utf8"), { closed, lang: "en" }));
+  // the English texts as they will be served (closed wording already applied)
+  const { EN } = await import(`data:text/javascript;base64,${Buffer.from(readFileSync(i18n, "utf8")).toString("base64")}`);
+  const pages = { bg: addSeo(html, { lang: "bg", url }), en: addSeo(renderEnglish(html, EN), { lang: "en", url }) };
+  writeFileSync(join(dist, "index.html"), pages.bg);
+  mkdirSync(join(dist, "en"), { recursive: true });
+  writeFileSync(join(dist, "en", "index.html"), pages.en);
+  writeFileSync(join(dist, "robots.txt"), robotsTxt(url));
+  if (url) writeFileSync(join(dist, "sitemap.xml"), sitemapXml(url, now.toISOString().slice(0, 10)));
   // no mixed state: a replaced wording must have found its place
-  if (closed && /Open source|Отворен код/.test(readFileSync(i18n, "utf8") + readFileSync(join(dist, "index.html"), "utf8"))) {
+  if (closed && OPEN_CLAIM.test(readFileSync(i18n, "utf8") + pages.bg + pages.en)) {
     throw new Error("closed mode: some open-source wording is still on the page (update CLOSED_TEXT in scripts/site/build.mjs)");
   }
   return { files: readdirSync(dist) };
