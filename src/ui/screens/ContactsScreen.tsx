@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { deleteContact, listContacts, type Contact } from "../../contacts/contacts";
+import { MAX_CONTACTS, deleteContact, listContacts, type Contact } from "../../contacts/contacts";
 import { useI18n } from "../../i18n";
 import { Avatar, ConstellationArt } from "../components/Art";
 
@@ -38,6 +38,11 @@ export function ContactsScreen({ onChat, onNewContact, onGroups }: ContactsScree
   return (
     <div className="screen">
       <h1>{t("Контакти")}</h1>
+      {contacts && (
+        <p className={contacts.length >= MAX_CONTACTS ? "contact-count full" : "contact-count"} aria-live="polite">
+          {t("{n} от {max} контакта", { n: contacts.length, max: MAX_CONTACTS })}
+        </p>
+      )}
       {error && <p role="alert">{t(error)}</p>}
       {contacts === null && (
         <ul className="skeleton-list" aria-busy="true" aria-label={t("Зареждане на контактите")}>
