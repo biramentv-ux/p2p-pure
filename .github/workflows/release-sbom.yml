@@ -4,12 +4,18 @@ name: Release SBOM
 # release, signed keylessly with cosign (Sigstore, GitHub OIDC): no signing key or secret
 # exists anywhere. Verification commands for users: docs/SUPPLY-CHAIN.md.
 #
-# Note: a release created by another workflow with the default GITHUB_TOKEN does not fire
-# `release: published`; run this workflow by hand (workflow_dispatch) with the tag in that case.
-# With a separate releases repository (variable RELEASES_REPO) the event never fires here either:
-# always run it by hand. The tag must also exist in this (source) repository.
+# Desktop tags (desktop-v*): runs on the tag push like the Windows and Linux builds and puts the
+# SBOM files into the same draft release (scripts/release/desktop-release.sh); whichever of the
+# three finishes last publishes it. So the SBOM is in the release before it becomes immutable,
+# also with a separate releases repository (variable RELEASES_REPO), where `release: published`
+# never fires here.
+#
+# Other releases: on `release: published` (not fired for a release made with the default
+# GITHUB_TOKEN), or by hand (workflow_dispatch) with the tag. The tag must exist in this repository.
 
 on:
+  push:
+    tags: ['desktop-v*']
   release:
     types: [published]
   workflow_dispatch:
@@ -22,11 +28,11 @@ on:
 permissions: {}
 
 concurrency:
-  group: release-sbom-${{ github.event.release.tag_name || inputs.tag }}
+  group: release-sbom-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
-  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
   COSIGN_VERSION: v3.1.4
 
 jobs:
@@ -36,6 +42,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    outputs:
+      commit: ${{ steps.commit.outputs.sha }}
     steps:
       - name: Validate tag name
         run: |
@@ -53,6 +61,11 @@ jobs:
           ref: refs/tags/${{ env.TAG }}
           path: src
           persist-credentials: false
+
+      # The commit the tag names: the shared desktop draft records it (desktop-release.sh).
+      - name: Tag commit
+        id: commit
+        run: echo "sha=$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -85,6 +98,10 @@ jobs:
     needs: generate
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # The same group as the Windows and Linux release jobs: one writer of the draft at a time.
+    concurrency:
+      group: desktop-release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+      cancel-in-progress: false
     permissions:
       contents: write   # gh release upload
       id-token: write   # keyless signing certificate from the GitHub OIDC token
@@ -93,7 +110,9 @@ jobs:
         with:
           # Only the helper scripts are needed here (from the triggering ref, not the tag).
           persist-credentials: false
-          sparse-checkout: scripts/release
+          sparse-checkout: |
+            scripts/release
+            docs
           sparse-checkout-cone-mode: true
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -133,8 +152,14 @@ jobs:
           # source is private (docs/PRIVATE-REPO.md). The signature identity stays this workflow.
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
           RELEASES_REPO: ${{ vars.RELEASES_REPO || github.repository }}
+          COMMIT: ${{ needs.generate.outputs.commit }}
         run: |
-          gh release upload "$TAG" release-sbom/* --clobber --repo "$RELEASES_REPO"
+          if [[ "$TAG" == desktop-v* ]] && ! gh api "repos/$RELEASES_REPO/releases/tags/$TAG" > /dev/null 2>&1; then
+            # not published yet: into the shared draft (published API lookups do not see drafts)
+            bash scripts/release/desktop-release.sh attach "$TAG" release-sbom "$COMMIT" docs/DESKTOP-RELEASE.md
+          else
+            gh release upload "$TAG" release-sbom/* --clobber --repo "$RELEASES_REPO"
+          fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
