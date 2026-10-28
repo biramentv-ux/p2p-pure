@@ -5,6 +5,9 @@
 #   desktop-release.sh attach TAG DIR SHA NOTES_FILE
 #       create the draft if the other platform has not, upload DIR/*, and publish the draft only
 #       when every file in REQUIRED_ASSETS is there (so the platform that finishes last publishes).
+#       The draft records the source commit (SHA). A draft left by an earlier, failed run of the same
+#       tag on another commit is deleted first: its files are stale and would otherwise let the
+#       first platform publish at once with the other platform's old files.
 #   desktop-release.sh wait TAG MINUTES
 #       block until the release is published (the install checks need public download links).
 #
@@ -16,7 +19,8 @@ set -euo pipefail
 
 : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 REL_REPO="${RELEASES_REPO:-$GITHUB_REPOSITORY}"
-REQUIRED_ASSETS="${REQUIRED_ASSETS:-P2P-Messenger-Setup-x64.exe SHA256SUMS-linux.txt}"
+# Windows installer, Linux checksums, SBOM checksums (release-sbom.yml): the last of the three publishes.
+REQUIRED_ASSETS="${REQUIRED_ASSETS:-P2P-Messenger-Setup-x64.exe SHA256SUMS-linux.txt SHA256SUMS-sbom.txt}"
 
 # "<id> <draft>" of the release with this tag, or nothing. Drafts are not found by tag in the REST
 # API, so the list is searched.
@@ -25,15 +29,32 @@ find_release() {
     --jq ".[] | select(.tag_name == \"$1\") | \"\(.id) \(.draft)\"" | sed -n 1p
 }
 
+# The source commit a draft was made from (the marker in its notes), or nothing.
+draft_commit() {
+  gh api "repos/$REL_REPO/releases/$1" --jq '.body // ""' | sed -n 's/.*<!-- source-commit: \([0-9a-f]*\) -->.*/\1/p' | sed -n 1p
+}
+
 attach() {
-  local tag="$1" dir="$2" sha="$3" notes="$4" info id draft
+  local tag="$1" dir="$2" sha="$3" notes="$4" info id draft made
   case "$tag" in desktop-v*) ;; *) echo "::error::release tag must start with desktop-v"; exit 1 ;; esac
   info="$(find_release "$tag")"
   if [ -n "$info" ] && [ "${info#* }" = "false" ]; then
     echo "::error::release $tag is already published and immutable: no more files can be added. Use a new version/tag, or delete the release first."
     exit 1
   fi
+  if [ -n "$info" ]; then
+    made="$(draft_commit "${info%% *}")"
+    if [ "$made" != "$sha" ]; then
+      echo "::notice title=release-stale-draft::draft $tag was made from ${made:-an unknown commit}, this build is $sha: deleting the stale draft and its files"
+      gh api -X DELETE "repos/$REL_REPO/releases/${info%% *}" > /dev/null
+      info=""
+    fi
+  fi
   if [ -z "$info" ]; then
+    local full
+    full="$(mktemp)"
+    { cat "$notes"; printf '\n\n<!-- source-commit: %s -->\n' "$sha"; } > "$full"
+    notes="$full"
     # A commit of another repository cannot be a target, so a separate releases repo tags its own
     # default branch; the tag in the source repository is what names the source commit.
     local target=(--target "$sha")
