@@ -17,7 +17,8 @@ param(
     [string]$Source = "biramentv-ux/p2p-pure",
     [string]$Releases = "biramentv-ux/p2p-pure-releases",
     [string]$Domain = "dyrakarmy.online",
-    [string]$Tag = "desktop-v0.7.1",
+    # Празно = desktop-v<версията в main>: след PR с нова версия скриптът сам минава на нея.
+    [string]$Tag = "",
     [switch]$SkipDomain,
     [switch]$DryRun
 )
@@ -50,7 +51,14 @@ if (-not (GhQuiet auth status)) { throw "gh не е влязъл: пусни gh 
 $go = Join-Path $PSScriptRoot "go-private.ps1"
 if (-not (Test-Path $go)) { throw "Липсва $go. Пусни git pull." }
 
-Write-Host "`nПроверявам докъде си стигнал..." -ForegroundColor Cyan
+if (-not $Tag) {
+    $content = GhOut api "repos/$Source/contents/electron/package.json" --jq .content
+    if (-not $content) { throw "Не мога да прочета electron/package.json от main на $Source." }
+    $mainVer = ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($content -replace '\s', ''))) | ConvertFrom-Json).version
+    $Tag = "desktop-v$mainVer"
+}
+
+Write-Host "`nПроверявам докъде си стигнал (издание $Tag)..." -ForegroundColor Cyan
 
 # 1. публичното репо
 $vis = GhOut repo view $Releases --json visibility --jq .visibility
@@ -74,7 +82,8 @@ $s4 = $SkipDomain -or ($cname -eq $Domain)
 $assets = @(GhOut api "repos/$Releases/releases/tags/$Tag" --jq ".assets[].name" | Where-Object { $_ })
 $published = $assets.Count -gt 0
 $hasSbom = $assets -contains "SHA256SUMS-sbom.txt"
-$s5 = $published -and ($assets -contains "P2P-Messenger-Setup-x64.exe") -and ($assets -contains "SHA256SUMS-linux.txt") -and $hasSbom
+$hasBuilds = ($assets -contains "P2P-Messenger-Setup-x64.exe") -and ($assets -contains "SHA256SUMS-linux.txt")
+$s5 = $published -and $hasBuilds -and $hasSbom
 
 # 7. изходното репо частно
 $srcVis = GhOut repo view $Source --json visibility --jq .visibility
@@ -99,6 +108,11 @@ $from = if (-not $s1) { 1 } elseif (-not $s2) { 2 } elseif (-not $s3) { 3 } else
 if (-not $s5) {
     $mainSha = GhOut api "repos/$Source/git/ref/heads/main" --jq .object.sha
     $tagSha = GhOut api "repos/$Source/git/ref/tags/$Tag" --jq .object.sha
+    if ($published -and -not $hasBuilds) {
+        Write-Host "Изданието $Tag е публикувано без всички файлове, а публикувано издание не може да се допълни." -ForegroundColor Yellow
+        Write-Host "Вдигни версията в main (PR с новата версия), слей го и пусни този скрипт пак: той сам минава на новата версия."
+        return
+    }
     if ($published -and -not $hasSbom -and $from -eq 5) {
         Write-Host "Изданието е публикувано, липсва само SBOM: пускам го." -ForegroundColor Cyan
         if (-not $DryRun) {
@@ -109,7 +123,7 @@ if (-not $s5) {
     }
     if ($tagSha -and -not $published) {
         $states = @()
-        foreach ($wf in @("windows-desktop.yml", "linux-desktop.yml")) {
+        foreach ($wf in @("windows-desktop.yml", "linux-desktop.yml", "release-sbom.yml")) {
             $runs = GhJson run list --repo $Source --workflow $wf --branch $Tag --limit 1 --json status,conclusion
             $r = if ($runs.Count -gt 0) { "$($runs[0].status)/$($runs[0].conclusion)" } else { $null }
             $states += "${wf}: $(if ($r) { $r } else { 'няма пускане' })"
@@ -123,7 +137,7 @@ if (-not $s5) {
             if ($DryRun) { Write-Host "(-DryRun: не трия нищо)"; return }
             $a = Read-Host "Да изтрия ли тага $Tag и да го направя наново върху main? (д/н)"
             if ($a -notmatch '^(д|y|yes|да)$') { Write-Host "Оставям тага. Нищо не е променено."; return }
-            # чернова от предишен опит не пречи: новото пускане качва в нея и я публикува
+            # старата чернова от предишен опит desktop-release.sh я трие сама (друг commit = стари файлове)
             & gh api -X DELETE "repos/$Source/git/refs/tags/$Tag" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "Не успях да изтрия тага $Tag." }
             $prev = $ErrorActionPreference; $ErrorActionPreference = "Continue"

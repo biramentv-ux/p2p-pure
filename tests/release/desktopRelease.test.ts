@@ -14,12 +14,17 @@ const FAKE_GH = `#!/usr/bin/env bash
 S="$FAKE_STATE"
 args="$*"
 case "$1 $2" in
+  "api -X")
+    rm -f "$S/tag" "$S/draft" "$S/assets" "$S/body"; echo deleted >> "$S/log"; exit 0 ;;
   "api repos/o/r/releases"|"api repos/o/pub/releases")
     tag="$(printf '%s' "$args" | sed -n 's/.*tag_name == "\\([^"]*\\)".*/\\1/p')"
     [ -f "$S/tag" ] && [ "$(cat "$S/tag")" = "$tag" ] && echo "7 $(cat "$S/draft")"
     exit 0 ;;
-  "api repos/o/r/releases/7"|"api repos/o/pub/releases/7") cat "$S/assets" 2>/dev/null; exit 0 ;;
-  "release create") echo "$3" > "$S/tag"; echo true > "$S/draft"; : > "$S/assets"; echo created >> "$S/log"; echo "$args" > "$S/create-args"; exit 0 ;;
+  "api repos/o/r/releases/7"|"api repos/o/pub/releases/7")
+    case "$args" in *.body*) cat "$S/body" 2>/dev/null ;; *) cat "$S/assets" 2>/dev/null ;; esac; exit 0 ;;
+  "release create")
+    echo "$3" > "$S/tag"; echo true > "$S/draft"; : > "$S/assets"; echo created >> "$S/log"; echo "$args" > "$S/create-args"
+    nf="$(printf '%s' "$args" | sed -n 's/.*--notes-file \\([^ ]*\\).*/\\1/p')"; cp "$nf" "$S/body"; exit 0 ;;
   "release upload")
     shift 3
     while [ $# -gt 0 ]; do
@@ -66,16 +71,19 @@ describe("desktop release script (draft -> upload -> publish)", () => {
     };
   });
 
-  it("keeps a draft until both platforms have added their files, then publishes once", () => {
+  it("keeps a draft until Windows, Linux and the SBOM have added their files, then publishes once", () => {
     const win = files("win", ["P2P-Messenger-Setup-x64.exe", "SHA256SUMS.txt"]);
     const lin = files("lin", ["P2P-Messenger-0.7.0-amd64.deb", "SHA256SUMS-linux.txt"]);
+    const sbom = files("sbom", ["web.cdx.json", "SHA256SUMS-sbom.txt"]);
 
-    let r = run("attach", "desktop-v0.7.0", win, "abc", join(dir, "notes.md"));
-    expect(r.status, r.stderr + r.stdout).toBe(0);
-    expect(readFileSync(join(state, "draft"), "utf8").trim()).toBe("true");
-    expect(readFileSync(out(), "utf8")).toContain("published=false");
+    for (const d of [win, lin]) {
+      const r = run("attach", "desktop-v0.7.0", d, "abc", join(dir, "notes.md"));
+      expect(r.status, r.stderr + r.stdout).toBe(0);
+      expect(readFileSync(join(state, "draft"), "utf8").trim()).toBe("true");
+      expect(readFileSync(out(), "utf8")).toContain("published=false");
+    }
 
-    r = run("attach", "desktop-v0.7.0", lin, "abc", join(dir, "notes.md"));
+    const r = run("attach", "desktop-v0.7.0", sbom, "abc", join(dir, "notes.md"));
     expect(r.status, r.stderr + r.stdout).toBe(0);
     expect(readFileSync(join(state, "draft"), "utf8").trim()).toBe("false");
     expect(readFileSync(out(), "utf8")).toContain("published=true");
@@ -88,7 +96,8 @@ describe("desktop release script (draft -> upload -> publish)", () => {
     env = { ...env, RELEASES_REPO: "o/pub" };
     const win = files("win", ["P2P-Messenger-Setup-x64.exe"]);
     const lin = files("lin", ["SHA256SUMS-linux.txt"]);
-    for (const d of [win, lin]) {
+    const sbom = files("sbom", ["SHA256SUMS-sbom.txt"]);
+    for (const d of [win, lin, sbom]) {
       const r = run("attach", "desktop-v0.7.0", d, "abc123", join(dir, "notes.md"));
       expect(r.status, r.stderr + r.stdout).toBe(0);
     }
@@ -103,6 +112,39 @@ describe("desktop release script (draft -> upload -> publish)", () => {
     const r = run("attach", "desktop-v0.7.0", files("win", ["P2P-Messenger-Setup-x64.exe"]), "abc123", join(dir, "notes.md"));
     expect(r.status, r.stderr + r.stdout).toBe(0);
     expect(readFileSync(join(state, "create-args"), "utf8")).toContain("--target abc123");
+  });
+
+  it("records the source commit in the draft notes", () => {
+    const r = run("attach", "desktop-v0.7.0", files("win", ["P2P-Messenger-Setup-x64.exe"]), "abc123", join(dir, "notes.md"));
+    expect(r.status, r.stderr + r.stdout).toBe(0);
+    const body = readFileSync(join(state, "body"), "utf8");
+    expect(body).toContain("notes");
+    expect(body).toContain("<!-- source-commit: abc123 -->");
+  });
+
+  it("deletes a stale draft from another commit instead of publishing with its old files", () => {
+    // an earlier failed run of the same tag left a draft that already has the Linux files
+    writeFileSync(join(state, "tag"), "desktop-v0.7.0");
+    writeFileSync(join(state, "draft"), "true");
+    writeFileSync(join(state, "assets"), "SHA256SUMS-linux.txt\n");
+    writeFileSync(join(state, "body"), "notes\n<!-- source-commit: 0ld0ld -->\n");
+    const r = run("attach", "desktop-v0.7.0", files("win", ["P2P-Messenger-Setup-x64.exe"]), "abc123", join(dir, "notes.md"));
+    expect(r.status, r.stderr + r.stdout).toBe(0);
+    expect(r.stdout).toMatch(/stale draft/);
+    expect(readFileSync(join(state, "draft"), "utf8").trim()).toBe("true");
+    expect(readFileSync(join(state, "assets"), "utf8")).not.toContain("SHA256SUMS-linux.txt");
+    expect(readFileSync(out(), "utf8")).toContain("published=false");
+    expect(readFileSync(join(state, "log"), "utf8").trim().split("\n")).toEqual(["deleted", "created", "upload"]);
+  });
+
+  it("a draft without the commit marker (older script) also counts as stale", () => {
+    writeFileSync(join(state, "tag"), "desktop-v0.7.0");
+    writeFileSync(join(state, "draft"), "true");
+    writeFileSync(join(state, "assets"), "SHA256SUMS-linux.txt\n");
+    writeFileSync(join(state, "body"), "notes\n");
+    const r = run("attach", "desktop-v0.7.0", files("win", ["P2P-Messenger-Setup-x64.exe"]), "abc123", join(dir, "notes.md"));
+    expect(r.status, r.stderr + r.stdout).toBe(0);
+    expect(readFileSync(join(state, "draft"), "utf8").trim()).toBe("true");
   });
 
   it("refuses to add files to a release that is already published (immutable)", () => {
@@ -140,6 +182,20 @@ describe("desktop workflows", () => {
     }
   });
 
+  it("the SBOM goes into the same draft on the tag push, in the same serialising group", () => {
+    const sbom = read(".github/workflows/release-sbom.yml");
+    expect(sbom).toMatch(/push:\r?\n\s+tags: \['desktop-v\*'\]/);
+    expect(sbom).toMatch(/desktop-release\.sh attach "\$TAG" release-sbom "\$COMMIT"/);
+    expect(sbom).toContain("group: desktop-release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}");
+    expect(read("scripts/release/desktop-release.sh")).toMatch(/SHA256SUMS-sbom\.txt/);
+  });
+
+  it("a hanging winget install cannot use up the whole verify job", () => {
+    const step = win.slice(win.indexOf("- name: Install with winget from the release"));
+    expect(step.split("run:")[0]).toMatch(/timeout-minutes: \d+/);
+    expect(step).toContain("WaitForExit(");
+  });
+
   it("both go through the draft script and share one serialising group", () => {
     for (const wf of [win, lin]) {
       expect(wf).toMatch(/desktop-release\.sh attach/);
@@ -151,7 +207,7 @@ describe("desktop workflows", () => {
 
   it("run the checks that need public downloads only after the release is published", () => {
     const winVerify = win.slice(win.indexOf("release-verify:"));
-    expect(winVerify.indexOf("desktop-release.sh wait")).toBeLessThan(winVerify.indexOf("winget install"));
+    expect(winVerify.indexOf("desktop-release.sh wait")).toBeLessThan(winVerify.indexOf('"install", "--manifest"'));
     const linVerify = lin.slice(lin.indexOf("release-verify:"));
     expect(linVerify.indexOf("desktop-release.sh wait")).toBeLessThan(linVerify.indexOf("install.sh --version"));
   });

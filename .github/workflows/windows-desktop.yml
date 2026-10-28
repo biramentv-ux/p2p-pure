@@ -330,7 +330,7 @@ jobs:
   release-verify:
     needs: [build, release]
     runs-on: windows-latest
-    timeout-minutes: 50
+    timeout-minutes: 90
     permissions:
       contents: read
     env:
@@ -349,16 +349,29 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/release/desktop-release.sh wait "$RELEASE_TAG" 40
+        # Linux (Flatpak) is the slowest: up to about 45 minutes after the Windows build.
+        run: bash scripts/release/desktop-release.sh wait "$RELEASE_TAG" 60
 
+      # winget on hosted runners can hang without output (desktop-v0.7.1 used up the whole job).
+      # The release is already published at this point, so a hang is a warning, not a failure;
+      # a real install error still fails.
       - name: Install with winget from the release
         shell: pwsh
+        timeout-minutes: 15
         run: |
           if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { $env:PATH += ";$env:LOCALAPPDATA\Microsoft\WindowsApps" }
-          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Write-Output "::warning::winget not available; install test skipped"; exit 0 }
+          $wg = Get-Command winget -ErrorAction SilentlyContinue
+          if (-not $wg) { Write-Output "::warning::winget not available; install test skipped"; exit 0 }
           winget settings --enable LocalManifestFiles
-          winget install --manifest "$env:WINGET_DIR" --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-          if ($LASTEXITCODE -ne 0) { Write-Output "::error title=winget-install::install from the release failed ($LASTEXITCODE)"; exit 1 }
+          $wargs = @("install", "--manifest", "`"$env:WINGET_DIR`"", "--silent", "--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity")
+          $p = Start-Process -FilePath $wg.Source -ArgumentList $wargs -NoNewWindow -PassThru
+          $null = $p.Handle   # keeps the exit code readable after WaitForExit
+          if (-not $p.WaitForExit(10 * 60 * 1000)) {
+            taskkill /T /F /PID $p.Id | Out-Null
+            Write-Output "::warning title=winget-install::winget did not finish within 10 minutes (hosted runner); install test skipped, the release is published"
+            exit 0
+          }
+          if ($p.ExitCode -ne 0) { Write-Output "::error title=winget-install::install from the release failed ($($p.ExitCode))"; exit 1 }
           Write-Output "::notice title=winget-install::installed from the release through winget"
 
 
