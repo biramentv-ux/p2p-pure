@@ -7,7 +7,9 @@ import { makeKeys, sampleContacts, setup, waitFor } from "./helpers";
 async function toCompare(s: ReturnType<typeof setup>) {
   await s.sender.start();
   await s.receiver.start();
-  await Promise.all([waitFor(s.sender, "compare"), waitFor(s.receiver, "compare")]);
+  // Also stop on a failure: waiting only for "compare" would hang until the test timeout.
+  const reached = await Promise.all([waitFor(s.sender, "compare", "failed"), waitFor(s.receiver, "compare", "failed", "aborted")]);
+  expect(reached, "both sides should reach the comparison").toEqual(["compare", "compare"]);
 }
 
 describe("channel closes after it opened (Codex P2: link.ts)", () => {
@@ -77,14 +79,19 @@ describe("channel closes after it opened (Codex P2: link.ts)", () => {
 });
 
 describe("protocol deadline", () => {
-  const soon = () => makeKeys({ now: Date.now() - TRANSFER_TTL_MS + 150 });
+  // The real clock runs the deadline. The steps before it take milliseconds locally but far longer
+  // on a loaded CI runner; with 150 ms the transfer sometimes expired before the comparison and the
+  // test hung. Long enough for a slow runner, short enough to keep the tests quick.
+  const DEADLINE_MS = 1500;
+  const TEST_TIMEOUT_MS = 15_000;
+  const soon = () => makeKeys({ now: Date.now() - TRANSFER_TTL_MS + DEADLINE_MS });
 
   it("nobody waits past the expiry: a comparison left open fails with EXPIRED", async () => {
     const s = setup({ keys: soon() });
     await toCompare(s);
     await Promise.all([waitFor(s.sender, "failed"), waitFor(s.receiver, "failed", "aborted")]);
     expect(s.sender.error?.code).toBe("EXPIRED");
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("the old device waiting for the stored ack stops at the expiry and is not wiped", async () => {
     const s = setup({ keys: soon() });
@@ -103,7 +110,7 @@ describe("protocol deadline", () => {
     expect(s.receiver.bundle).not.toBeNull();
     expect(s.receiver.peerEnded).toBe(true);
     await expect(s.receiver.reportStored(s.ownDid)).rejects.toMatchObject({ code: "CLOSED" });
-  });
+  }, TEST_TIMEOUT_MS);
 
   it("a deadline while the contacts are still being read: the seed is never sent", async () => {
     let release!: () => void;
@@ -126,7 +133,7 @@ describe("protocol deadline", () => {
     expect(s.sender.error?.code).toBe("EXPIRED");
     expect(s.ch.a.sent).toHaveLength(2); // hello + abort, no bundle after the failure
     expect(s.receiver.bundle).toBeNull();
-  });
+  }, TEST_TIMEOUT_MS);
 });
 
 describe("a received bundle survives whatever comes after it", () => {
