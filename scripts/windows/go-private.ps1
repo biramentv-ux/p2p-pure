@@ -6,7 +6,8 @@
     2. Токен (скрито въвеждане) -> secret RELEASES_TOKEN; задава променливите на частното репо.
     3. Публикува сайта в gh-pages на публичното репо и включва Pages там.
     4. Сочи домейна към новото място (Cloudflare токен се пита от point-domain-to-pages.ps1).
-    5. Прави новото издание (таг), изчаква Windows + Linux билдовете и подписания SBOM.
+    5. Прави новото издание (таг), изчаква Windows + Linux билдовете и подписания SBOM
+       (тримата качват в една чернова; последният я публикува).
     6. Проверява сайта и изданията.
     7. Пита дали да направи основното репо private. Преди това НЕ го променя.
 
@@ -22,8 +23,8 @@ param(
     [string]$Source = "biramentv-ux/p2p-pure",
     [string]$Releases = "biramentv-ux/p2p-pure-releases",
     [string]$Domain = "dyrakarmy.online",
-    # Тагът на новото издание. Версията в main (electron/package.json) трябва да е същата.
-    [string]$Tag = "desktop-v0.7.1",
+    # Тагът на новото издание. Празно = desktop-v<версията в main> (electron/package.json).
+    [string]$Tag = "",
     [switch]$SkipDomain,
     [ValidateRange(1, 7)][int]$From = 1
 )
@@ -93,6 +94,12 @@ function Wait-Run($workflow, $branch, $event, $Since = $null) {
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw "Липсва GitHub CLI (winget install GitHub.cli), после gh auth login." }
 RunGh auth status | Out-Null
+if (-not $Tag) {
+    $content = GhOut api "repos/$Source/contents/electron/package.json" --jq .content
+    if (-not $content) { throw "Не мога да прочета electron/package.json от main на $Source." }
+    $mainVer = ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(($content -replace '\s', ''))) | ConvertFrom-Json).version
+    $Tag = "desktop-v$mainVer"
+}
 $ver = $Tag -replace '^desktop-v', ''
 if ($ver -notmatch '^\d+\.\d+\.\d+$') { throw "Тагът трябва да е като desktop-v0.7.1, а е $Tag" }
 $ownerRel = $Releases.Split("/")[0].ToLower()
@@ -205,13 +212,11 @@ if ($From -le 5) {
             RunGh api -X POST "repos/$Source/git/refs" -f "ref=refs/tags/$Tag" -f "sha=$sha" | Out-Null
             Ok "таг $Tag върху main ($($sha.Substring(0, 7)))"
         } else { Ok "тагът $Tag вече съществува" }
-        Write-Host "    Windows и Linux билдовете траят около 20-40 минути."
+        Write-Host "    Windows, Linux и SBOM тръгват от тага и траят около 20-50 минути."
+        # SBOM също тръгва от тага и качва в същата чернова: изданието се публикува само с трите
+        Wait-Run "release-sbom.yml" $Tag "push" $since
         Wait-Run "windows-desktop.yml" $Tag "push" $since
         Wait-Run "linux-desktop.yml" $Tag "push" $since
-        # между репа събитието "release: published" не се задейства: SBOM се пуска на ръка
-        $sbomSince = (Get-Date).ToUniversalTime()
-        RunGh workflow run release-sbom.yml --repo $Source -f "tag=$Tag"
-        Wait-Run "release-sbom.yml" "" "workflow_dispatch" $sbomSince
     }
 }
 
@@ -221,7 +226,9 @@ if ($From -le 6) {
     $rel = & gh release view $Tag --repo $Releases --json isDraft,assets --jq '{draft: .isDraft, files: [.assets[].name]}' | ConvertFrom-Json
     if ($rel.draft) { throw "Изданието $Tag в $Releases е още чернова." }
     foreach ($need in @("P2P-Messenger-Setup-x64.exe", "SHA256SUMS-linux.txt", "SHA256SUMS-sbom.txt")) {
-        if ($rel.files -notcontains $need) { throw "Липсва $need в изданието." }
+        if ($rel.files -notcontains $need) {
+            throw "Липсва $need в изданието. Публикуваното издание не може да се допълни: вдигни версията в main (PR), после пусни continue-private.ps1."
+        }
     }
     Ok "изданието има $($rel.files.Count) файла, включително инсталатор, суми и SBOM"
     $url = if ($SkipDomain) { "https://$ownerRel.github.io/$($Releases.Split('/')[1])/" } else { "https://$Domain/" }

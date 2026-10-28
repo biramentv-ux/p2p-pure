@@ -53,7 +53,7 @@ describe('go-private.ps1', () => {
   const full = readFileSync(resolve(root, 'scripts/windows/go-private.ps1'), 'utf8')
   const ps = full.slice(full.indexOf('$ErrorActionPreference')) // without the comment header
   it('does every step in order and changes the source repo only after the typed word', () => {
-    const order = ['RunGh repo create', 'RELEASES_TOKEN', 'pages.yml', 'point-domain-to-pages.ps1', 'refs/tags/', 'release-sbom.yml', 'PRIVATE']
+    const order = ['RunGh repo create', 'RELEASES_TOKEN', 'pages.yml', 'point-domain-to-pages.ps1', 'refs/tags/', 'Wait-Run "release-sbom.yml" $Tag "push" $since', 'PRIVATE']
     let at = -1
     for (const t of order) { const i = ps.indexOf(t, at + 1); expect(i, t).toBeGreaterThan(at); at = i }
     expect(ps.match(/--visibility private/g)).toHaveLength(1)
@@ -68,10 +68,13 @@ describe('go-private.ps1', () => {
     expect(ps).not.toMatch(/(Out-File|Set-Content|>>?\s)[^\n]*\$plain/)
     expect(ps).toContain('$plain = $null')
   })
-  it('matches the version files it waits for', () => {
-    expect(read('electron/package.json')).toContain('"version": "0.7.1"')
-    expect(read('src-tauri/tauri.conf.json')).toContain('"version": "0.7.1"')
-    expect(read('src-tauri/Cargo.toml')).toContain('version = "0.7.1"')
+  it('takes the release version from main by default, and every desktop version file agrees', () => {
+    expect(full).toContain('[string]$Tag = ""')
+    expect(ps).toContain('contents/electron/package.json')
+    const v = JSON.parse(read('electron/package.json')).version
+    expect(JSON.parse(read('src-tauri/tauri.conf.json')).version).toBe(v)
+    expect(read('src-tauri/Cargo.toml')).toContain(`version = "${v}"`)
+    expect(read('flatpak/bg.p2pmessenger.app.metainfo.xml')).toContain(`<release version="${v}"`)
   })
 })
 
@@ -95,6 +98,10 @@ describe('continue-private.ps1', () => {
   it('repairs a stale tag whenever the release is not done, not only when starting at step 5', () => {
     expect(ps).toContain('if (-not $s5) {')
     expect(ps).not.toContain('if ($from -eq 5) {')
+  })
+  it('follows the version in main and stops on a published release that misses files', () => {
+    expect(full).toContain('[string]$Tag = ""')
+    expect(ps).toContain('$published -and -not $hasBuilds')
   })
   it('never makes the repository private itself: that stays the typed step of go-private.ps1', () => {
     expect(ps).not.toContain('--visibility')
