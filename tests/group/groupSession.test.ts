@@ -106,6 +106,32 @@ describe("GroupSession over real pairwise sessions", () => {
     expect(adminGroup.snapshot.messages[0].mine).toBe(true);
   });
 
+  it("tells listeners about messages from other members, with the group and sender names, never about its own", async () => {
+    const admin = person("Ани");
+    const bob = person("Боб");
+    const adminGroup = GroupSession.create(admin.keys, "g-notify", "Приятели", "Ани");
+    const bobGroup = new GroupSession(bob.keys);
+    const { la, lb, sa, sb } = linkPair(admin, bob);
+    adminGroup.attach(bob.contact, la as never, sa);
+    bobGroup.attach(admin.contact, lb as never, sb);
+    await adminGroup.invite(bob.did, "Боб");
+    await settle([la, lb]);
+
+    const atBob: { groupName: string; fromName: string; text: string }[] = [];
+    const atAdmin: unknown[] = [];
+    const off = bobGroup.onIncoming((m) => atBob.push({ groupName: m.groupName, fromName: m.fromName, text: m.text }));
+    adminGroup.onIncoming((m) => atAdmin.push(m));
+    await adminGroup.sendText("има ли някой?");
+    await settle([la, lb]);
+
+    expect(atBob).toEqual([{ groupName: "Приятели", fromName: "Ани", text: "има ли някой?" }]);
+    expect(atAdmin).toEqual([]); // the admin's own message makes no sound on the admin's device
+    off();
+    await adminGroup.sendText("втори път");
+    await settle([la, lb]);
+    expect(atBob).toHaveLength(1);
+  });
+
   it("Bob has no messages before any are sent, even with the link up", async () => {
     const admin = person("Ани");
     const bob = person("Боб");

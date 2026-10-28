@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { copyWithAutoClear } from "../clipboard";
 import { publicKeyToDidKey } from "../../identity/didKey";
 import type { UnlockedIdentity } from "../../identity";
-import { saveContact, type Contact } from "../../contacts/contacts";
+import { CONTACT_LIMIT_MESSAGE, ContactLimitError, canAddContact, saveContact, type Contact } from "../../contacts/contacts";
 import {
   assertKind,
   bytesEqual,
@@ -115,6 +115,18 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   const wsRef = useRef<WebSocketSignalingProvider | null>(null);
   const [mode, setMode] = useState<SignalMode>(() => getSignalMode());
   useEffect(() => () => wsRef.current?.disconnect(), []);
+  // A full book (99) is said before a connection is started; a saved contact can still reconnect.
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    if (expected) return;
+    let alive = true;
+    canAddContact()
+      .then((ok) => alive && setFull(!ok))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [expected]);
 
   function getProvider(): OfflineSignalingProvider {
     if (!providerRef.current) {
@@ -348,7 +360,18 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       verifiedAt: Date.now(),
       addedAt: Date.now(),
     };
-    await saveContact(contact);
+    try {
+      await saveContact(contact);
+    } catch (err) {
+      if (!(err instanceof ContactLimitError)) throw err;
+      // The book filled up meanwhile (another tab, a group): nothing is saved, the link closes.
+      link.close();
+      linkRef.current = null;
+      setFull(true);
+      setError(t(CONTACT_LIMIT_MESSAGE));
+      setView({ k: "choose" });
+      return;
+    }
     doneRef.current = true;
     onConnected({ contact, link, session });
   }
@@ -386,6 +409,11 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     return (
       <div className="screen">
         <h1>{expected ? t("Свързване с {name}", { name: expected.name }) : t("Нов контакт")}</h1>
+        {full && !expected && (
+          <p role="note" className="limit-note">
+            {t(CONTACT_LIMIT_MESSAGE)}
+          </p>
+        )}
         <div role="group" aria-label={t("Начин на свързване")} className="call-actions">
           <button
             className={mode === "local" ? "" : "secondary"}

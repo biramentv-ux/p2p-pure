@@ -104,6 +104,17 @@ export interface GroupNotice {
   vars?: Vars;
 }
 
+/** A message from another member, for sounds and notifications (App.tsx -> src/notify). */
+export interface GroupIncoming {
+  groupId: string | null;
+  groupName: string;
+  from: string;
+  /** The name the group knows the sender by. */
+  fromName: string;
+  text: string;
+  file?: FileCard;
+}
+
 export interface GroupView {
   state: GroupState | null;
   isAdmin: boolean;
@@ -177,6 +188,7 @@ export class GroupSession {
   private readonly mesh: GroupMesh;
   private readonly links = new Map<string, LinkEntry>();
   private readonly subscribers = new Set<() => void>();
+  private readonly incoming = new Set<(m: GroupIncoming) => void>();
   private saveQueue: Promise<unknown> = Promise.resolve();
   private view: GroupView;
   private nextId = 1;
@@ -289,6 +301,31 @@ export class GroupSession {
   subscribe(fn: () => void): () => void {
     this.subscribers.add(fn);
     return () => this.subscribers.delete(fn);
+  }
+
+  /** Called for every text or file another member sends (not for this device's own messages). */
+  onIncoming(fn: (m: GroupIncoming) => void): () => void {
+    this.incoming.add(fn);
+    return () => this.incoming.delete(fn);
+  }
+
+  private emitIncoming(from: string, text: string, file?: FileCard): void {
+    const state = this.mesh.state;
+    const m: GroupIncoming = {
+      groupId: state?.groupId ?? this.groupId,
+      groupName: state?.name ?? "",
+      from,
+      fromName: state?.members.find((x) => x.did === from)?.name ?? "",
+      text,
+      ...(file ? { file } : {}),
+    };
+    for (const fn of this.incoming) {
+      try {
+        fn(m);
+      } catch {
+        /* a listener's problem must not stop the group */
+      }
+    }
   }
 
   /** The contact behind a linked member, if this device has a link to it. */
@@ -596,6 +633,7 @@ export class GroupSession {
   private addFileMessage(from: string, card: FileCard, mine: boolean): void {
     const message: GroupMessageView = { id: this.nextId++, from, text: "", file: card, mine, at: Date.now() };
     this.view = { ...this.view, messages: [...this.view.messages, message] };
+    if (!mine) this.emitIncoming(from, "", card);
     const key = this.historyKey;
     const groupId = this.groupId;
     if (key && groupId) {
@@ -765,6 +803,7 @@ export class GroupSession {
   private addMessage(from: string, text: string, mine: boolean): void {
     const message: GroupMessageView = { id: this.nextId++, from, text, mine, at: Date.now() };
     this.view = { ...this.view, messages: [...this.view.messages, message] };
+    if (!mine) this.emitIncoming(from, text);
     const key = this.historyKey;
     const groupId = this.groupId;
     if (key && groupId) {
