@@ -45,7 +45,7 @@
     "test:linux": "node tests/desktop/electron-linux.mjs"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.3",
+    "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3",
     "@fontsource/ibm-plex-mono": "5.2.5",
