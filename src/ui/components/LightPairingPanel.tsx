@@ -133,7 +133,11 @@ function ShowPanel({ bytes, onShowQr }: { bytes: Uint8Array; onShowQr(): void })
     if (!frames) return null;
     const cached = rasterRef.current;
     if (cached && cached.size === size) return cached.images;
-    const images = frames.map((f) => new ImageData(rasterizeFrame(f, size, size), size, size));
+    const images = frames.map((f) => {
+      const image = new ImageData(size, size);
+      image.data.set(rasterizeFrame(f, size, size));
+      return image;
+    });
     rasterRef.current = { size, images };
     return images;
   }
@@ -155,18 +159,21 @@ function ShowPanel({ bytes, onShowQr }: { bytes: Uint8Array; onShowQr(): void })
     // The next frame waits a full period after this one was drawn: never faster than LIGHT_FPS.
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      rafRef.current = requestAnimationFrame(drawNext);
+      rafRef.current = requestAnimationFrame(() => drawRef.current());
     }, period);
   }
+  // The running carousel always calls the latest drawNext (current size and frames).
+  const drawRef = useRef(drawNext);
+  useEffect(() => {
+    drawRef.current = drawNext;
+  });
 
   // Run the carousel while playing and visible; pause when the tab is hidden.
   useEffect(() => {
     if (!playing || paused) return;
     clearTimers();
-    rafRef.current = requestAnimationFrame(drawNext);
+    rafRef.current = requestAnimationFrame(() => drawRef.current());
     return clearTimers;
-    // drawNext reads the current size through rasterPx; restart when it changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, paused, rasterPx]);
 
   useEffect(() => {
