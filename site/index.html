@@ -44,6 +44,7 @@
       <nav class="nav" aria-label="Основно меню" data-i18n-aria="navLabel">
         <a href="#features" data-i18n="navFeatures">Какво може</a>
         <a href="#how" data-i18n="navHow">Как работи</a>
+        <a href="#connect" data-i18n="navConnect">Начини</a>
         <a href="#security" data-i18n="navSecurity">Сигурност</a>
         <a href="#download" data-i18n="navDownload">Изтегли</a>
         <a href="#faq" data-i18n="navFaq">Въпроси</a>
@@ -78,9 +79,10 @@
       <nav aria-label="Меню" data-i18n-aria="menuLabel">
         <a href="#features"><small>01</small><span data-i18n="navFeatures">Какво може</span></a>
         <a href="#how"><small>02</small><span data-i18n="navHow">Как работи</span></a>
-        <a href="#security"><small>03</small><span data-i18n="navSecurity">Сигурност</span></a>
-        <a href="#download"><small>04</small><span data-i18n="navDownload">Изтегли</span></a>
-        <a href="#faq"><small>05</small><span data-i18n="navFaq">Въпроси</span></a>
+        <a href="#connect"><small>03</small><span data-i18n="navConnect">Начини</span></a>
+        <a href="#security"><small>04</small><span data-i18n="navSecurity">Сигурност</span></a>
+        <a href="#download"><small>05</small><span data-i18n="navDownload">Изтегли</span></a>
+        <a href="#faq"><small>06</small><span data-i18n="navFaq">Въпроси</span></a>
       </nav>
       <div class="menu-quick">
         <p data-i18n="menuQuick">Направо към файла за</p>
@@ -173,8 +175,8 @@
           </article>
           <article class="card reveal" data-tilt>
             <div class="card-ico"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z"/></svg></div>
-            <h3 data-i18n="f3t">Контакт с QR или код</h3>
-            <p data-i18n="f3p">Покажи QR, другият го сканира. Отдалеч: код от 5 знака и 3 думи. Думите не стигат до сървъра.</p>
+            <h3 data-i18n="f3t">Шест начина да се свържете</h3>
+            <p data-i18n="f3p">QR на живо, код отдалеч, Bluetooth, звук, общ приятел или покана през месинджър. Думите от кода не стигат до сървъра.</p>
           </article>
           <article class="card reveal" data-tilt>
             <div class="card-ico"><svg viewBox="0 0 24 24"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M12 10v6m-3-3 3 3 3-3"/></svg></div>
@@ -220,7 +222,7 @@
           <li class="step reveal">
             <span class="step-n">2</span>
             <h3 data-i18n="s2t">Свържи се</h3>
-            <p data-i18n="s2p">Покажи QR кода или прати кратък код. Връзката между двете устройства е директна (WebRTC).</p>
+            <p data-i18n="s2p">Свържи се по един от шест начина: QR, код, Bluetooth, звук, общ приятел или покана. Връзката между двете устройства е директна (WebRTC).</p>
           </li>
           <li class="step reveal">
             <span class="step-n">3</span>
@@ -247,6 +249,121 @@
               <li data-i18n="vsNew3">историята е само при вас, шифрована</li>
             </ul>
           </div>
+        </div>
+      </section>
+
+      <!-- ================= CONNECT: six ways ================= -->
+      <section class="connect" id="connect" data-palette="8">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="connKicker">Начини за свързване</p>
+          <h2 data-i18n-html="connTitle">Шест начина да се свържете.<br /><em>Изберете своя.</em></h2>
+          <p class="sec-lead" data-i18n="connLead">Всеки начин носи поканата по различен път. След свързването, и при шестте, сравнявате едни и същи 12 думи за сигурност: ако съвпадат, никой не стои по средата.</p>
+        </header>
+        <div class="ways">
+          <article class="card way reveal" data-tilt data-way="qr">
+            <div class="way-art" aria-hidden="true">
+              <svg class="art" viewBox="0 0 240 120" focusable="false">
+                <g class="ph"><rect x="52" y="14" width="44" height="88" rx="9"/><rect class="scr" x="57" y="24" width="34" height="68" rx="4"/></g>
+                <g class="ph"><rect x="144" y="14" width="44" height="88" rx="9"/><rect class="scr" x="149" y="24" width="34" height="68" rx="4"/></g>
+                <g class="qr an qr-l"><rect x="63" y="46" width="8" height="8"/><rect x="73" y="46" width="8" height="8"/><rect x="63" y="56" width="8" height="8"/><rect x="73" y="66" width="8" height="8"/><rect x="63" y="66" width="8" height="8"/><rect x="73" y="56" width="8" height="8" class="dim"/></g>
+                <g class="qr an qr-r"><rect x="155" y="46" width="8" height="8"/><rect x="165" y="56" width="8" height="8"/><rect x="155" y="56" width="8" height="8" class="dim"/><rect x="165" y="46" width="8" height="8"/><rect x="155" y="66" width="8" height="8"/><rect x="165" y="66" width="8" height="8" class="dim"/></g>
+                <rect class="scan an" x="60" y="40" width="28" height="2.5" rx="1.2"/>
+                <rect class="scan scan-r an" x="152" y="40" width="28" height="2.5" rx="1.2"/>
+                <g class="ok an"><circle cx="120" cy="58" r="12"/><path d="M114 58.5l4.2 4.2 7.8-8.4"/></g>
+              </svg>
+            </div>
+            <span class="way-n mono" aria-hidden="true">01</span>
+            <h3 data-i18n="w1t">QR лице в лице</h3>
+            <p data-i18n="w1p">Двата телефона си показват и сканират QR кодове. Поканата е подписан текст в самия код, затова изобщо няма сървър (локален режим).</p>
+            <p class="way-when"><b data-i18n="wayWhen">Подходящо, когато</b> <span data-i18n="w1w">сте на едно място.</span></p>
+          </article>
+
+          <article class="card way reveal" data-tilt data-way="code">
+            <div class="way-art" aria-hidden="true">
+              <svg class="art" viewBox="0 0 240 120" focusable="false">
+                <path class="arc" d="M38 104 Q120 124 202 104"/>
+                <circle class="say an" cx="79" cy="111.5" r="3.6"/><circle class="say an" cx="120" cy="114" r="3.6"/><circle class="say an" cx="161" cy="111.5" r="3.6"/>
+                <g class="ph"><rect x="16" y="10" width="44" height="86" rx="9"/><rect class="scr" x="21" y="20" width="34" height="66" rx="4"/></g>
+                <g class="ph"><rect x="180" y="10" width="44" height="86" rx="9"/><rect class="scr" x="185" y="20" width="34" height="66" rx="4"/></g>
+                <g class="chips"><rect class="cd an" x="92" y="12" width="8" height="11" rx="2"/><rect class="cd an" x="104" y="12" width="8" height="11" rx="2"/><rect class="cd an" x="116" y="12" width="8" height="11" rx="2"/><rect class="cd an" x="128" y="12" width="8" height="11" rx="2"/><rect class="cd an" x="140" y="12" width="8" height="11" rx="2"/></g>
+                <g class="box"><rect x="102" y="38" width="36" height="34" rx="7"/><path d="M110 50h20M110 58h20M110 66h12"/></g>
+                <rect class="pkt an" x="64" y="49" width="15" height="11" rx="3"/>
+              </svg>
+            </div>
+            <span class="way-n mono" aria-hidden="true">02</span>
+            <h3 data-i18n="w2t">Кратък код от разстояние</h3>
+            <p data-i18n="w2p">Единият отваря стая и по телефона казва код от 5 знака и 3 думи. Сървърът вижда само номера на стаята и шифрован текст; ключът идва от думите (CPace PAKE).</p>
+            <p class="way-when"><b data-i18n="wayWhen">Подходящо, когато</b> <span data-i18n="w2w">сте далеч, но можете да си говорите.</span></p>
+          </article>
+
+          <article class="card way reveal" data-tilt data-way="ble">
+            <div class="way-art" aria-hidden="true">
+              <svg class="art" viewBox="0 0 240 120" focusable="false">
+                <circle class="ring an" cx="120" cy="58" r="14"/><circle class="ring r2 an" cx="120" cy="58" r="14"/><circle class="ring r3 an" cx="120" cy="58" r="14"/>
+                <g class="ph"><rect x="52" y="14" width="44" height="88" rx="9"/><rect class="scr" x="57" y="24" width="34" height="68" rx="4"/></g>
+                <g class="ph"><rect x="144" y="14" width="44" height="88" rx="9"/><rect class="scr" x="149" y="24" width="34" height="68" rx="4"/></g>
+                <g class="bt an"><circle cx="120" cy="58" r="15"/><path d="M114 52l12 12-6 5V47l6 5-12 12"/></g>
+                <circle class="blip an" cx="74" cy="58" r="4"/><circle class="blip b2 an" cx="166" cy="58" r="4"/>
+              </svg>
+            </div>
+            <span class="way-n mono" aria-hidden="true">03</span>
+            <h3 data-i18n="w3t">Bluetooth</h3>
+            <p data-i18n="w3p">Телефоните един до друг си подават поканата по Bluetooth Low Energy. Само в приложението за Android и iPhone, не в браузъра.</p>
+            <p class="way-when"><b data-i18n="wayWhen">Подходящо, когато</b> <span data-i18n="w3w">сте близо един до друг и не искате да сканирате.</span></p>
+          </article>
+
+          <article class="card way reveal" data-tilt data-way="sound">
+            <div class="way-art" aria-hidden="true">
+              <svg class="art" viewBox="0 0 240 120" focusable="false">
+                <g class="ph"><rect x="30" y="14" width="44" height="88" rx="9"/><rect class="scr" x="35" y="24" width="34" height="68" rx="4"/></g>
+                <g class="ph"><rect x="166" y="14" width="44" height="88" rx="9"/><rect class="scr" x="171" y="24" width="34" height="68" rx="4"/></g>
+                <g class="qr"><rect x="41" y="44" width="8" height="8"/><rect x="51" y="44" width="8" height="8"/><rect x="41" y="54" width="8" height="8"/><rect x="51" y="64" width="8" height="8"/><rect x="41" y="64" width="8" height="8"/><rect x="51" y="54" width="8" height="8" class="dim"/></g>
+                <circle class="mic an" cx="52" cy="82" r="3.2"/>
+                <g class="eq"><rect class="eqb an" x="175" y="54" width="3.4" height="14" rx="1.7"/><rect class="eqb b2 an" x="181" y="54" width="3.4" height="14" rx="1.7"/><rect class="eqb b3 an" x="187" y="54" width="3.4" height="14" rx="1.7"/><rect class="eqb b4 an" x="193" y="54" width="3.4" height="14" rx="1.7"/><rect class="eqb b5 an" x="199" y="54" width="3.4" height="14" rx="1.7"/></g>
+                <path class="wave an" d="M156 46q-9 12 0 24"/><path class="wave w2 an" d="M156 46q-9 12 0 24"/><path class="wave w3 an" d="M156 46q-9 12 0 24"/>
+              </svg>
+            </div>
+            <span class="way-n mono" aria-hidden="true">04</span>
+            <span class="way-new" data-i18n="wayNew">Ново</span>
+            <h3 data-i18n="w4t">QR + звук</h3>
+            <p data-i18n="w4p">Единият телефон показва QR, другият отговаря с кратък звук (около 15 секунди) през говорителя, а първият го слуша с микрофона. Няма втори код за сканиране.</p>
+            <p class="way-when"><b data-i18n="wayWhen">Подходящо, когато</b> <span data-i18n="w4w">сте заедно на сравнително тихо място.</span></p>
+          </article>
+
+          <article class="card way reveal" data-tilt data-way="friend">
+            <div class="way-art" aria-hidden="true">
+              <svg class="art" viewBox="0 0 240 120" focusable="false">
+                <path class="ln l1 an" d="M120 36L58 86"/><path class="ln l2 an" d="M120 36L182 86"/>
+                <path class="ln dash l3 an" d="M70 92H170"/>
+                <circle class="pdot d1 an" cx="120" cy="36" r="4.5"/><circle class="pdot d2 an" cx="120" cy="36" r="4.5"/>
+                <g class="who"><circle cx="120" cy="26" r="15"/><circle class="hd" cx="120" cy="22" r="4.6"/><path class="sh" d="M111 35a9 8 0 0 1 18 0"/></g>
+                <g class="who"><circle cx="50" cy="92" r="15"/><circle class="hd" cx="50" cy="88" r="4.6"/><path class="sh" d="M41 101a9 8 0 0 1 18 0"/></g>
+                <g class="who"><circle cx="190" cy="92" r="15"/><circle class="hd" cx="190" cy="88" r="4.6"/><path class="sh" d="M181 101a9 8 0 0 1 18 0"/></g>
+                <g class="ok an"><circle cx="120" cy="92" r="9"/><path d="M115.5 92.2l3.1 3.1 5.9-6.3"/></g>
+              </svg>
+            </div>
+            <span class="way-n mono" aria-hidden="true">05</span>
+            <span class="way-new" data-i18n="wayNew">Ново</span>
+            <h3 data-i18n="w5t">Чрез общ приятел</h3>
+            <p data-i18n="w5p">Контакт, когото и двамата познавате, ви запознава. Всичко е директно между вас, и двамата трябва да приемете, а приятелят не може да се представи за друг.</p>
+            <p class="way-when"><b data-i18n="wayWhen">Подходящо, когато</b> <span data-i18n="w5w">имате общ приятел, на когото вече вярвате.</span></p>
+          </article>
+
+          <article class="card way reveal" data-tilt data-way="relay">
+            <div class="way-art" aria-hidden="true">
+              <svg class="art" viewBox="0 0 240 120" focusable="false">
+                <path class="arc" d="M40 62Q120 8 200 62"/>
+                <g class="ph"><rect x="16" y="14" width="44" height="88" rx="9"/><rect class="scr" x="21" y="24" width="34" height="68" rx="4"/></g>
+                <g class="ph"><rect x="180" y="14" width="44" height="88" rx="9"/><rect class="scr" x="185" y="24" width="34" height="68" rx="4"/></g>
+                <g class="bub an"><path d="M90 42h60a8 8 0 0 1 8 8v22a8 8 0 0 1-8 8h-44l-10 9v-9h-6a8 8 0 0 1-8-8V50a8 8 0 0 1 8-8z"/><path class="tx" d="M98 54h44M98 62h30M98 70h38"/></g>
+                <path class="plane an" d="M54 52l18 7-18 7 4-7z"/>
+              </svg>
+            </div>
+            <span class="way-n mono" aria-hidden="true">06</span>
+            <h3 data-i18n="w6t">Telegram бот или копирана покана</h3>
+            <p data-i18n="w6p">Подписаната покана минава през Telegram бота или я копирате и поставяте във всеки месинджър. Каналът вижда поканата, но подмяна се издава при сравняването на думите.</p>
+            <p class="way-when"><b data-i18n="wayWhen">Подходящо, когато</b> <span data-i18n="w6w">сте далеч и не можете да си говорите.</span></p>
+          </article>
         </div>
       </section>
 

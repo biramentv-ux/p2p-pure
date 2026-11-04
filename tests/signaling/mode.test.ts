@@ -24,6 +24,25 @@ describe("signal mode", () => {
     expect(getSignalMode()).toBe("local");
   });
 
+  it("remembers the sound choice", () => {
+    setSignalMode("sound");
+    expect(getSignalMode()).toBe("sound");
+    localStorage.setItem("p2p-signal-mode", "Sound");
+    expect(getSignalMode()).toBe("local");
+  });
+
+  it("does not throw when storage refuses to save", () => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new Error("quota");
+    };
+    try {
+      expect(() => setSignalMode("sound")).not.toThrow();
+    } finally {
+      Storage.prototype.setItem = original;
+    }
+  });
+
   it("falls back to local when storage throws", () => {
     const original = Storage.prototype.getItem;
     Storage.prototype.getItem = () => {

@@ -106,7 +106,7 @@ sections.forEach((s) => spy.observe(s));
 
 /* ------------------------------------------------------------------ palette travels with the scroll */
 // [hue of the cool accent, hue of the warm accent] in OKLCH; the root eases between them (see @property).
-const PALETTES = [[222, 350], [200, 320], [255, 8], [165, 300], [285, 45], [222, 350], [330, 200], [10, 250]];
+const PALETTES = [[222, 350], [200, 320], [255, 8], [165, 300], [285, 45], [222, 350], [330, 200], [10, 250], [195, 335]];
 const paletteObserver = new IntersectionObserver((entries) => {
   const best = entries.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
   if (!best) return;
@@ -148,6 +148,12 @@ const reveal = new IntersectionObserver((entries) => {
 $$(".reveal").forEach((el) => { stagger(el); reveal.observe(el); });
 const stepsList = $(".steps");
 if (stepsList) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { stepsList.classList.add("in"); o.disconnect(); } }, { threshold: 0.3 }).observe(stepsList);
+
+/* ------------------------------------------------------------------ six ways: a scene plays only while its card is on screen */
+const wayObserver = new IntersectionObserver((entries) => {
+  for (const en of entries) en.target.classList.toggle("live", en.isIntersecting);
+}, { threshold: 0.2 });
+$$(".way").forEach((c) => wayObserver.observe(c));
 
 /* ------------------------------------------------------------------ tilt cards and magnetic buttons */
 if (finePointer && !reduced) {

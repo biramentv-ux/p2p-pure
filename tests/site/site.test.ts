@@ -483,6 +483,49 @@ describe("the language pages", () => {
   });
 });
 
+describe("the six ways to connect", () => {
+  const html = read("site/index.html");
+  it("sits between how and security, is in the menu, and has six cards with an animation each", () => {
+    const at = (id: string) => html.indexOf(`id="${id}"`);
+    expect(at("how")).toBeGreaterThan(0);
+    expect(at("connect")).toBeGreaterThan(at("how"));
+    expect(at("security")).toBeGreaterThan(at("connect"));
+    expect(html).toMatch(/<section class="connect" id="connect" data-palette="\d+"/);
+    expect(html.match(/href="#connect"/g)?.length).toBe(2); // top menu and full-screen menu
+    const section = /<section class="connect"[\s\S]*?<\/section>/.exec(html)![0];
+    expect(section.match(/<article class="card way /g)?.length).toBe(6);
+    expect(section.match(/<svg class="art"/g)?.length).toBe(6);
+    expect(section).not.toMatch(/\sstyle=|<img|<canvas|<video/i);
+  });
+
+  it("is built with six cards in every language, none left in Bulgarian", async () => {
+    const dist = mkdtempSync(join(tmpdir(), "site-ways-"));
+    writeFileSync(join(dist, "index.html"), "<!doctype html><title>app</title>");
+    await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true, url: "" });
+    for (const l of LOCALES as Locale[]) {
+      const page = readFileSync(join(dist, l.path, "index.html"), "utf8");
+      const section = /<section class="connect"[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
+      expect(section, l.code).not.toBe("");
+      expect(section.match(/<article class="card way /g)?.length, l.code).toBe(6);
+      for (const k of ["w1t", "w2t", "w3t", "w4t", "w5t", "w6t", "w1p", "w6p", "wayWhen", "connLead"]) {
+        const text = new RegExp(`data-i18n="${k}">([^<]+)<`).exec(section)?.[1];
+        expect(text, `${l.code}.${k}`).toBeTruthy();
+        if (l.code !== "bg") expect(/[\u0400-\u04FF]/.test(text!) && l.code !== "ru", `${l.code}.${k}`).toBe(false);
+      }
+    }
+    rmSync(dist, { recursive: true, force: true });
+  });
+
+  it("scenes pause off-screen and for people who ask for less motion", () => {
+    const css = read("site/site.css");
+    const js = read("site/site.js");
+    expect(css).toMatch(/\.js \.way:not\(\.live\) \.art \* \{ animation-play-state: paused/);
+    expect(js).toMatch(/classList\.toggle\("live", en\.isIntersecting\)/);
+    // transform and opacity only: nothing in the scenes' keyframes moves layout
+    for (const m of css.matchAll(/@keyframes (w-[\w-]+) \{(.*)\}/g)) expect(m[2], m[1]).not.toMatch(/\b(width|height|top|left|margin|stroke-dash\w*)\s*:/);
+  });
+});
+
 describe("publishing", () => {
   const wf = read(".github/workflows/pages.yml");
   it("passes the public address to the build when the site has its own domain", () => {
