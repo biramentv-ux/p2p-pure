@@ -91,7 +91,7 @@ jobs:
           name: sbom
           path: release-sbom/*.cdx.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 3
 
   sign:
     name: Checksums, sign, attach
@@ -165,4 +165,4 @@ jobs:
         with:
           name: sbom-signed
           path: release-sbom/*
-          retention-days: 30
+          retention-days: 7
