@@ -4,12 +4,14 @@
  * and the default (local, no network) is used when it fails.
  *
  * "sound" = QR one way (offer) and the answer back as sound through the microphone.
- * A stored "ble" or "sound" choice is only a wish: the screen falls back to local
+ * "light" = QR one way (offer) and the answer back as an animated grid of coloured cells,
+ *           read by the initiator's camera.
+ * A stored "ble", "sound" or "light" choice is only a wish: the screen falls back to local
  * when the device cannot do it.
  */
-export type SignalMode = "local" | "demo" | "ble" | "sound";
+export type SignalMode = "local" | "demo" | "ble" | "sound" | "light";
 
-const MODES: readonly SignalMode[] = ["local", "demo", "ble", "sound"];
+const MODES: readonly SignalMode[] = ["local", "demo", "ble", "sound", "light"];
 
 function isSignalMode(value: unknown): value is SignalMode {
   return typeof value === "string" && (MODES as readonly string[]).includes(value);

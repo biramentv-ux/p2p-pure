@@ -31,6 +31,23 @@ describe("signal mode", () => {
     expect(getSignalMode()).toBe("local");
   });
 
+  it("remembers the light choice", () => {
+    setSignalMode("light");
+    expect(getSignalMode()).toBe("light");
+    localStorage.setItem("p2p-signal-mode", "Light");
+    expect(getSignalMode()).toBe("local");
+    localStorage.setItem("p2p-signal-mode", "light ");
+    expect(getSignalMode()).toBe("local");
+  });
+
+  it("switches between sound and light", () => {
+    setSignalMode("sound");
+    setSignalMode("light");
+    expect(getSignalMode()).toBe("light");
+    setSignalMode("sound");
+    expect(getSignalMode()).toBe("sound");
+  });
+
   it("does not throw when storage refuses to save", () => {
     const original = Storage.prototype.setItem;
     Storage.prototype.setItem = () => {
@@ -38,6 +55,7 @@ describe("signal mode", () => {
     };
     try {
       expect(() => setSignalMode("sound")).not.toThrow();
+      expect(() => setSignalMode("light")).not.toThrow();
     } finally {
       Storage.prototype.setItem = original;
     }
