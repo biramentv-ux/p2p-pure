@@ -139,7 +139,7 @@ jobs:
           name: p2p-messenger-android-apk
           path: out/*
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   release:
     needs: build

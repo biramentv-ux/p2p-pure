@@ -163,14 +163,14 @@ jobs:
             desktop-test-wayland
             desktop-test-camera
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: p2p-messenger-linux-x64
           path: out/*
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   # Flatpak bundle (org.freedesktop.Platform + Electron2 BaseApp). Runs next to the build job: it
   # makes its own unpacked app from the same locked versions. The manifest has no network
@@ -247,7 +247,7 @@ jobs:
           name: p2p-messenger-linux-flatpak
           path: out-flatpak/*
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   # The .rpm on a Fedora system: its dependencies must resolve with dnf, and the installed
   # app must start (root in a container, so the Chromium sandbox is switched off here only).
@@ -280,7 +280,7 @@ jobs:
           name: p2p-messenger-linux-rpm-test
           path: desktop-test-rpm
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 3
 
   release:
     if: inputs.release_tag != '' || startsWith(github.ref, 'refs/tags/desktop-v')
@@ -363,7 +363,7 @@ jobs:
           name: p2p-messenger-linux-release
           path: out
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 3
 
   # The only job here that can write to the repository. Releases are immutable once published, so
   # files go into a draft, and the draft is published by whichever desktop workflow (this one or
