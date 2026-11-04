@@ -1,12 +1,22 @@
 # P2P Messenger
 
+<a href="assets/promo-bg.mp4"><img src="assets/promo-bg.gif" alt="Промо видео: P2P Messenger за 30 секунди" width="49%"></a>
+<a href="assets/promo-en.mp4"><img src="assets/promo-en.gif" alt="Promo video: P2P Messenger in 30 seconds" width="49%"></a>
+
+▶️ Видео със звук: [български](assets/promo-bg.mp4) · [English](assets/promo-en.mp4)
+
 Месинджър без телефонен номер, без акаунт и без сървър по средата. Съобщенията, файловете и
 разговорите вървят директно между устройствата, шифровани от край до край.
 
 **Сайт и приложение в браузъра:** https://dyrakarmy.online/ · **Изтегляне:** [Издания](../../releases)
 
 Тук са изданията (Windows, Linux, Android) и сайтът. Изходният код е частен; всяко издание има
-контролни суми SHA-256 и SBOM.
+контролни суми SHA-256 и подписан SBOM.
+
+**Какво може:** профил без телефон и имейл (passkey или парола), 12 думи за възстановяване, контакт с
+QR или кратък код, 12 думи за проверка срещу човек по средата, шифрован чат, файлове до 100 MB, аудио
+и видео разговори, групи до 9 души, известия и звуци, местене на нов телефон. Приложението е на
+6 езика (български, English, Русский, Deutsch, Español, Português), сайтът е на 8.
 
 | | Български | English |
 |---|---|---|
@@ -24,8 +34,13 @@ go straight between devices, end-to-end encrypted.
 **Website and browser app:** https://dyrakarmy.online/en/ · **Download:** [Releases](../../releases)
 
 This repository holds the releases (Windows, Linux, Android) and the website. The source code is
-private; every release ships SHA-256 checksums and an SBOM. The encryption has not had an independent
-audit yet.
+private; every release ships SHA-256 checksums and a signed SBOM. The encryption has not had an
+independent audit yet.
+
+**What it does:** a profile with no phone or email (passkey or password), 12 recovery words, contacts by
+QR or short code, 12 words to rule out anyone in the middle, encrypted chat, files up to 100 MB, audio and
+video calls, groups of up to 9, notifications and sounds, moving to a new phone. The app speaks
+6 languages (Bulgarian, English, Russian, German, Spanish, Portuguese); the site speaks 8.
 
 Issues and questions: [Issues](../../issues). Security problems: please report them privately
 (Security → Report a vulnerability), not in a public issue.
