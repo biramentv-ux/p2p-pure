@@ -48,7 +48,7 @@ function PlayPanel({ bytes, onShowQr }: { bytes: Uint8Array; onShowQr(): void })
   const { t } = useI18n();
   const [phase, setPhase] = useState<"idle" | "playing" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [showQrHint, setShowQrHint] = useState(false);
+  const [hintTimerFired, setHintTimerFired] = useState(false);
   const ctxRef = useRef<AudioContext | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef<number | null>(null);
@@ -69,21 +69,15 @@ function PlayPanel({ bytes, onShowQr }: { bytes: Uint8Array; onShowQr(): void })
   );
 
   // Long transfers (or many replays) without a connection: point at the QR code.
+  const longSound = durationMs > QR_HINT_AFTER_MS;
   useEffect(() => {
-    if (durationMs > QR_HINT_AFTER_MS) {
-      setShowQrHint(true);
-      return;
-    }
-    if (phase === "idle") return;
+    if (longSound || phase === "idle" || hintTimerFired) return;
     const startedAt = startedAtRef.current ?? Date.now();
-    const left = QR_HINT_AFTER_MS - (Date.now() - startedAt);
-    if (left <= 0) {
-      setShowQrHint(true);
-      return;
-    }
-    const id = setTimeout(() => setShowQrHint(true), left);
+    const left = Math.max(0, QR_HINT_AFTER_MS - (Date.now() - startedAt));
+    const id = setTimeout(() => setHintTimerFired(true), left);
     return () => clearTimeout(id);
-  }, [phase, durationMs]);
+  }, [phase, longSound, hintTimerFired]);
+  const showQrHint = longSound || hintTimerFired;
 
   function play() {
     abortRef.current?.abort();

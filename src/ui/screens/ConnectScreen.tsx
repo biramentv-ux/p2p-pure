@@ -306,8 +306,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
    * sound). `answer` must already be decoded and signature-checked. Throws on any failure;
    * the caller owns the busy flag and the error handling.
    */
-  async function connectWithAnswer(answer: Invitation) {
-    const { link, offer, eph } = activeOffer();
+  async function connectWithAnswer(answer: Invitation, active = activeOffer()) {
+    const { link, offer, eph } = active;
     assertKind(answer, "answer");
     if (!answer.answersNonce || !bytesEqual(answer.answersNonce, offer.nonce)) {
       throw new InvitationError("Този отговор не е за тази покана.", "INVALID_FIELD");
@@ -329,9 +329,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     if (busyRef.current) return;
     busyRef.current = true;
     try {
-      activeOffer();
+      // Captured before decoding, as before: the answer is checked against this offer.
+      const active = activeOffer();
       const { invitation: answer } = await parseScannedInvitation(text);
-      await connectWithAnswer(answer);
+      await connectWithAnswer(answer, active);
     } catch (err) {
       fail(err);
     } finally {
@@ -362,9 +363,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     if (busyRef.current) return;
     busyRef.current = true;
     let answer: Invitation;
+    let active: ReturnType<typeof activeOffer>;
     try {
-      const { offer } = activeOffer();
-      answer = decodeCompactAnswer(bytes, offer);
+      active = activeOffer();
+      answer = decodeCompactAnswer(bytes, active.offer);
     } catch (err) {
       busyRef.current = false;
       if (err instanceof CompactAnswerError) {
@@ -377,7 +379,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     }
     try {
       setError(null);
-      await connectWithAnswer(answer);
+      await connectWithAnswer(answer, active);
     } catch (err) {
       fail(err);
     } finally {
@@ -511,8 +513,12 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         offerNonce: offer.nonce,
       });
     } catch (err) {
-      if (!(err instanceof CompactAnswerError)) throw err;
-      setError(t("Отговорът е твърде голям за звук. Покажи този QR код на другия човек."));
+      // Sound is an extra: any problem here (usually too_large / unsupported_sdp) means QR only.
+      setError(
+        err instanceof CompactAnswerError && err.code !== "too_large" && err.code !== "unsupported_sdp"
+          ? t("Отговорът не може да се изпрати като звук. Покажи този QR код на другия човек.")
+          : t("Отговорът е твърде голям за звук. Покажи този QR код на другия човек."),
+      );
       return null;
     }
   }
