@@ -4,6 +4,7 @@
 #   LICENSE, LICENSE.bg.md, SECURITY.md, SECURITY.bg.md   -> root of the public repository
 #   docs/WINDOWS.md, docs/LINUX.md, docs/SIGNING.md        -> docs/ of the public repository
 #   docs/public/README.md                                  -> README.md of the public repository
+#   docs/public/assets/*                                   -> assets/ (promo videos for the README)
 #
 # It also rewrites the notes of already published releases that still link to this repository.
 # Needs the variable RELEASES_REPO and the secret RELEASES_TOKEN (Contents: Read and write on the
@@ -58,6 +59,8 @@ jobs:
           cp src/LICENSE src/LICENSE.bg.md src/SECURITY.md src/SECURITY.bg.md pub/
           cp src/docs/WINDOWS.md src/docs/LINUX.md src/docs/SIGNING.md pub/docs/
           cp src/docs/public/README.md pub/README.md
+          # the promo videos and their previews, linked from the README
+          mkdir -p pub/assets && cp src/docs/public/assets/* pub/assets/
           # links into the private repository would be a 404 for everyone else
           sed -i -e "s#github.com/${SOURCE}/releases#github.com/${TARGET}/releases#g" \
                  -e "s#github.com/${SOURCE}/blob/main/#github.com/${TARGET}/blob/main/#g" \
