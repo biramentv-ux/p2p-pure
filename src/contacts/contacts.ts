@@ -1,6 +1,8 @@
 /**
  * Local contact book, encrypted at rest. A contact is `verified` only after both sides
- * compared the safety code and the user confirmed. Unverified contacts are never stored.
+ * compared the safety code and the user confirmed. The only unverified contacts stored are
+ * the ones made through an introduction (src/intro): they carry `introducedBy` and stay
+ * unverified until the safety code is compared.
  *
  * Storage (DB v5, store `contactsSealed`): one row per contact, `{ id, iv, ct }`.
  *   - `id`  = hex HMAC-SHA-256(macKey, did). The DID itself is not visible; only someone with
@@ -27,6 +29,13 @@ export interface Contact {
   verified: boolean;
   verifiedAt?: number;
   addedAt: number;
+  /** Set when a mutual contact introduced this person (M8): who vouched for the key. */
+  introducedBy?: IntroducedBy;
+}
+
+export interface IntroducedBy {
+  did: string;
+  name: string;
 }
 
 /** At most this many contacts in the book. Updating a saved contact is always allowed. */
@@ -107,6 +116,7 @@ function toJson(c: Contact): string {
     verified: c.verified,
     verifiedAt: c.verifiedAt,
     addedAt: c.addedAt,
+    ...(c.introducedBy ? { ib: { did: c.introducedBy.did, name: c.introducedBy.name } } : {}),
   });
 }
 
@@ -123,6 +133,10 @@ function fromJson(text: string): Contact | null {
       addedAt: o.addedAt,
     };
     if (typeof o.verifiedAt === "number") c.verifiedAt = o.verifiedAt;
+    const ib = o.ib as Record<string, unknown> | undefined;
+    if (ib && typeof ib === "object" && typeof ib.did === "string" && typeof ib.name === "string") {
+      c.introducedBy = { did: ib.did, name: ib.name };
+    }
     return c;
   } catch {
     return null;
@@ -287,4 +301,11 @@ export async function renameContact(did: string, name: string): Promise<void> {
   const c = await getContact(did);
   if (!c) return;
   await saveContact({ ...c, name: name.trim() || c.name });
+}
+
+/** The user compared the safety code with this contact and it matched. */
+export async function markContactVerified(did: string): Promise<void> {
+  const c = await getContact(did);
+  if (!c || c.verified) return;
+  await saveContact({ ...c, verified: true, verifiedAt: Date.now() });
 }

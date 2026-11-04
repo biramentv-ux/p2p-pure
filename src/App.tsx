@@ -16,6 +16,9 @@ import { webrtcLinks } from "./group/groupLinker";
 import { newProposalId } from "./p2p/suiteNegotiation";
 import { ContactsScreen } from "./ui/screens/ContactsScreen";
 import { ShowQrScreen } from "./ui/screens/ShowQrScreen";
+import { IntroduceScreen, type IntroduceMode } from "./ui/screens/IntroduceScreen";
+import { IntroHub } from "./intro/introHub";
+import { canAddContact, saveContact } from "./contacts/contacts";
 import { TransferReceiveScreen, TransferSendScreen } from "./ui/screens/TransferScreen";
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
 import { LanguageSwitch } from "./ui/components/LanguageSwitch";
@@ -32,8 +35,9 @@ type AppState =
 type Screen =
   | { k: "identity" }
   | { k: "contacts" }
-  | { k: "connect"; expected?: Contact; forGroup?: boolean }
+  | { k: "connect"; expected?: Contact; forGroup?: boolean; forIntro?: boolean }
   | { k: "group" }
+  | { k: "intro"; mode: IntroduceMode }
   | { k: "transfer" }
   | { k: "chat"; contact: Contact; link: PeerLink; session: SecureSession };
 
@@ -69,10 +73,51 @@ function App() {
   // Sounds and notifications for the group: it runs behind every screen, so it is watched here.
   const groupWatch = useRef<{ group: GroupSession; off: () => void } | null>(null);
   const [, setGroupRestored] = useState(0);
+  // Introductions (src/intro): several live links at once, behind every screen like the group.
+  // Nothing is saved: it is closed on lock, on "Край", and every pending entry expires.
+  const introRef = useRef<IntroHub | null>(null);
+  const introWatch = useRef<{ hub: IntroHub; off: () => void } | null>(null);
+  const [introPending, setIntroPending] = useState(0);
   // New device without an identity: receiving one from another device (src/transfer).
   const [receiving, setReceiving] = useState(false);
+  /** The introductions screen to return to after a connect for the hub. */
+  const lastIntroMode = useRef<IntroduceMode>({ k: "hub" });
 
   useEffect(() => installNotifier(), []);
+
+  /** Counts invitations and requests waiting for this user, and alerts on new ones. */
+  function watchIntro(hub: IntroHub | null): void {
+    if (introWatch.current?.hub === hub) return;
+    introWatch.current?.off();
+    introWatch.current = null;
+    setIntroPending(0);
+    if (!hub) return;
+    const seen = new Set<string>();
+    const off = hub.subscribe(() => {
+      const snap = hub.snapshot;
+      const waiting = [
+        ...snap.invites.filter((i) => i.state === "pending").map((i) => ({ id: i.id, title: i.via.name })),
+        ...snap.requestsIn.filter((r) => r.state === "pending").map((r) => ({ id: r.id, title: r.peer.name })),
+      ];
+      setIntroPending(waiting.length);
+      for (const w of waiting) {
+        if (seen.has(w.id)) continue;
+        seen.add(w.id);
+        const tr = tRef.current;
+        notifyIncoming(
+          { chatId: "intro", known: true, title: w.title, preview: tr("Покана за запознанство"), hidden: tr("Ново съобщение") },
+          screenRef.current.k === "intro",
+        );
+      }
+    });
+    introWatch.current = { hub, off };
+  }
+
+  function closeIntro(): void {
+    introRef.current?.close();
+    introRef.current = null;
+    watchIntro(null);
+  }
 
   const tRef = useRef(t);
   tRef.current = t;
@@ -117,6 +162,7 @@ function App() {
   useAutoLock(state.kind === "unlocked", () => {
     const current = screenRef.current;
     if (current.k === "chat") current.link.close();
+    closeIntro();
     groupRef.current?.closeAll();
     groupRef.current = null;
     watchGroup(null);
@@ -212,6 +258,12 @@ function App() {
   }
 
   function onConnected(result: ConnectedResult) {
+    if (screen.k === "connect" && screen.forIntro) {
+      // A link for introductions: the hub keeps it open next to the others.
+      ensureIntro().attach(result.contact, result.link, result.session);
+      setScreen({ k: "intro", mode: lastIntroMode.current });
+      return;
+    }
     if (screen.k === "connect" && screen.forGroup) {
       // A link for the group: it joins the mesh, not a one-to-one chat.
       ensureGroup().attach(result.contact, result.link, result.session);
@@ -219,6 +271,25 @@ function App() {
       return;
     }
     setScreen({ k: "chat", contact: result.contact, link: result.link, session: result.session });
+  }
+
+  /** The introduction hub, created the first time the introductions screen opens. */
+  function ensureIntro(): IntroHub {
+    if (!introRef.current || introRef.current.isClosed) {
+      introRef.current = new IntroHub({
+        identity: identity.keyPair,
+        factory: webrtcLinks,
+        contacts: { get: getContact, save: (c) => saveContact(c), canAdd: canAddContact },
+      });
+      watchIntro(introRef.current);
+    }
+    return introRef.current;
+  }
+
+  function openIntro(mode: IntroduceMode): void {
+    ensureIntro();
+    lastIntroMode.current = mode;
+    setScreen({ k: "intro", mode });
   }
 
   /** The group on this device, created empty the first time the group screen opens. */
@@ -250,7 +321,7 @@ function App() {
     );
   }
 
-  const activeTab: TabScreen = screen.k === "connect" ? "connect" : screen.k === "group" ? "contacts" : screen.k === "transfer" ? "identity" : (screen.k as TabScreen);
+  const activeTab: TabScreen = screen.k === "connect" ? "connect" : screen.k === "group" || screen.k === "intro" ? "contacts" : screen.k === "transfer" ? "identity" : (screen.k as TabScreen);
 
   return (
     <Frame
@@ -313,6 +384,11 @@ function App() {
             ensureGroup();
             setScreen({ k: "group" });
           }}
+          onIntroduce={() => openIntro({ k: "pair" })}
+          onAskIntro={(contact) => openIntro({ k: "ask", contact })}
+          onIntroductions={() => openIntro({ k: "hub" })}
+          introPending={introPending}
+          myPublicKey={identity.keyPair.publicKey}
         />
       )}
       {screen.k === "connect" && (
@@ -321,7 +397,31 @@ function App() {
           identity={identity}
           expected={screen.expected}
           onConnected={onConnected}
-          onCancel={() => setScreen(screen.forGroup ? { k: "group" } : { k: "contacts" })}
+          onCancel={() =>
+            setScreen(
+              screen.forGroup ? { k: "group" } : screen.forIntro ? { k: "intro", mode: lastIntroMode.current } : { k: "contacts" },
+            )
+          }
+        />
+      )}
+      {screen.k === "intro" && introRef.current && (
+        <IntroduceScreen
+          key={screen.mode.k === "ask" ? `ask:${screen.mode.contact.did}` : screen.mode.k}
+          hub={introRef.current}
+          mode={screen.mode}
+          myPublicKey={identity.keyPair.publicKey}
+          onLink={(contact) => setScreen({ k: "connect", expected: contact, forIntro: true })}
+          onChat={(did) => {
+            const fresh = introRef.current?.takeFresh(did);
+            if (!fresh) return;
+            // The introduction link is a real PeerLink in the app (webrtcLinks).
+            setScreen({ k: "chat", contact: fresh.contact, link: fresh.link as PeerLink, session: fresh.session });
+          }}
+          onClose={() => {
+            closeIntro();
+            setScreen({ k: "contacts" });
+          }}
+          onBack={() => setScreen({ k: "contacts" })}
         />
       )}
       {screen.k === "group" && (
