@@ -4,9 +4,11 @@
  * tests/i18n/i18n.test.ts enforces this.
  */
 import { EN_TRANSFER } from "./enTransfer";
+import { EN_PAIRING } from "./enPairing";
 
 export const EN_DICTIONARY: Record<string, string> = {
   ...EN_TRANSFER,
+  ...EN_PAIRING,
   // App shell and tabs
   "Език": "Language",
   "Зареждане…": "Loading…",

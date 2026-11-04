@@ -1,0 +1,38 @@
+/*
+ * English strings of the pairing features: Bluetooth (src/ui/components/BlePairingPanel.tsx) and the
+ * PAKE short code (src/ui/components/ShortCode.tsx, src/ui/screens/ConnectScreen.tsx).
+ * Spread into EN_DICTIONARY; ru/de/es/pt carry the same keys.
+ */
+export const EN_PAIRING: Record<string, string> = {
+  "Bluetooth работи само в приложението за Android и iOS.": "Bluetooth works only in the Android and iOS app.",
+  "Стартирам Bluetooth…": "Starting Bluetooth…",
+  "Чакам другия телефон…": "Waiting for the other phone…",
+  "Свързвам се…": "Connecting…",
+  "Търся телефони наблизо…": "Looking for phones nearby…",
+  "Изпращам: {done} от {total}": "Sending: {done} of {total}",
+  "Получавам: {done} от {total}": "Receiving: {done} of {total}",
+  "Чакам данни…": "Waiting for data…",
+  "Обработвам поканата…": "Processing the invitation…",
+  "Готово.": "Done.",
+  "силен сигнал": "strong signal",
+  "среден сигнал": "medium signal",
+  "слаб сигнал": "weak signal",
+  "Покажи този код на другия телефон и избери го там.": "Show this code to the other phone and pick it there.",
+  "Код за Bluetooth": "Bluetooth code",
+  "Избери кода, който се вижда на другия телефон.": "Pick the code shown on the other phone.",
+  "Още не е намерен телефон.": "No phone found yet.",
+  "Напредък": "Progress",
+  "Опитай пак": "Try again",
+  "Код за сдвояване: {code}": "Pairing code: {code}",
+  "Код за сдвояване": "Pairing code",
+  "Въведи петте знака и трите думи. Стигат първите 4 букви от всяка дума.": "Enter the five characters and the three words. The first 4 letters of each word are enough.",
+  "Кодът не е разпознат. Провери петте знака и трите думи.": "The code was not recognised. Check the five characters and the three words.",
+  "Кодът не съвпада. Започнете отначало с нов код.": "The code does not match. Start over with a new code.",
+  "Времето изтече. Започнете отначало.": "Time ran out. Start over.",
+  "Връзката през сървъра прекъсна. Опитайте пак.": "The connection through the server dropped. Try again.",
+  "Чакам другия човек…": "Waiting for the other person…",
+  "Кодът съвпадна. Чакам поканата от другия човек…": "The code matched. Waiting for the other person's invitation…",
+  "Кажи този код на другия човек — по телефона или лично. Не го пращай през същия канал, през който е поканата.": "Tell this code to the other person, by phone or in person. Do not send it through the same channel as the invitation.",
+  "Кодът съвпадна. Свързвам…": "The code matched. Connecting…",
+  "Демо режимът използва сигналния сървър за стая с код. Сървърът вижда само номера на стаята и шифрован текст. Не съхранява нищо.": "Demo mode uses the signalling server for a room with a code. The server sees only the room number and encrypted text. It stores nothing.",
+};
