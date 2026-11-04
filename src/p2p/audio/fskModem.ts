@@ -406,8 +406,12 @@ export class FskDecoder {
     if (this.phase === Phase.Search) {
       keepFrom = this.scanPos
     } else if (this.phase === Phase.Receive) {
-      keepFrom = Math.floor(this.symbolStart(this.symbolIndex)) - Math.round(0.02 * this.fs)
-      if (this.payloadLength < 0) keepFrom = Math.min(keepFrom, this.scanPos)
+      // Keep everything after the header so a failed frame can be searched again
+      // (e.g. a truncated transmission followed by a full retry).
+      keepFrom = Math.min(
+        Math.floor(this.symbolStart(this.symbolIndex)) - Math.round(0.02 * this.fs),
+        this.scanPos,
+      )
     } else {
       keepFrom = this.bufStart + this.bufLen
     }
@@ -652,7 +656,6 @@ export class FskDecoder {
     const bodyLen = len + CRC_BYTES
     const coded = this.coded.subarray(headerBytes, headerBytes + codedLength(bodyLen))
     const body = decodeBlocks(coded, bodyLen)
-    const frameEnd = this.symbolStart(this.totalSymbols)
     if (body) {
       const payload = body.data.slice(0, len)
       const d = body.data
@@ -665,7 +668,9 @@ export class FskDecoder {
         return false
       }
     }
-    this.unlock(frameEnd)
+    // Bad frame: search again from the end of its header, so a retransmission that
+    // started inside this frame's span is still found.
+    this.unlock(this.scanPos)
     return true
   }
 }
