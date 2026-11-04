@@ -257,13 +257,13 @@ try {
   await alice.page.getByRole("button", { name: "Демо (стая)" }).click();
   await alice.page.getByRole("button", { name: "Покажи моята покана" }).click();
   const roomCode = (await alice.page.locator(".short-code").innerText()).trim();
-  check("demo: host shows a room code", /^[2-9A-HJKMNP-TV-Z]{5}-[2-9A-HJKMNP-TV-Z]{5}$/.test(roomCode), roomCode);
+  check("demo: host shows a room id and three words", /^[2-9A-HJKMNP-TV-Z]{5}\s*·\s*[a-z]+-[a-z]+-[a-z]+$/.test(roomCode), roomCode);
 
   await bob.page.getByRole("button", { name: "Назад" }).click();
   await bob.page.getByRole("button", { name: "Чат", exact: true }).first().click();
   await bob.page.getByRole("button", { name: "Демо (стая)" }).click();
   await bob.page.getByRole("button", { name: "Сканирай чужда покана" }).click();
-  await bob.page.getByLabel("Кратък код").fill(roomCode);
+  await bob.page.getByLabel("Код за сдвояване").fill(roomCode);
   await bob.page.getByRole("button", { name: "Присъедини се" }).click();
 
   await alice.page.locator(".chat").waitFor({ timeout: 60_000 });

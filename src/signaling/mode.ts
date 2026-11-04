@@ -3,13 +3,14 @@
  * Storage can be unavailable (private windows, blocked site data), so every access is guarded
  * and the default (local, no network) is used when it fails.
  */
-export type SignalMode = "local" | "demo";
+export type SignalMode = "local" | "demo" | "ble";
 
 const STORAGE_KEY = "p2p-signal-mode";
 
 export function getSignalMode(): SignalMode {
   try {
-    return globalThis.localStorage?.getItem(STORAGE_KEY) === "demo" ? "demo" : "local";
+    const stored = globalThis.localStorage?.getItem(STORAGE_KEY);
+    return stored === "demo" || stored === "ble" ? stored : "local";
   } catch {
     return "local";
   }
