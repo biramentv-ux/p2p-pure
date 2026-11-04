@@ -217,7 +217,16 @@ function ListenPanel({ onBytes }: { onBytes(bytes: Uint8Array): void }) {
     if (doneRef.current) return;
     let entry = decoderRef.current;
     if (!entry || entry.rate !== sampleRate) {
-      entry = { decoder: new FskDecoder(sampleRate), rate: sampleRate };
+      try {
+        entry = { decoder: new FskDecoder(sampleRate), rate: sampleRate };
+      } catch {
+        // Sample rate outside what the modem supports.
+        doneRef.current = true;
+        stopMic();
+        setPhase("error");
+        setError(t("Този микрофон не може да се използва за звука. Сканирай QR отговора."));
+        return;
+      }
       decoderRef.current = entry;
     }
     const { decoder } = entry;
@@ -239,12 +248,9 @@ function ListenPanel({ onBytes }: { onBytes(bytes: Uint8Array): void }) {
     m.locked = decoder.locked;
     m.progress = decoder.progress;
     if (m.locked) m.garbled = false;
-    // Lost the signal without a result: a bad frame (CRC). Keep listening for a replay.
-    else if (wasLocked) {
-      m.garbled = true;
-      decoder.reset();
-      m.progress = 0;
-    }
+    // Lost the frame without a result: bad CRC or too much noise. The decoder already went back
+    // to searching on its own, so we just say so and keep listening for a replay.
+    else if (wasLocked) m.garbled = true;
   }
 
   async function start() {
