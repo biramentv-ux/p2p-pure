@@ -287,7 +287,7 @@ jobs:
           name: p2p-messenger-windows-x64
           path: out/*
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
       # The manifests directory (with the release URL already inside) for the release job.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -295,7 +295,7 @@ jobs:
           name: p2p-messenger-winget-dir
           path: winget
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   # Only this job can write to the repository (release assets); the build above is read-only.
   # Releases are immutable once published, so files go into a draft, and the draft is published by
