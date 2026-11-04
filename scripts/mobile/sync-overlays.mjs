@@ -7,6 +7,7 @@
  *
  * Run `npx cap add android` / `npx cap add ios` first (creates android/ and ios/).
  */
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +33,38 @@ const MEDIA_FEATURES = [
   '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
   '    <uses-feature android:name="android.hardware.microphone" android:required="false" />',
 ];
+// Bluetooth Low Energy first-contact pairing (BlePairingPlugin). Android 12+ asks for the
+// three BLUETOOTH_* runtime permissions; scanning is declared neverForLocation because the
+// app never derives a position from it. Android 11 and older use the legacy pair plus the
+// location permission above (already in MEDIA_PERMISSIONS, so it is not repeated here).
+// Each entry carries its own needle: a plain name would also match longer names
+// ("android.permission.BLUETOOTH" is a prefix of "...BLUETOOTH_SCAN").
+const BLE_MANIFEST = [
+  {
+    needle: 'android:name="android.permission.BLUETOOTH"',
+    line: '    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />',
+  },
+  {
+    needle: 'android:name="android.permission.BLUETOOTH_ADMIN"',
+    line: '    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />',
+  },
+  {
+    needle: 'android:name="android.permission.BLUETOOTH_SCAN"',
+    line: '    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />',
+  },
+  {
+    needle: 'android:name="android.permission.BLUETOOTH_ADVERTISE"',
+    line: '    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />',
+  },
+  {
+    needle: 'android:name="android.permission.BLUETOOTH_CONNECT"',
+    line: '    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />',
+  },
+  {
+    needle: 'android:name="android.hardware.bluetooth_le"',
+    line: '    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />',
+  },
+];
 const GRADLE_DEPS = [
   'implementation "androidx.credentials:credentials:1.6.0"',
   'implementation "androidx.credentials:credentials-play-services-auth:1.6.0"',
@@ -40,6 +73,7 @@ const IOS_USAGE = [
   ["NSCameraUsageDescription", "Камерата се използва, за да сканираш QR код и за видео разговори."],
   ["NSMicrophoneUsageDescription", "Микрофонът се използва за аудио и видео разговори."],
   ["NSLocationWhenInUseUsageDescription", "Локацията се споделя с човека, когото избереш, само когато натиснеш бутона."],
+  ["NSBluetoothAlwaysUsageDescription", "Bluetooth се използва, за да размениш поканата с телефон до теб, без да сканираш QR код."],
 ];
 
 /** Copies native-overlays/android/java/** to android/app/src/main/java/**. */
@@ -116,6 +150,105 @@ function syncAndroid() {
       `manifest ${name.split(".").pop()}`,
     );
   }
+  for (const { needle, line } of BLE_MANIFEST) {
+    ensureLine(
+      "android/app/src/main/AndroidManifest.xml",
+      needle,
+      '<uses-permission android:name="android.permission.INTERNET" />',
+      [line],
+      `manifest ${/android:name="[^"]*?([^."]+)"/.exec(needle)[1]}`,
+    );
+  }
+}
+
+/** Stable 24-hex-digit Xcode object id for an overlay file (same input, same id). */
+function xcodeId(kind, name) {
+  return crypto.createHash("sha1").update(`p2p-overlay:${kind}:${name}`).digest("hex").slice(0, 24).toUpperCase();
+}
+
+/**
+ * Copies native-overlays/ios/*.swift into ios/App/App/ and registers each file in the
+ * App target of App.xcodeproj (the generated project lists its sources one by one; it has
+ * no folder references, so a file that is only copied would not be compiled).
+ */
+function syncIosSwift() {
+  const srcDir = path.join(ROOT, "native-overlays/ios");
+  const destDir = path.join(ROOT, "ios/App/App");
+  const swiftFiles = fs
+    .readdirSync(srcDir)
+    .filter((f) => f.endsWith(".swift"))
+    .sort();
+  for (const f of swiftFiles) {
+    const want = fs.readFileSync(path.join(srcDir, f), "utf8");
+    const dest = path.join(destDir, f);
+    const have = fs.existsSync(dest) ? fs.readFileSync(dest, "utf8") : null;
+    if (have === want) continue;
+    changed.push(`swift: ${f}`);
+    if (!CHECK) fs.writeFileSync(dest, want);
+  }
+
+  const pbxPath = "ios/App/App.xcodeproj/project.pbxproj";
+  if (!fs.existsSync(path.join(ROOT, pbxPath))) {
+    problems.push(`${pbxPath} is missing`);
+    return;
+  }
+  let pbx = read(pbxPath);
+  const before = pbx;
+  const insertAfter = (re, text, label) => {
+    if (!re.test(pbx)) {
+      problems.push(`xcode project: ${label} not found in ${pbxPath}`);
+      return;
+    }
+    pbx = pbx.replace(re, (m) => m + text);
+  };
+  for (const f of swiftFiles) {
+    const refId = xcodeId("fileref", f);
+    const buildId = xcodeId("build", f);
+    if (!pbx.includes(`${refId} /* ${f} */ = {isa = PBXFileReference`)) {
+      pbx = pbx.replace(
+        "/* End PBXFileReference section */",
+        `\t\t${refId} /* ${f} */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ${f}; sourceTree = "<group>"; };\n/* End PBXFileReference section */`,
+      );
+    }
+    if (!pbx.includes(`${buildId} /* ${f} in Sources */ = {isa = PBXBuildFile`)) {
+      pbx = pbx.replace(
+        "/* End PBXBuildFile section */",
+        `\t\t${buildId} /* ${f} in Sources */ = {isa = PBXBuildFile; fileRef = ${refId} /* ${f} */; };\n/* End PBXBuildFile section */`,
+      );
+    }
+    const groupRe = /504EC3061FED79650016851F \/\* App \*\/ = \{\s*isa = PBXGroup;\s*children = \(\n/;
+    const groupBlock = /504EC3061FED79650016851F \/\* App \*\/ = \{[\s\S]*?\n\t\t\};/.exec(pbx)?.[0] ?? "";
+    if (!groupBlock.includes(`${refId} /* ${f} */,`)) {
+      insertAfter(groupRe, `\t\t\t\t${refId} /* ${f} */,\n`, "App group");
+    }
+    const srcRe = /504EC3001FED79650016851F \/\* Sources \*\/ = \{[\s\S]*?files = \(\n/;
+    const srcBlock = /504EC3001FED79650016851F \/\* Sources \*\/ = \{[\s\S]*?\n\t\t\};/.exec(pbx)?.[0] ?? "";
+    if (!srcBlock.includes(`${buildId} /* ${f} in Sources */,`)) {
+      insertAfter(srcRe, `\t\t\t\t${buildId} /* ${f} in Sources */,\n`, "Sources build phase");
+    }
+  }
+  if (pbx !== before) {
+    changed.push(`xcode project sources: ${pbxPath}`);
+    if (!CHECK) fs.writeFileSync(path.join(ROOT, pbxPath), pbx);
+  }
+
+  // The first screen must be our subclass of Capacitor's bridge controller, which registers
+  // BlePairingPlugin (a local plugin is not found by `cap sync`). Only switch when the class
+  // exists, otherwise the app would not start.
+  const sb = "ios/App/App/Base.lproj/Main.storyboard";
+  if (swiftFiles.includes("MainViewController.swift") && fs.existsSync(path.join(ROOT, sb))) {
+    const text = read(sb);
+    const stock = 'customClass="CAPBridgeViewController" customModule="Capacitor"';
+    const ours = 'customClass="MainViewController" customModule="App" customModuleProvider="target"';
+    if (!text.includes(ours)) {
+      if (!text.includes(stock)) {
+        problems.push(`storyboard: CAPBridgeViewController view controller not found in ${sb}`);
+      } else {
+        changed.push(`storyboard initial view controller: ${sb}`);
+        if (!CHECK) fs.writeFileSync(path.join(ROOT, sb), text.replace(stock, ours));
+      }
+    }
+  }
 }
 
 function syncIos() {
@@ -131,6 +264,7 @@ function syncIos() {
     changed.push(`ios usage text ${key}: ${plist}`);
   }
   if (!CHECK) fs.writeFileSync(path.join(ROOT, plist), text);
+  syncIosSwift();
 }
 
 syncAndroid();

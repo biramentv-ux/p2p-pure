@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth се използва, за да размениш поканата с телефон до теб, без да сканираш QR код.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Локацията се споделя с човека, когото избереш, само когато натиснеш бутона.</string>
 	<key>NSMicrophoneUsageDescription</key>
