@@ -170,11 +170,15 @@ describe('integrity', () => {
   it('never returns data from a corrupted frame', () => {
     const data = randomBytes(100, 60)
     const tx = pad(encodeToSamples(data, 48000), 1000, 3000, 0, 0)
-    // Destroy a long stretch of the body: far beyond what RS can fix.
-    const start = Math.floor(tx.length * 0.5)
+    // 1 s of loud noise is spread over all blocks by the interleaver and still corrected…
+    const start = Math.floor(tx.length * 0.4)
     const r = prng(1)
+    const hit = tx.slice()
+    for (let i = start; i < start + 48000; i++) hit[i] = 0.8 * (2 * r() - 1)
+    expect(decode(hit, 48000, 2)).toEqual(data)
+    // …but 3 s is far beyond what RS can fix: no result, decoder back to searching.
     const bad = tx.slice()
-    for (let i = start; i < start + 48000; i++) bad[i] = 0.8 * (2 * r() - 1)
+    for (let i = start; i < start + 3 * 48000; i++) bad[i] = 0.8 * (2 * r() - 1)
     const dec = new FskDecoder(48000)
     feed(dec, bad, 3)
     expect(dec.result).toBeNull()
