@@ -66,7 +66,7 @@ function frame(opcode, payload) {
  */
 export async function startDemoRelay(vite, port = 0) {
   const { RoomRelay, ROOM_JOINED_FRAME } = await vite.ssrLoadModule("/worker/room.ts");
-  const { newInviteCode, normalizeInviteCode } = await vite.ssrLoadModule("/worker/logic.ts");
+  const { newRoomId, normalizeRoomId } = await vite.ssrLoadModule("/worker/logic.ts");
   void ROOM_JOINED_FRAME;
   const rooms = new Map();
   const frames = [];
@@ -78,7 +78,7 @@ export async function startDemoRelay(vite, port = 0) {
     }
     if (req.method === "POST" && req.url === "/ws/rooms") {
       res.writeHead(201, { ...CORS, "content-type": "application/json" });
-      return res.end(JSON.stringify({ code: newInviteCode(), ttlSec: 600 }));
+      return res.end(JSON.stringify({ code: newRoomId(), ttlSec: 600 }));
     }
     res.writeHead(404, CORS);
     res.end();
@@ -86,7 +86,7 @@ export async function startDemoRelay(vite, port = 0) {
 
   server.on("upgrade", (req, socket) => {
     const match = /^\/ws\/rooms\/([^/]+)$/.exec(req.url ?? "");
-    const code = match ? normalizeInviteCode(decodeURIComponent(match[1])) : null;
+    const code = match ? normalizeRoomId(decodeURIComponent(match[1])) : null;
     if (!code) return socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
 
     let relay = rooms.get(code);

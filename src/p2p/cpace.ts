@@ -2,8 +2,9 @@
  * CPace (draft-irtf-cfrg-cpace), ciphersuite CPACE-RISTR255-SHA512,
  * initiator-responder setting.
  *
- * NOTE: written from the draft's structure without access to the official
- * test vectors in this environment; see tests/p2p/cpace.test.ts.
+ * Verified against the official CPACE-RISTR255-SHA512 test vectors of
+ * draft-irtf-cfrg-cpace-21 (repository testvectors.json, "G_Coffee25519"):
+ * generator g, Ya, Yb, K and ISK_IR. See tests/p2p/cpace.test.ts.
  *
  * Flow: both sides derive a generator g from the password (PRS), channel
  * identifier (CI) and session id (sid), send Y = y*g, and compute K = y*Y_peer.
@@ -105,10 +106,14 @@ export function cpaceStart(
   random: (n: number) => Uint8Array = randomBytes,
 ): { msg: Uint8Array; state: CpaceState } {
   const g = calculateGenerator(input.prs, input.ci, input.sid);
-  // 64 random bytes reduced mod the group order: negligible bias.
-  const raw = random(2 * FIELD_SIZE_BYTES);
-  if (raw.length < 2 * FIELD_SIZE_BYTES) throw new CpaceError("Not enough random bytes.");
-  const y = bytesToScalar(raw.subarray(0, 2 * FIELD_SIZE_BYTES));
+  // Draft section 8.3 (recommended sample_scalar): group_size_bytes random bytes,
+  // clear the bits above group_size_bits (252), read as little-endian.
+  const raw = random(FIELD_SIZE_BYTES);
+  if (raw.length < FIELD_SIZE_BYTES) throw new CpaceError("Not enough random bytes.");
+  const bytes = raw.slice(0, FIELD_SIZE_BYTES);
+  bytes[FIELD_SIZE_BYTES - 1] &= 0x0f;
+  const y = bytesToScalar(bytes);
+  bytes.fill(0);
   if (y === 0n) throw new CpaceError("Sampled a zero scalar.");
   const Y = g.multiply(y).toBytes();
   const msg = lvCat(Y, input.ad ?? new Uint8Array(0));

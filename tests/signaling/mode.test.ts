@@ -17,6 +17,13 @@ describe("signal mode", () => {
     expect(getSignalMode()).toBe("local");
   });
 
+  it("remembers the Bluetooth choice and ignores unknown values", () => {
+    setSignalMode("ble");
+    expect(getSignalMode()).toBe("ble");
+    localStorage.setItem("p2p-signal-mode", "carrier-pigeon");
+    expect(getSignalMode()).toBe("local");
+  });
+
   it("falls back to local when storage throws", () => {
     const original = Storage.prototype.getItem;
     Storage.prototype.getItem = () => {

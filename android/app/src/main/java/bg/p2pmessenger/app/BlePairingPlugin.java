@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothGattServerCallback;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.bluetooth.BluetoothStatusCodes;
 import android.bluetooth.le.AdvertiseCallback;
 import android.bluetooth.le.AdvertiseData;
 import android.bluetooth.le.AdvertiseSettings;
@@ -939,7 +940,7 @@ public class BlePairingPlugin extends Plugin {
     @SuppressWarnings("deprecation")
     private boolean writeCccd(BluetoothGatt gatt, BluetoothGattDescriptor cccd) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == 0; // BluetoothStatusCodes.SUCCESS
+            return gatt.writeDescriptor(cccd, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == BluetoothStatusCodes.SUCCESS;
         }
         cccd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
         return gatt.writeDescriptor(cccd);
@@ -994,7 +995,7 @@ public class BlePairingPlugin extends Plugin {
                 pendingSend = call;
                 boolean started;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    started = server.notifyCharacteristicChanged(central, serverTx, false, payload) == 0; // BluetoothStatusCodes.SUCCESS
+                    started = server.notifyCharacteristicChanged(central, serverTx, false, payload) == BluetoothStatusCodes.SUCCESS;
                 } else {
                     serverTx.setValue(payload);
                     started = server.notifyCharacteristicChanged(central, serverTx, false);
@@ -1013,7 +1014,7 @@ public class BlePairingPlugin extends Plugin {
                 boolean started;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     started =
-                        client.writeCharacteristic(clientRx, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == 0; // BluetoothStatusCodes.SUCCESS
+                        client.writeCharacteristic(clientRx, payload, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS;
                 } else {
                     clientRx.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
                     clientRx.setValue(payload);
