@@ -10,6 +10,14 @@ import { detectOS, formatSize, pickDownloads, versionOf } from "../../site/downl
 import { FONT_FILES, OPEN_CLAIM, applyMode, assemble, injectReleases, killSwitchWorker, releasesRepo, siteUrl } from "../../scripts/site/build.mjs";
 // @ts-expect-error plain ES module
 import { BG_EXTRA, EN } from "../../site/i18n.js";
+// @ts-expect-error plain ES module
+import { CLOSED_KEYS, LOCALES } from "../../site/locales.js";
+
+type Locale = { code: string; path: string; html: string; og: string; name: string; short: string; image: string; scripts: string[] };
+type Pack = Record<string, unknown> & { closed: Record<string, string>; demoMsgs: string[]; osNames: Record<string, string> };
+const FOREIGN = (LOCALES as Locale[]).filter((l) => l.code !== "bg" && l.code !== "en");
+const packs: Record<string, Pack> = {};
+for (const l of FOREIGN) packs[l.code] = (await import(`../../site/i18n/${l.code}.js`)).default;
 
 const root = resolve(__dirname, "../..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
@@ -155,7 +163,9 @@ describe("site assembly", () => {
     expect(en).toContain("<title>Messenger without a phone number or server · P2P Messenger</title>");
     expect(en).toContain("Your letters.");
     expect(en).not.toContain("Писмата ти");
-    expect(en).toMatch(/<a class="chip lang" href="\.\.\/" hreflang="bg"/);
+    expect(en).toMatch(/<a href="\.\.\/" hreflang="bg" lang="bg" data-code="bg">Български<\/a>/);
+    expect(en).toMatch(/<a href="\.\/" hreflang="en" lang="en" data-code="en" aria-current="page">English<\/a>/);
+    expect(en).toMatch(/<a href="\.\.\/zh\/" hreflang="zh-Hans"/);
     expect(en).toContain('href="../site.css"');
     expect(en).toContain('href="../app/"');
     expect(en).toContain('href="#features"'); // in-page links stay on this page
@@ -163,7 +173,8 @@ describe("site assembly", () => {
     expect(en).toContain("https://github.com/o/pub/blob/main/LICENSE\"");
     expect(en).not.toMatch(OPEN_CLAIM);
     const bg = readFileSync(join(dist, "index.html"), "utf8");
-    expect(bg).toMatch(/<a class="chip lang" href="en\/" hreflang="en"/);
+    expect(bg).toMatch(/<a href="en\/" hreflang="en" lang="en" data-code="en">English<\/a>/);
+    expect(bg).toMatch(/<a href="\.\/" hreflang="bg" lang="bg" data-code="bg" aria-current="page">/);
     expect(bg).toContain("https://github.com/o/pub/blob/main/SECURITY.bg.md");
     expect(bg).not.toContain("{{PUBLIC_REPO}}");
     expect(bg).not.toContain("<!--seo:");
@@ -202,7 +213,8 @@ describe("site assembly", () => {
   it("structured data repeats the questions and answers shown on each page", async () => {
     const dist = fakeDist();
     await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true, url: "https://example.test/" });
-    for (const [file, lang] of [["index.html", "bg"], ["en/index.html", "en"]]) {
+    for (const { path, html: lang } of LOCALES as Locale[]) {
+      const file = `${path}index.html`;
       const page = readFileSync(join(dist, file), "utf8");
       const json = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)?.[1] ?? "";
       const data = JSON.parse(json);
@@ -345,7 +357,129 @@ describe("the page", () => {
     expect(boot).toMatch(/localStorage\.getItem\("site-lang"\)/);
     expect(boot).not.toMatch(/navigator\.language/);
     expect(js).not.toMatch(/navigator\.language/);
-    expect(read("site/index.html")).toMatch(/<html lang="bg"[^>]*data-other="en\/"/);
+    expect(read("site/index.html")).toMatch(/<html lang="bg"[^>]*data-lang="bg" data-langs="bg en es pt fr de ru zh"/);
+  });
+
+  // boot.js is a classic script: run it with a stand-in page and see where it sends the visitor
+  function boot(page: { lang: string; root: string }, chosen: string | null) {
+    const attrs: Record<string, string> = { "data-lang": page.lang, "data-langs": (LOCALES as Locale[]).map((l) => l.code).join(" "), "data-root": page.root };
+    let went = "";
+    const documentElement = { lang: page.lang, classList: { add() {} }, getAttribute: (k: string) => attrs[k] ?? null, setAttribute() {} };
+    vm.runInNewContext(read("site/boot.js"), {
+      document: { documentElement },
+      window: { matchMedia: () => ({ matches: false }), navigator: {} },
+      localStorage: { getItem: (k: string) => (k === "site-lang" ? chosen : null) },
+      location: { search: "", hash: "", replace: (u: string) => { went = u; } },
+    });
+    return went;
+  }
+
+  it("opens the remembered language from any page, and stays put otherwise", () => {
+    expect(boot({ lang: "bg", root: "" }, "es")).toBe("es/");
+    expect(boot({ lang: "bg", root: "" }, "zh")).toBe("zh/");
+    expect(boot({ lang: "de", root: "../" }, "fr")).toBe("../fr/");
+    expect(boot({ lang: "ru", root: "../" }, "bg")).toBe("../");
+    expect(boot({ lang: "pt", root: "../" }, "pt")).toBe("");
+    expect(boot({ lang: "bg", root: "" }, null)).toBe("");
+    expect(boot({ lang: "bg", root: "" }, "xx")).toBe(""); // not a language of the site
+  });
+});
+
+describe("translations (site/i18n/<code>.js)", () => {
+  const tags = (v: string) => [...v.matchAll(/<\/?[a-z][^>]*>|\{\w+\}/gi)].map((m) => m[0]).sort();
+  // brand and technical names that stay as they are, so they are not counted by the script check
+  const KEEP = /P2P Messenger|Double Ratchet|WebRTC|Passkey|AES-GCM|DTLS-SRTP|SHA-256|SBOM|GitHub|Worker|TURN|STUN|QR|Wi.?Fi|Windows|Linux|Android|iPhone|Mac|Chrome|Edge|Firefox|Safari|App Store|SmartScreen|install\.sh|\.exe|\.apk|\.zip|MB|Mo|МБ/g;
+  const OPEN_ANY = /open[ -]?source|código (abierto|aberto)|quelloffen|offene[nrs]? (quell)?code|открыт\w* код|开源|公开/i;
+  const texts = (pack: Record<string, unknown>) => Object.entries(pack).filter(([k]) => k !== "closed" && k !== "osNames");
+
+  it("the registry is complete: every language has its own folder, a pack and a name", () => {
+    expect((LOCALES as Locale[]).map((l) => l.code)).toEqual(["bg", "en", "es", "pt", "fr", "de", "ru", "zh"]);
+    expect(new Set((LOCALES as Locale[]).map((l) => l.path)).size).toBe(LOCALES.length);
+    for (const l of FOREIGN) expect(packs[l.code], l.code).toBeTruthy();
+  });
+
+  for (const l of FOREIGN) {
+    describe(l.name, () => {
+      const pack = () => packs[l.code];
+
+      it("has exactly the English keys, none empty", () => {
+        const { closed, ...rest } = pack();
+        expect(Object.keys(rest).sort()).toEqual(Object.keys(EN).sort());
+        for (const [k, v] of texts(pack())) {
+          if (Array.isArray(v)) for (const x of v) expect(String(x).trim(), `${l.code}.${k}`).not.toBe("");
+          else expect(String(v).trim(), `${l.code}.${k}`).not.toBe("");
+        }
+        expect(pack().demoMsgs.length).toBe(EN.demoMsgs.length);
+        expect(Object.keys(pack().osNames).sort()).toEqual(Object.keys(EN.osNames).sort());
+        expect(Object.keys(closed).sort()).toEqual([...CLOSED_KEYS].sort());
+      });
+
+      it("keeps every tag and placeholder of the English text", () => {
+        for (const [k, v] of texts(pack())) if (typeof v === "string") expect(tags(v), `${l.code}.${k}`).toEqual(tags(EN[k]));
+        for (const k of CLOSED_KEYS as string[]) {
+          if (k === "marquee") expect(tags(pack().closed[k]).length, `${l.code}.closed.${k}`).toBe(tags(EN[k]).length);
+          else expect(tags(pack().closed[k]), `${l.code}.closed.${k}`).toEqual(tags(EN[k]));
+        }
+      });
+
+      it(`is written in ${l.scripts.join("/")}, not copied from English`, () => {
+        const all = texts(pack()).flatMap(([, v]) => (Array.isArray(v) ? v : [v])).map(String).join(" ");
+        const letters = all.replace(/<[^>]*>|\{\w+\}/g, " ").replace(KEEP, " ").match(/\p{L}/gu) ?? [];
+        const own = letters.filter((c) => l.scripts.some((sc) => new RegExp(`\\p{Script=${sc}}`, "u").test(c)));
+        expect(own.length / letters.length).toBeGreaterThan(0.8);
+        // short labels can be the same word ("Menu", "Download", "Links"); a whole sentence cannot
+        const same = texts(pack()).filter(([k, v]) => typeof v === "string" && v === EN[k] && v.split(/\s+/).length > 3);
+        expect(same.map(([k]) => k)).toEqual([]);
+      });
+
+      it("the private-source wording claims no open code", () => {
+        for (const k of CLOSED_KEYS as string[]) expect(pack().closed[k], `${l.code}.closed.${k}`).not.toMatch(OPEN_ANY);
+      });
+    });
+  }
+});
+
+describe("the language pages", () => {
+  it("builds one page per language with its own title, lang, menu, alternates and sitemap entry", async () => {
+    const dist = mkdtempSync(join(tmpdir(), "site-langs-"));
+    mkdirSync(dist, { recursive: true });
+    writeFileSync(join(dist, "index.html"), "<!doctype html><title>app</title>");
+    await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true, url: "https://example.test/" });
+    const map = readFileSync(join(dist, "sitemap.xml"), "utf8");
+    for (const l of LOCALES as Locale[]) {
+      const page = readFileSync(join(dist, l.path, "index.html"), "utf8");
+      expect(page, l.code).toMatch(new RegExp(`<html lang="${l.html}"[^>]*data-lang="${l.code}"`));
+      expect(page).toContain(`<span data-lang-current="">${l.short}</span>`);
+      expect(page).toContain(`data-code="${l.code}" aria-current="page">${l.name}</a>`);
+      expect(page.match(/aria-current="page"/g)!.length).toBe(1);
+      for (const o of LOCALES as Locale[]) expect(page).toContain(`<link rel="alternate" hreflang="${o.html}" href="https://example.test/${o.path}">`);
+      expect(page).toContain(`<meta property="og:locale" content="${l.og}">`);
+      expect(page).not.toMatch(OPEN_CLAIM);
+      expect(map).toContain(`<loc>https://example.test/${l.path}</loc>`);
+      if (l.code === "bg") continue;
+      const pack = l.code === "en" ? EN : packs[l.code];
+      const title = /<title>([^<]*)<\/title>/.exec(page)![1];
+      expect(title).toBe(String(pack.title).replaceAll("&", "&amp;"));
+      expect(page).not.toContain("Писмата ти"); // no Bulgarian left on a foreign page
+      expect(page).toContain('href="../site.css"');
+      const ld = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)![1]);
+      expect(ld[0].inLanguage).toBe(l.html);
+    }
+    rmSync(dist, { recursive: true, force: true });
+  });
+
+  it("uses the private-source wording of each language in closed mode, and the open one otherwise", async () => {
+    for (const closed of [true, false]) {
+      const dist = mkdtempSync(join(tmpdir(), "site-mode-"));
+      writeFileSync(join(dist, "index.html"), "<!doctype html><title>app</title>");
+      await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed, url: "" });
+      for (const l of FOREIGN) {
+        const page = readFileSync(join(dist, l.path, "index.html"), "utf8");
+        const sec1t = /<b data-i18n="sec1t">([^<]*)<\/b>/.exec(page)?.[1] ?? /data-i18n="sec1t"[^>]*>([^<]*)</.exec(page)?.[1];
+        expect(sec1t, l.code).toBe(closed ? packs[l.code].closed.sec1t : packs[l.code].sec1t);
+      }
+      rmSync(dist, { recursive: true, force: true });
+    }
   });
 });
 

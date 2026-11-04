@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="bg" data-theme="auto" data-root="" data-other="en/">
+<html lang="bg" data-theme="auto" data-root="" data-lang="bg" data-langs="bg en es pt fr de ru zh">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -49,7 +49,20 @@
         <a href="#faq" data-i18n="navFaq">Въпроси</a>
       </nav>
       <div class="bar-tools">
-        <a class="chip lang" href="en/" hreflang="en" lang="en" data-lang-toggle aria-label="Switch to English">EN</a>
+        <details class="langs" data-langs-menu>
+          <summary class="chip lang" aria-label="Език" data-i18n-aria="langLabel"><span data-lang-current>БГ</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+          <!-- written again for every page by scripts/site/build.mjs from site/locales.js -->
+          <ul class="lang-list" data-lang-list>
+            <li><a href="./" hreflang="bg" lang="bg" aria-current="page">Български</a></li>
+            <li><a href="en/" hreflang="en" lang="en">English</a></li>
+            <li><a href="es/" hreflang="es" lang="es">Español</a></li>
+            <li><a href="pt/" hreflang="pt-BR" lang="pt-BR">Português (Brasil)</a></li>
+            <li><a href="fr/" hreflang="fr" lang="fr">Français</a></li>
+            <li><a href="de/" hreflang="de" lang="de">Deutsch</a></li>
+            <li><a href="ru/" hreflang="ru" lang="ru">Русский</a></li>
+            <li><a href="zh/" hreflang="zh-Hans" lang="zh-Hans">简体中文</a></li>
+          </ul>
+        </details>
         <button class="chip theme" type="button" data-theme-toggle aria-label="Светла или тъмна тема" data-i18n-aria="themeLabel">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path class="sun" d="M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z"/><path class="moon" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
         </button>

@@ -3,7 +3,7 @@
  *  - marks the page as scripted, so the reveal animations are only hidden when they will play;
  *  - applies the saved or system theme;
  *  - sends an installed app (opened from the home screen or the old start address) to the messenger;
- *  - opens the other language's page when the visitor chose it before (only a stored choice, never
+ *  - opens the page of the language the visitor chose before (only a stored choice, never
  *    a guess from the browser, so search engines always see the page they asked for).
  * No data leaves the device. Storage is optional: every access is guarded.
  */
@@ -23,7 +23,7 @@
     standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
   } catch { /* ignore */ }
   var forced = /[?&]site=1(?:&|$)/.test(location.search);
-  var base = root.getAttribute("data-root") || ""; // "" on "/", "../" on "/en/"
+  var base = root.getAttribute("data-root") || ""; // "" on "/", "../" on "/en/", "/es/" …
   if (standalone && !forced) {
     location.replace(base + "app/" + location.search + location.hash);
     return;
@@ -31,8 +31,11 @@
 
   var chosen = "";
   try { chosen = localStorage.getItem("site-lang") || ""; } catch { /* private mode */ }
-  var other = root.getAttribute("data-other");
-  if (other && (chosen === "bg" || chosen === "en") && chosen !== root.lang) {
-    location.replace(other + location.search + location.hash);
+  // data-langs is written by the build from site/locales.js; the first code is the page at "/"
+  var codes = (root.getAttribute("data-langs") || "").split(" ");
+  var here = root.getAttribute("data-lang") || codes[0];
+  if (chosen && chosen !== here && codes.indexOf(chosen) >= 0) {
+    var target = base + (chosen === codes[0] ? "" : chosen + "/");
+    location.replace((target || "./") + location.search + location.hash);
   }
 })();
