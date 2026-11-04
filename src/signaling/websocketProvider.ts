@@ -36,6 +36,8 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
   private opened: Promise<void> | null = null;
   private offerHandlers: PayloadHandler[] = [];
   private answerHandlers: PayloadHandler[] = [];
+  private rawHandlers: Array<(text: string) => void> = [];
+  private closeHandlers: Array<() => void> = [];
   private peerJoined = false;
   private joinWaiters: Array<() => void> = [];
   private readonly apiBase: string;
@@ -79,6 +81,26 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
     return new Promise<void>((resolve) => this.joinWaiters.push(resolve));
   }
 
+  /** Raw API (used by the PAKE layer): sends one text frame as is. */
+  async sendRaw(text: string): Promise<void> {
+    if (!this.opened) throw new SignalingError("Няма отворена стая.", "not_open");
+    await this.opened;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      throw new SignalingError("Стаята е затворена.", "closed");
+    }
+    this.socket.send(text);
+  }
+
+  /** Raw API: called for every incoming text frame, including the relay's "joined". */
+  onRawFrame(callback: (text: string) => void): void {
+    this.rawHandlers.push(callback);
+  }
+
+  /** Raw API: called when the socket closes (not when disconnect() is called locally). */
+  onClose(callback: () => void): void {
+    this.closeHandlers.push(callback);
+  }
+
   async sendOffer(payload: SignalingPayload): Promise<void> {
     if (payload.type !== "offer") throw new SignalingError("Очаква се покана.", "not_open");
     await this.send(payload);
@@ -103,6 +125,8 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
     this.opened = null;
     this.offerHandlers = [];
     this.answerHandlers = [];
+    this.rawHandlers = [];
+    this.closeHandlers = [];
     this.peerJoined = false;
     this.joinWaiters = [];
     if (socket && socket.readyState <= WebSocket.OPEN) socket.close(1000, "done");
@@ -116,7 +140,9 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
       socket.addEventListener("open", () => resolve());
       socket.addEventListener("error", () => reject(new SignalingError("Връзката към стаята се провали.", "network")));
       socket.addEventListener("close", (event) => {
-        if (this.socket === socket) this.socket = null;
+        const wasCurrent = this.socket === socket;
+        if (wasCurrent) this.socket = null;
+        if (wasCurrent) for (const handler of [...this.closeHandlers]) handler();
         const reason = event.reason === "room full" || event.code === 1013 ? "room_full" : "closed";
         reject(
           reason === "room_full"
@@ -142,6 +168,7 @@ export class WebSocketSignalingProvider implements ISignalingProvider {
 
   private onFrame(data: unknown): void {
     if (typeof data !== "string") return;
+    for (const handler of [...this.rawHandlers]) handler(data);
     let parsed: unknown;
     try {
       parsed = JSON.parse(data);

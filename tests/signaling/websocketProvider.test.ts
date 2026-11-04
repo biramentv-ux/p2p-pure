@@ -145,4 +145,37 @@ describe("WebSocketSignalingProvider", () => {
     await expect(waiting).resolves.toBeUndefined();
     await expect(host.waitForPeer()).resolves.toBeUndefined();
   });
+
+  it("raw API: sendRaw reaches the peer, onRawFrame sees every frame including joined, onClose fires", async () => {
+    const worker = fakeWorker();
+    const host = new WebSocketSignalingProvider("https://sig.example", worker.makeSocket, okFetch("ABCDEFGHJK"));
+    const guest = new WebSocketSignalingProvider("https://sig.example", worker.makeSocket, okFetch(""));
+    const hostFrames: string[] = [];
+    const guestFrames: string[] = [];
+    let guestClosed = 0;
+    host.onRawFrame((t) => hostFrames.push(t));
+    guest.onRawFrame((t) => guestFrames.push(t));
+    guest.onClose(() => guestClosed++);
+    const code = await host.openRoom();
+    expect(code).toBe("ABCDEFGHJK");
+    await guest.joinRoom(code);
+    worker.sockets[0].emit("message", { data: '{"type":"joined"}' });
+    await host.sendRaw("hello");
+    await guest.sendRaw("world");
+    expect(hostFrames).toEqual(['{"type":"joined"}', "world"]);
+    expect(guestFrames).toEqual(["hello"]);
+    worker.sockets[0].close(1000, "bye");
+    expect(guestClosed).toBe(1);
+  });
+
+  it("raw API: disconnect() does not fire onClose; sendRaw without a room is refused", async () => {
+    const worker = fakeWorker();
+    const host = new WebSocketSignalingProvider("https://sig.example", worker.makeSocket, okFetch("ABCDEFGHJK"));
+    await expect(host.sendRaw("x")).rejects.toThrow("Няма отворена стая");
+    let closed = 0;
+    host.onClose(() => closed++);
+    await host.openRoom();
+    host.disconnect();
+    expect(closed).toBe(0);
+  });
 });

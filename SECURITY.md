@@ -62,7 +62,7 @@ Scope: the Cloudflare Worker at `tg.dyrakarmy.online` (`worker/`). Messages, pho
 |---|---|---|---|
 | Short-code invitation (`/invite`) | Workers KV | 10 minutes, deleted on first fetch | Signed `p2p1:` text; contains network addresses (ICE candidates) but no keys or messages |
 | Telegram delivery record | Workers KV | until the recipient presses the delete button, or about 10 minutes (cron purge every minute; KV TTL as a backstop) | Recipient chat id, message id, due time. No text, no invitation |
-| Demo room frames | Durable Object memory only | relayed, not stored; room closes after 10 minutes | Nothing is written to Durable Object storage except the expiry alarm time |
+| Demo room frames | Durable Object memory only | relayed, not stored; room closes after 10 minutes | Nothing is written to Durable Object storage except the expiry alarm time. New clients send only PAKE messages and ciphertext (see "Демо стая с PAKE" below) |
 | Rate-limit key | Cloudflare Rate Limiting binding | 60-second window | HMAC-SHA-256 of the client IP, keyed with a Worker secret, first 8 bytes. The raw IP is not passed to the limiter and not stored by the Worker |
 
 ### What the Worker logs
@@ -71,7 +71,43 @@ Nothing. The code has no `console.*` calls, `observability` is explicitly `enabl
 
 ### What Cloudflare as a platform still sees
 
-The Worker runs on Cloudflare, and Cloudflare terminates TLS. As the platform operator it can see, outside the control of this code: client IP addresses, request URLs (including codes), headers and timing for every request, and the plaintext of invitations and demo-room frames passing through the Worker. It keeps its own operational and abuse-prevention logs and aggregate analytics under its own policy. Account owners also see the usage metrics in the dashboard. Invitations are signed and contain no message keys, so this exposes who connects and when, not message content.
+The Worker runs on Cloudflare, and Cloudflare terminates TLS. As the platform operator it can see, outside the control of this code: client IP addresses, request URLs (including codes), headers and timing for every request, the plaintext of `/invite` invitations and of legacy (10-character) demo-room frames passing through the Worker. New demo rooms (5-character id) carry only PAKE messages and ciphertext. It keeps its own operational and abuse-prevention logs and aggregate analytics under its own policy. Account owners also see the usage metrics in the dashboard. Invitations are signed and contain no message keys, so this exposes who connects and when, not message content.
+
+### Демо стая с PAKE (CPace)
+
+Новият демо режим използва код от две части, например `K7M2Q · lemon-rocket-bridge`.
+Петте знака са номерът на стаята. Дава ги Worker-ът. Трите думи са паролата. Те се правят
+на устройството, което отваря стаята, и не се пращат на сървъра.
+
+Двете устройства пускат CPace през стаята. После всяко доказва, че знае същите думи.
+Едва тогава поканата (SDP, did:key) тръгва, шифрована с ключ от CPace.
+
+Worker-ът и Cloudflare виждат сега:
+
+- петте знака на стаята (в адреса на заявката);
+- IP адресите на двете WebSocket връзки;
+- кога се свързват и колко време стои стаята;
+- броя и размера на кадрите;
+- кадрите на CPace (случайни на вид числа), MAC-ове за потвърждение и шифрован текст.
+
+Не виждат вече:
+
+- SDP и ICE кандидатите, тоест мрежовите адреси на устройствата за WebRTC;
+- did:key и публичните ключове;
+- подписаната покана;
+- трите думи.
+
+Трите думи дават около 33 бита. Това е малко за офлайн атака, но CPace не позволява такава.
+Който иска да влезе в чужда стая, има един опит онлайн. Грешен опит проваля сдвояването.
+Стаята не се ползва повторно, а стая побира само двама. Затова сървърът не може да застане
+по средата, освен ако не познае думите от първия път.
+
+Ако думите изтекат (например през същия канал като поканата), CPace вече не пази.
+Тогава защитата е кодът за сигурност. Сравнете го винаги. Контактът не се маркира като
+проверен без това сравнение.
+
+Старите клиенти още ползват 10-знакови стаи. Worker-ът ги приема. В тях кадрите са в явен
+вид, както преди: сървърът вижда SDP, did:key и подписаната покана.
 
 ### What Telegram sees
 
