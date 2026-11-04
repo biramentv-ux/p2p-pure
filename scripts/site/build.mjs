@@ -25,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { JSDOM } from "jsdom";
 import { pickDownloads, REPO } from "../../site/downloads.js";
+import { CLOSED_KEYS, DEFAULT_LOCALE, LOCALES, localeOf } from "../../site/locales.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -105,50 +106,75 @@ export function siteUrl(env = process.env) {
   return u.href.endsWith("/") ? u.href : `${u.href}/`;
 }
 
-/** The two language versions of the landing page: path under the site, html lang, og:locale, share image. */
-export const PAGES = {
-  bg: { path: "", locale: "bg_BG", image: "og-bg.png" },
-  en: { path: "en/", locale: "en_US", image: "og-en.png" },
-};
-
-/** A relative href/src on the Bulgarian page ("site.css", "app/") seen from /en/. */
-const fromEn = (v) => (!v || /^(#|[a-z][a-z0-9+.-]*:|\/|\.\.\/)/i.test(v) ? v : `../${v}`);
+/** A relative href/src on the Bulgarian page ("site.css", "app/") seen from a language folder ("/en/"). */
+const fromSub = (v) => (!v || /^(#|[a-z][a-z0-9+.-]*:|\/|\.\.\/)/i.test(v) ? v : `../${v}`);
 
 /**
- * The English page, rendered at build time from the Bulgarian one and the EN texts, so it exists
- * without JavaScript and search engines see it (it used to be swapped in by the browser only).
+ * One language's page, rendered at build time from the Bulgarian one and that language's texts, so
+ * it exists without JavaScript and search engines see it. `texts` holds every key of site/i18n.js EN.
  */
-export function renderEnglish(bgHtml, EN) {
+export function renderLocale(bgHtml, texts, loc) {
   const dom = new JSDOM(bgHtml);
   const d = dom.window.document;
   const html = d.documentElement;
-  html.lang = "en";
+  html.lang = loc.html;
   html.setAttribute("data-root", "../");
-  html.setAttribute("data-other", "../");
-  d.title = EN.title;
+  d.title = texts.title;
   const meta = (sel, value) => { const m = d.querySelector(sel); if (m && value) m.setAttribute("content", value); };
-  meta('meta[name="description"]', EN.metaDescription);
-  meta('meta[property="og:title"]', EN.ogTitle);
-  meta('meta[property="og:description"]', EN.ogDescription);
-  meta('meta[property="og:locale"]', PAGES.en.locale);
-  for (const el of d.querySelectorAll("[data-i18n]")) { const v = EN[el.getAttribute("data-i18n")]; if (v != null) el.textContent = v; }
-  for (const el of d.querySelectorAll("[data-i18n-html]")) { const v = EN[el.getAttribute("data-i18n-html")]; if (v != null) el.innerHTML = v; }
-  for (const el of d.querySelectorAll("[data-i18n-aria]")) { const v = EN[el.getAttribute("data-i18n-aria")]; if (v != null) el.setAttribute("aria-label", v); }
-  const toggle = d.querySelector("[data-lang-toggle]");
-  if (toggle) {
-    toggle.textContent = "БГ";
-    toggle.setAttribute("hreflang", "bg");
-    toggle.setAttribute("lang", "bg");
-    toggle.setAttribute("aria-label", "Превключи на български");
-  }
+  meta('meta[name="description"]', texts.metaDescription);
+  meta('meta[property="og:title"]', texts.ogTitle);
+  meta('meta[property="og:description"]', texts.ogDescription);
+  meta('meta[property="og:locale"]', loc.og);
+  const missing = [];
+  const get = (key) => { const v = texts[key]; if (v == null || v === "") missing.push(key); return v; };
+  for (const el of d.querySelectorAll("[data-i18n]")) { const v = get(el.getAttribute("data-i18n")); if (v) el.textContent = v; }
+  for (const el of d.querySelectorAll("[data-i18n-html]")) { const v = get(el.getAttribute("data-i18n-html")); if (v) el.innerHTML = v; }
+  for (const el of d.querySelectorAll("[data-i18n-aria]")) { const v = get(el.getAttribute("data-i18n-aria")); if (v) el.setAttribute("aria-label", v); }
+  // a gap would show Bulgarian on a foreign page: stop the build instead (the tests check the packs too)
+  if (missing.length) throw new Error(`site: ${loc.code} has no text for ${[...new Set(missing)].join(", ")}`);
   for (const el of d.querySelectorAll("[href], [src]")) {
-    for (const a of ["href", "src"]) if (el.hasAttribute(a)) el.setAttribute(a, fromEn(el.getAttribute(a)));
+    for (const a of ["href", "src"]) if (el.hasAttribute(a)) el.setAttribute(a, fromSub(el.getAttribute(a)));
   }
-  if (toggle) toggle.setAttribute("href", "../");
   // the public documents have an English original; the Bulgarian page links the translations
   for (const a of d.querySelectorAll('a[href*="/blob/main/"]')) {
     a.setAttribute("href", a.getAttribute("href").replace(/SECURITY\.bg\.md$/, "SECURITY.md").replace(/LICENSE\.bg\.md$/, "LICENSE"));
   }
+  return dom.serialize();
+}
+
+/** The English page (kept for callers of the two-language build). */
+export const renderEnglish = (bgHtml, EN) => renderLocale(bgHtml, EN, localeOf("en"));
+
+/**
+ * The language menu of one page, from site/locales.js: every language, the current one marked, links
+ * relative to the page ("../es/" from "/en/"). Also tells boot.js which page this is and which exist.
+ */
+export function withLangMenu(html, code) {
+  const dom = new JSDOM(html);
+  const d = dom.window.document;
+  const here = localeOf(code);
+  const up = here.path ? "../" : "";
+  d.documentElement.setAttribute("data-lang", code);
+  d.documentElement.setAttribute("data-langs", LOCALES.map((l) => l.code).join(" "));
+  d.documentElement.removeAttribute("data-other");
+  const list = d.querySelector("[data-lang-list]");
+  if (!list) throw new Error("site: the language menu ([data-lang-list]) is missing from site/index.html");
+  list.textContent = "";
+  for (const l of LOCALES) {
+    const li = d.createElement("li");
+    const a = d.createElement("a");
+    a.setAttribute("href", l.code === code ? "./" : up + l.path || "./");
+    a.setAttribute("hreflang", l.html);
+    a.setAttribute("lang", l.html);
+    a.setAttribute("data-code", l.code);
+    if (l.code === code) a.setAttribute("aria-current", "page");
+    a.textContent = l.name;
+    li.append(a);
+    list.append(d.createTextNode("\n            "), li);
+  }
+  list.append(d.createTextNode("\n          "));
+  const current = d.querySelector("[data-lang-current]");
+  if (current) current.textContent = here.short;
   return dom.serialize();
 }
 
@@ -162,17 +188,17 @@ export function addSeo(html, { lang, url }) {
   const d = dom.window.document;
   const head = d.head;
   const add = (tag, attrs) => { const el = d.createElement(tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); head.appendChild(el); return el; };
-  const page = PAGES[lang];
+  const page = localeOf(lang);
   if (url) {
     add("link", { rel: "canonical", href: url + page.path });
-    for (const [l, p] of Object.entries(PAGES)) add("link", { rel: "alternate", hreflang: l, href: url + p.path });
-    add("link", { rel: "alternate", hreflang: "x-default", href: url + PAGES.bg.path });
+    for (const l of LOCALES) add("link", { rel: "alternate", hreflang: l.html, href: url + l.path });
+    add("link", { rel: "alternate", hreflang: "x-default", href: url + localeOf(DEFAULT_LOCALE).path });
     add("meta", { property: "og:url", content: url + page.path });
     add("meta", { property: "og:image", content: url + page.image });
     add("meta", { property: "og:image:width", content: "1200" });
     add("meta", { property: "og:image:height", content: "630" });
     add("meta", { property: "og:image:alt", content: d.querySelector('meta[property="og:title"]')?.getAttribute("content") ?? "P2P Messenger" });
-    for (const [l, p] of Object.entries(PAGES)) if (l !== lang) add("meta", { property: "og:locale:alternate", content: p.locale });
+    for (const l of LOCALES) if (l.code !== lang) add("meta", { property: "og:locale:alternate", content: l.og });
   }
   const faq = [...d.querySelectorAll("details")].map((x) => [x.querySelector("summary")?.textContent?.trim(), x.querySelector("p")?.textContent?.trim()]).filter(([q, a]) => q && a);
   const data = [
@@ -183,14 +209,14 @@ export function addSeo(html, { lang, url }) {
       applicationCategory: "CommunicationApplication",
       operatingSystem: "Windows, Linux, Android, iOS, Web",
       description: d.querySelector('meta[name="description"]')?.getAttribute("content") ?? "",
-      inLanguage: lang,
+      inLanguage: page.html,
       offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
       ...(url ? { url: url + page.path, image: url + page.image } : {}),
     },
     {
       "@context": "https://schema.org",
       "@type": "FAQPage",
-      inLanguage: lang,
+      inLanguage: page.html,
       mainEntity: faq.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
     },
   ];
@@ -207,8 +233,8 @@ export function robotsTxt(url) {
 }
 
 export function sitemapXml(url, lastmod) {
-  const alts = Object.entries(PAGES).map(([l, p]) => `    <xhtml:link rel="alternate" hreflang="${l}" href="${url}${p.path}"/>`).join("\n");
-  const entries = Object.values(PAGES).map((p) => `  <url>\n    <loc>${url}${p.path}</loc>\n    <lastmod>${lastmod}</lastmod>\n${alts}\n    <xhtml:link rel="alternate" hreflang="x-default" href="${url}"/>\n  </url>`).join("\n");
+  const alts = LOCALES.map((l) => `    <xhtml:link rel="alternate" hreflang="${l.html}" href="${url}${l.path}"/>`).join("\n");
+  const entries = LOCALES.map((p) => `  <url>\n    <loc>${url}${p.path}</loc>\n    <lastmod>${lastmod}</lastmod>\n${alts}\n    <xhtml:link rel="alternate" hreflang="x-default" href="${url}"/>\n  </url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${entries}\n</urlset>\n`;
 }
 
@@ -244,6 +270,21 @@ self.addEventListener("activate", (event) => {
   })());
 });
 `;
+}
+
+/**
+ * One language's texts (site/i18n/<code>.js). Its `closed` part holds the wording for a private
+ * source (CLOSED_KEYS) and replaces those keys in closed mode; it is never shipped as page text.
+ */
+export async function loadPack(file, { closed }) {
+  const { default: pack } = await import(`${pathToFileURL(file).href}?v=${Date.now()}`);
+  const { closed: closedText = {}, ...texts } = pack;
+  if (!closed) return texts;
+  for (const k of CLOSED_KEYS) {
+    if (!closedText[k]) throw new Error(`site: ${file} has no closed-source text for ${k}`);
+    texts[k] = closedText[k];
+  }
+  return texts;
 }
 
 async function fetchReleases() {
@@ -298,14 +339,27 @@ export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "s
   writeFileSync(i18n, applyMode(readFileSync(i18n, "utf8"), { closed, lang: "en" }));
   // the English texts as they will be served (closed wording already applied)
   const { EN } = await import(`data:text/javascript;base64,${Buffer.from(readFileSync(i18n, "utf8")).toString("base64")}`);
-  const pages = { bg: addSeo(html, { lang: "bg", url }), en: addSeo(renderEnglish(html, EN), { lang: "en", url }) };
-  writeFileSync(join(dist, "index.html"), pages.bg);
-  mkdirSync(join(dist, "en"), { recursive: true });
-  writeFileSync(join(dist, "en", "index.html"), pages.en);
+  const pages = {};
+  for (const loc of LOCALES) {
+    const texts = loc.code === "bg" ? null : loc.code === "en" ? EN : await loadPack(join(site, "i18n", `${loc.code}.js`), { closed });
+    const page = texts ? renderLocale(html, texts, loc) : html;
+    pages[loc.code] = addSeo(withLangMenu(page, loc.code), { lang: loc.code, url });
+    mkdirSync(join(dist, loc.path), { recursive: true });
+    writeFileSync(join(dist, loc.path, "index.html"), pages[loc.code]);
+  }
+  // the packs the browser loads: this mode's wording only, without the other variant
+  const shipped = [];
+  for (const loc of LOCALES) {
+    if (loc.code === "bg" || loc.code === "en") continue;
+    const texts = await loadPack(join(site, "i18n", `${loc.code}.js`), { closed });
+    const text = `/* ${loc.name}: built from site/i18n/${loc.code}.js */\nexport default ${JSON.stringify(texts).replaceAll("<", "\\u003c")};\n`;
+    writeFileSync(join(dist, "i18n", `${loc.code}.js`), text);
+    shipped.push(text);
+  }
   writeFileSync(join(dist, "robots.txt"), robotsTxt(url));
   if (url) writeFileSync(join(dist, "sitemap.xml"), sitemapXml(url, now.toISOString().slice(0, 10)));
   // no mixed state: a replaced wording must have found its place
-  if (closed && OPEN_CLAIM.test(readFileSync(i18n, "utf8") + pages.bg + pages.en)) {
+  if (closed && OPEN_CLAIM.test(readFileSync(i18n, "utf8") + Object.values(pages).join("") + shipped.join(""))) {
     throw new Error("closed mode: some open-source wording is still on the page (update CLOSED_TEXT in scripts/site/build.mjs)");
   }
   return { files: readdirSync(dist) };
