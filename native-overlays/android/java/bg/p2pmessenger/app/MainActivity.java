@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Register before super.onCreate so the bridge loads the plugin.
         registerPlugin(PasskeyBridgePlugin.class);
+        registerPlugin(BlePairingPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
