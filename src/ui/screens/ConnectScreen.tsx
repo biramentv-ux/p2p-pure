@@ -25,6 +25,8 @@ import { PairingCodeEnter, PairingCodeShare, ShortCodeEnter, ShortCodeShare } fr
 import { OfflineSignalingProvider } from "../../signaling/offlineProvider";
 import { PakeError, PakeSignalingProvider } from "../../signaling/pakeProvider";
 import { getSignalMode, setSignalMode, type SignalMode } from "../../signaling/mode";
+import { isBleSupported } from "../../platform/mobile/blePairing";
+import { BlePairingPanel } from "../components/BlePairingPanel";
 import type { PairingCode } from "../../p2p/pairingCode";
 import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
 
@@ -53,6 +55,7 @@ type View =
   | { k: "scan-offer" }
   | { k: "demo-wait"; code: PairingCode; net: string; matched: boolean }
   | { k: "demo-join" }
+  | { k: "ble"; role: "initiator" | "responder"; offer?: string }
   | { k: "answer-qr"; payload: string; hex: string; net: string }
   | {
       k: "confirm";
@@ -113,7 +116,14 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   const pendingHexRef = useRef<string>("");
   // Demo signalling: an open PAKE room connection, and the mode the user picked (persisted).
   const wsRef = useRef<PakeSignalingProvider | null>(null);
-  const [mode, setMode] = useState<SignalMode>(() => getSignalMode());
+  // Bluetooth is offered only in the native apps; a stored "ble" choice falls back to local elsewhere.
+  const bleSupported = isBleSupported();
+  const [mode, setMode] = useState<SignalMode>(() => {
+    const stored = getSignalMode();
+    return stored === "ble" && !bleSupported ? "local" : stored;
+  });
+  // Bluetooth responder: the panel waits for the answer invitation to send back.
+  const bleAnswerRef = useRef<{ resolve: (answer: string) => void; reject: (err: unknown) => void } | null>(null);
   useEffect(
     () => () => {
       wsRef.current?.disconnect();
@@ -157,6 +167,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   }, []);
 
   function clearAll() {
+    bleAnswerRef.current?.reject(new Error("cancelled"));
+    bleAnswerRef.current = null;
     wsRef.current?.disconnect();
     wsRef.current = null;
     linkRef.current?.close();
@@ -253,6 +265,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         await startDemoOffer(offer, payload);
         return;
       }
+      if (mode === "ble") {
+        setView({ k: "ble", role: "initiator", offer: payload });
+        return;
+      }
       await getProvider().sendOffer(toSignalingPayload(offer, payload));
     } catch (err) {
       fail(err);
@@ -294,7 +310,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
 
   function startAsResponder() {
     setError(null);
-    setView(mode === "demo" ? { k: "demo-join" } : { k: "scan-offer" });
+    setView(mode === "demo" ? { k: "demo-join" } : mode === "ble" ? { k: "ble", role: "responder" } : { k: "scan-offer" });
   }
 
   /**
@@ -360,7 +376,9 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     try {
       const { invitation: offer } = await parseScannedInvitation(text);
       assertKind(offer, "offer");
-      setView({ k: "busy", label: t("Подготвям отговор…") });
+      // Over Bluetooth the panel stays on screen until it has sent the answer back.
+      const ble = bleAnswerRef.current;
+      if (!ble) setView({ k: "busy", label: t("Подготвям отговор…") });
       const { link, sdp } = await PeerLink.createAnswer(offer.sdp);
       mySdpRef.current = sdp;
       linkRef.current = link;
@@ -373,7 +391,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       // Start waiting before the answer leaves, so the handshake can't be missed.
       const handshake = completeHandshake(link, identity.did, offer.publicKey, RESPONDER_TIMEOUT_MS);
       const demo = wsRef.current;
-      if (demo) {
+      if (ble) {
+        bleAnswerRef.current = null;
+        ble.resolve(payload);
+      } else if (demo) {
         await demo.sendAnswer(toSignalingPayload(answer, payload));
         setView({ k: "busy", label: t("Свързвам…") });
       } else {
@@ -390,10 +411,21 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       });
       afterHandshake(link, session, offer.publicKey);
     } catch (err) {
+      const ble = bleAnswerRef.current;
+      bleAnswerRef.current = null;
+      ble?.reject(err);
       fail(err);
     } finally {
       busyRef.current = false;
     }
+  }
+
+  /** Bluetooth responder: hands the received offer to the normal flow and waits for its answer. */
+  function onBleOffer(invitation: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      bleAnswerRef.current = { resolve, reject };
+      void onOfferScanned(invitation);
+    });
   }
 
   /* ---------- Safety confirmation ---------- */
@@ -454,6 +486,22 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     );
   }
 
+  if (view.k === "ble") {
+    return (
+      <div className="screen">
+        <h1>{t("Свързване по Bluetooth")}</h1>
+        {error && <p role="alert">{error}</p>}
+        <BlePairingPanel
+          role={view.role}
+          offer={view.offer}
+          onAnswer={(invitation) => void onAnswerScanned(invitation)}
+          onOffer={onBleOffer}
+          onCancel={reset}
+        />
+      </div>
+    );
+  }
+
   if (view.k === "demo-join") {
     return <DemoCodeEntry onSubmit={(code) => void startDemoJoin(code)} onCancel={reset} />;
   }
@@ -488,9 +536,23 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
           >
             {t("Демо (стая)")}
           </button>
+          {bleSupported && (
+            <button
+              className={mode === "ble" ? "" : "secondary"}
+              aria-pressed={mode === "ble"}
+              onClick={() => {
+                setSignalMode("ble");
+                setMode("ble");
+              }}
+            >
+              {t("Bluetooth")}
+            </button>
+          )}
         </div>
         <p>
-          {mode === "demo"
+          {mode === "ble"
+            ? t("Поканата минава по Bluetooth между два телефона наблизо. Не се използва сървър. После сравнете думите за безопасност.")
+            : mode === "demo"
             ? t(
                 "Демо режимът използва сигналния сървър за стая с код. Сървърът вижда само номера на стаята и шифрован текст. Не съхранява нищо.",
               )
