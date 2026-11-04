@@ -18,7 +18,7 @@ QR или отдалеч с код от 5 знака и 3 думи (думите
 и видео разговори, групи до 9 души, известия и звуци, местене на нов телефон. Приложението е на
 6 езика (български, English, Русский, Deutsch, Español, Português), сайтът е на 8.
 
-**Шест начина за първа връзка:** QR лице в лице (без сървър); кратък код от 5 знака и 3 думи (PAKE, сървърът вижда само номера на стаята и шифрован текст); Bluetooth (само в приложението за Android и iOS); QR + звук; запознаване чрез общ приятел (без сървър); Telegram бот или копиране на поканата. След всеки начин двамата сравняват 12 думи за проверка.
+**Седем начина за първа връзка:** QR лице в лице (без сървър); кратък код от 5 знака и 3 думи (PAKE, сървърът вижда само номера на стаята и шифрован текст); Bluetooth (само в приложението за Android и iOS); QR + звук; QR + светлина (бавна анимация от цветни квадратчета, без сървър); запознаване чрез общ приятел (без сървър); Telegram бот или копиране на поканата. След всеки начин двамата сравняват 12 думи за проверка.
 
 | | Български | English |
 |---|---|---|
@@ -44,7 +44,7 @@ QR or, from afar, a code of 5 characters and 3 words (the words never reach the 
 video calls, groups of up to 9, notifications and sounds, moving to a new phone. The app speaks
 6 languages (Bulgarian, English, Russian, German, Spanish, Portuguese); the site speaks 8.
 
-**Six ways to make the first connection:** QR face to face (no server); a short code of 5 characters and 3 words (PAKE, the server sees only the room id and ciphertext); Bluetooth (Android and iOS app only); QR + sound; introduction by a mutual friend (no server); Telegram bot or copying the invitation. After any of them, both sides compare 12 verification words.
+**Seven ways to make the first connection:** QR face to face (no server); a short code of 5 characters and 3 words (PAKE, the server sees only the room id and ciphertext); Bluetooth (Android and iOS app only); QR + sound; QR + light (a slow animation of coloured squares, no server); introduction by a mutual friend (no server); Telegram bot or copying the invitation. After any of them, both sides compare 12 verification words.
 
 Issues and questions: [Issues](../../issues). Security problems: please report them privately
 (Security → Report a vulnerability), not in a public issue.

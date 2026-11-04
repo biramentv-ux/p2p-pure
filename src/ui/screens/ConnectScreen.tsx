@@ -31,6 +31,7 @@ import type { PairingCode } from "../../p2p/pairingCode";
 import { isAudioPairingSupported } from "../../p2p/audio/audioIo";
 import { CompactAnswerError, decodeCompactAnswer, encodeCompactAnswer } from "../../p2p/compactAnswer";
 import { SoundPairingPanel } from "../components/SoundPairingPanel";
+import { LightPairingPanel } from "../components/LightPairingPanel";
 import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
 
 export interface ConnectedResult {
@@ -50,6 +51,33 @@ interface ConnectScreenProps {
 /** Responder waits longer: the initiator has to scan the answer first. */
 const RESPONDER_TIMEOUT_MS = 5 * 60_000;
 
+/** Side channels that carry the compact signed answer back (M7 sound, M14 light). */
+type CompactVia = "sound" | "light";
+
+function compactVia(mode: SignalMode): CompactVia | null {
+  return mode === "sound" || mode === "light" ? mode : null;
+}
+
+/** Light pairing needs a camera (getUserMedia) and a 2D canvas to draw and read frames. */
+function isLightPairingSupported(): boolean {
+  try {
+    const md = (globalThis.navigator as Navigator | undefined)?.mediaDevices;
+    if (typeof md?.getUserMedia !== "function") return false;
+    if (typeof document === "undefined" || typeof ImageData === "undefined") return false;
+    return typeof document.createElement("canvas").getContext === "function";
+  } catch {
+    return false;
+  }
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+  } catch {
+    return false;
+  }
+}
+
 type View =
   | { k: "choose" }
   | { k: "busy"; label: string; cancellable?: boolean }
@@ -59,9 +87,13 @@ type View =
   | { k: "demo-wait"; code: PairingCode; net: string; matched: boolean }
   | { k: "demo-join" }
   | { k: "ble"; role: "initiator" | "responder"; offer?: string }
-  | { k: "answer-qr"; payload: string; hex: string; net: string }
-  /** Sound mode, responder: the compact answer is played as sound; the QR stays one tap away. */
-  | { k: "answer-sound"; bytes: Uint8Array; payload: string; hex: string; net: string }
+  /** `light`: the compact answer, kept so the person can still choose the light animation. */
+  | { k: "answer-qr"; payload: string; hex: string; net: string; light?: Uint8Array }
+  /**
+   * Sound or light mode, responder: the compact answer is played as sound or shown as light;
+   * the QR stays one tap away.
+   */
+  | { k: "answer-compact"; via: CompactVia; bytes: Uint8Array; payload: string; hex: string; net: string }
   | {
       k: "confirm";
       peerPublicKey: Uint8Array;
@@ -125,16 +157,19 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   const bleSupported = isBleSupported();
   // Sound pairing needs a microphone and Web Audio; a stored "sound" choice falls back the same way.
   const soundSupported = isAudioPairingSupported();
+  // Light pairing needs a camera and a canvas; a stored "light" choice falls back the same way.
+  const [lightSupported] = useState(isLightPairingSupported);
   const [mode, setMode] = useState<SignalMode>(() => {
     const stored = getSignalMode();
     if (stored === "ble" && !bleSupported) return "local";
     if (stored === "sound" && !soundSupported) return "local";
+    if (stored === "light" && !isLightPairingSupported()) return "local";
     return stored;
   });
-  // Sound responder: the compact answer to play, set just before the answer view is shown.
-  const soundAnswerRef = useRef<Uint8Array | null>(null);
-  // Sound initiator: bumped to give the listening panel a fresh start after a rejected answer.
-  const [soundKey, setSoundKey] = useState(0);
+  // Sound/light responder: the compact answer to send, set just before the answer view is shown.
+  const compactAnswerRef = useRef<{ via: CompactVia; bytes: Uint8Array } | null>(null);
+  // Sound/light initiator: bumped to give the receiving panel a fresh start after a rejected answer.
+  const [compactKey, setCompactKey] = useState(0);
   // Bluetooth responder: the panel waits for the answer invitation to send back.
   const bleAnswerRef = useRef<{ resolve: (answer: string) => void; reject: (err: unknown) => void } | null>(null);
   useEffect(
@@ -164,11 +199,15 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         const net = t(describeReachability(summarizeCandidates(payload.sdp)));
         const invitation = payload.invitation ?? "";
         const hex = pendingHexRef.current;
-        const soundBytes = soundAnswerRef.current;
-        soundAnswerRef.current = null;
+        const compact = compactAnswerRef.current;
+        compactAnswerRef.current = null;
         if (payload.type === "offer") setView({ k: "offer-qr", payload: invitation, hex, net });
-        else if (soundBytes) setView({ k: "answer-sound", bytes: soundBytes, payload: invitation, hex, net });
-        else setView({ k: "answer-qr", payload: invitation, hex, net });
+        // Light with reduced motion: the QR comes first; the animation is one explicit tap away.
+        else if (compact && !(compact.via === "light" && prefersReducedMotion())) {
+          setView({ k: "answer-compact", via: compact.via, bytes: compact.bytes, payload: invitation, hex, net });
+        } else if (compact) {
+          setView({ k: "answer-qr", payload: invitation, hex, net, light: compact.bytes });
+        } else setView({ k: "answer-qr", payload: invitation, hex, net });
       });
       providerRef.current = provider;
     }
@@ -192,7 +231,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     mySdpRef.current = null;
     offerRef.current = null;
     ephemeralRef.current = null;
-    soundAnswerRef.current = null;
+    compactAnswerRef.current = null;
     busyRef.current = false;
   }
 
@@ -303,7 +342,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
 
   /**
    * Initiator core, shared by every answer path (scanned QR, short code, demo room, Bluetooth,
-   * sound). `answer` must already be decoded and signature-checked. Throws on any failure;
+   * sound, light). `answer` must already be decoded and signature-checked. Throws on any failure;
    * the caller owns the busy flag and the error handling.
    */
   async function connectWithAnswer(answer: Invitation, active = activeOffer()) {
@@ -340,8 +379,20 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     }
   }
 
-  /** Sound initiator: compact-answer errors, in words a person can act on. */
-  function compactErrorMessage(err: CompactAnswerError): string {
+  /** Sound/light initiator: compact-answer errors, in words a person can act on. */
+  function compactErrorMessage(err: CompactAnswerError, via: CompactVia): string {
+    if (via === "light") {
+      switch (err.code) {
+        case "bad_signature":
+          return t("Подписът на прочетения отговор не е валиден. Отговорът е отхвърлен.");
+        case "wrong_offer":
+          return t("Прочетеният отговор не е за тази покана.");
+        case "expired":
+          return t("Прочетеният отговор е изтекъл. Нека другият човек започне отначало.");
+        default:
+          return t("Прочетената анимация не е валиден отговор. Нека другият човек я пусне отново.");
+      }
+    }
     switch (err.code) {
       case "bad_signature":
         return t("Подписът на чутия отговор не е валиден. Отговорът е отхвърлен.");
@@ -355,11 +406,12 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   }
 
   /**
-   * Sound initiator: bytes decoded by the modem (CRC already checked there). A rejected answer
-   * (bad signature, other offer, expired, malformed) keeps the offer open, so a stray or forged
-   * sound cannot cancel the pairing; the listening panel starts over and the QR path still works.
+   * Sound/light initiator: bytes decoded by the modem or the light decoder (CRC already checked
+   * there). A rejected answer (bad signature, other offer, expired, malformed) keeps the offer
+   * open, so a stray or forged sound or animation cannot cancel the pairing; the receiving panel
+   * starts over and the QR path still works.
    */
-  async function onSoundAnswer(bytes: Uint8Array) {
+  async function onCompactAnswer(bytes: Uint8Array, via: CompactVia) {
     if (busyRef.current) return;
     busyRef.current = true;
     let answer: Invitation;
@@ -370,8 +422,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     } catch (err) {
       busyRef.current = false;
       if (err instanceof CompactAnswerError) {
-        setError(compactErrorMessage(err));
-        setSoundKey((k) => k + 1);
+        setError(compactErrorMessage(err, via));
+        setCompactKey((k) => k + 1);
         return;
       }
       fail(err);
@@ -480,8 +532,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         setView({ k: "busy", label: t("Свързвам…") });
       } else {
         pendingHexRef.current = await encodeInvitationHex(answer);
-        // Sound mode: a compact answer to play; too big or odd SDP falls back to the QR code.
-        soundAnswerRef.current = mode === "sound" ? compactAnswerOrNull(sdp, eph, offer) : null;
+        // Sound/light mode: a compact answer to send; too big or odd SDP falls back to the QR code.
+        const via = compactVia(mode);
+        const compactBytes = via ? compactAnswerOrNull(sdp, eph, offer, via) : null;
+        compactAnswerRef.current = via && compactBytes ? { via, bytes: compactBytes } : null;
         await getProvider().sendAnswer(toSignalingPayload(answer, payload));
       }
       await handshake;
@@ -503,8 +557,13 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     }
   }
 
-  /** Sound responder: the compact answer bytes, or null (with a note) when only the QR can carry it. */
-  function compactAnswerOrNull(sdp: string, eph: EphemeralKeyPair, offer: Invitation): Uint8Array | null {
+  /** Sound/light responder: the compact answer bytes, or null (with a note) when only the QR can carry it. */
+  function compactAnswerOrNull(
+    sdp: string,
+    eph: EphemeralKeyPair,
+    offer: Invitation,
+    via: CompactVia,
+  ): Uint8Array | null {
     try {
       return encodeCompactAnswer({
         answerSdp: sdp,
@@ -513,12 +572,21 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         offerNonce: offer.nonce,
       });
     } catch (err) {
-      // Sound is an extra: any problem here (usually too_large / unsupported_sdp) means QR only.
-      setError(
-        err instanceof CompactAnswerError && err.code !== "too_large" && err.code !== "unsupported_sdp"
-          ? t("Отговорът не може да се изпрати като звук. Покажи този QR код на другия човек.")
-          : t("Отговорът е твърде голям за звук. Покажи този QR код на другия човек."),
-      );
+      // Sound and light are extras: any problem here (usually too_large / unsupported_sdp) means QR only.
+      const other = err instanceof CompactAnswerError && err.code !== "too_large" && err.code !== "unsupported_sdp";
+      if (via === "light") {
+        setError(
+          other
+            ? t("Отговорът не може да се изпрати като светлина. Покажи този QR код на другия човек.")
+            : t("Отговорът е твърде голям за светлина. Покажи този QR код на другия човек."),
+        );
+      } else {
+        setError(
+          other
+            ? t("Отговорът не може да се изпрати като звук. Покажи този QR код на другия човек.")
+            : t("Отговорът е твърде голям за звук. Покажи този QR код на другия човек."),
+        );
+      }
       return null;
     }
   }
@@ -663,9 +731,25 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
               {t("QR + звук")}
             </button>
           )}
+          {lightSupported && (
+            <button
+              className={mode === "light" ? "" : "secondary"}
+              aria-pressed={mode === "light"}
+              onClick={() => {
+                setSignalMode("light");
+                setMode("light");
+              }}
+            >
+              {t("QR + светлина")}
+            </button>
+          )}
         </div>
         <p>
-          {mode === "sound"
+          {mode === "light"
+            ? t(
+                "Поканата се сканира като QR код. Отговорът се връща като цветна анимация към камерата. Не се използва сървър. После сравнете думите за безопасност.",
+              )
+            : mode === "sound"
             ? t(
                 "Поканата се сканира като QR код. Отговорът се връща като звук към микрофона. Не се използва сървър. После сравнете думите за безопасност.",
               )
@@ -713,7 +797,9 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     return (
       <div className="screen">
         <h1>{t("Покана")}</h1>
-        {mode === "sound" ? (
+        {mode === "light" ? (
+          <p>{t("Другият човек сканира този код и показва отговора като цветна анимация. Камерата тук я чете.")}</p>
+        ) : mode === "sound" ? (
           <p>{t("Другият човек сканира този код и пуска отговора като звук. Микрофонът тук го чува.")}</p>
         ) : (
           <p>{t("Другият човек сканира този код. След това натисни „Сканирай отговора“.")}</p>
@@ -723,7 +809,13 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         {mode === "sound" && (
           <>
             {error && <p role="alert">{error}</p>}
-            <SoundPairingPanel key={soundKey} role="listen" onBytes={(bytes) => void onSoundAnswer(bytes)} />
+            <SoundPairingPanel key={compactKey} role="listen" onBytes={(bytes) => void onCompactAnswer(bytes, "sound")} />
+          </>
+        )}
+        {mode === "light" && (
+          <>
+            {error && <p role="alert">{error}</p>}
+            <LightPairingPanel key={compactKey} role="read" onBytes={(bytes) => void onCompactAnswer(bytes, "light")} />
           </>
         )}
         <HexFallback hex={view.hex} />
@@ -767,17 +859,30 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     );
   }
 
-  if (view.k === "answer-sound") {
-    const { payload, hex, net } = view;
+  if (view.k === "answer-compact") {
+    const { payload, hex, net, via, bytes } = view;
     return (
       <div className="screen">
         <h1>{t("Отговор")}</h1>
-        <p>{t("Пусни отговора като звук близо до другото устройство. Чакаме връзката…")}</p>
-        <SoundPairingPanel
-          role="play"
-          bytes={view.bytes}
-          onShowQr={() => setView({ k: "answer-qr", payload, hex, net })}
-        />
+        {via === "light" ? (
+          <>
+            <p>{t("Покажи отговора като цветна анимация пред камерата на другото устройство. Чакаме връзката…")}</p>
+            <LightPairingPanel
+              role="show"
+              bytes={bytes}
+              onShowQr={() => setView({ k: "answer-qr", payload, hex, net, light: bytes })}
+            />
+          </>
+        ) : (
+          <>
+            <p>{t("Пусни отговора като звук близо до другото устройство. Чакаме връзката…")}</p>
+            <SoundPairingPanel
+              role="play"
+              bytes={bytes}
+              onShowQr={() => setView({ k: "answer-qr", payload, hex, net })}
+            />
+          </>
+        )}
         <p className="net-hint">{net}</p>
         <button className="secondary" onClick={reset}>
           {t("Отказ")}
@@ -797,6 +902,17 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         <HexFallback hex={view.hex} />
         <p>{t("Не може да сканира? Използвай кратък код:")}</p>
         <ShortCodeShare payload={view.payload} />
+        {view.light && (
+          <button
+            className="secondary"
+            onClick={() => {
+              const { payload, hex, net, light } = view;
+              if (light) setView({ k: "answer-compact", via: "light", bytes: light, payload, hex, net });
+            }}
+          >
+            {t("Покажи цветната анимация вместо това")}
+          </button>
+        )}
         <button className="secondary" onClick={reset}>
           {t("Отказ")}
         </button>

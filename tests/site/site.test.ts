@@ -483,9 +483,9 @@ describe("the language pages", () => {
   });
 });
 
-describe("the six ways to connect", () => {
+describe("the seven ways to connect", () => {
   const html = read("site/index.html");
-  it("sits between how and security, is in the menu, and has six cards with an animation each", () => {
+  it("sits between how and security, is in the menu, and has seven cards with an animation each", () => {
     const at = (id: string) => html.indexOf(`id="${id}"`);
     expect(at("how")).toBeGreaterThan(0);
     expect(at("connect")).toBeGreaterThan(at("how"));
@@ -493,12 +493,12 @@ describe("the six ways to connect", () => {
     expect(html).toMatch(/<section class="connect" id="connect" data-palette="\d+"/);
     expect(html.match(/href="#connect"/g)?.length).toBe(2); // top menu and full-screen menu
     const section = /<section class="connect"[\s\S]*?<\/section>/.exec(html)![0];
-    expect(section.match(/<article class="card way /g)?.length).toBe(6);
-    expect(section.match(/<svg class="art"/g)?.length).toBe(6);
+    expect(section.match(/<article class="card way /g)?.length).toBe(7);
+    expect(section.match(/<svg class="art"/g)?.length).toBe(7);
     expect(section).not.toMatch(/\sstyle=|<img|<canvas|<video/i);
   });
 
-  it("is built with six cards in every language, none left in Bulgarian", async () => {
+  it("is built with seven cards in every language, none left in Bulgarian", async () => {
     const dist = mkdtempSync(join(tmpdir(), "site-ways-"));
     writeFileSync(join(dist, "index.html"), "<!doctype html><title>app</title>");
     await assemble({ dist, site: join(root, "site"), releases: [], repo: "o/pub", closed: true, url: "" });
@@ -506,8 +506,8 @@ describe("the six ways to connect", () => {
       const page = readFileSync(join(dist, l.path, "index.html"), "utf8");
       const section = /<section class="connect"[\s\S]*?<\/section>/.exec(page)?.[0] ?? "";
       expect(section, l.code).not.toBe("");
-      expect(section.match(/<article class="card way /g)?.length, l.code).toBe(6);
-      for (const k of ["w1t", "w2t", "w3t", "w4t", "w5t", "w6t", "w1p", "w6p", "wayWhen", "connLead"]) {
+      expect(section.match(/<article class="card way /g)?.length, l.code).toBe(7);
+      for (const k of ["w1t", "w2t", "w3t", "w4t", "w5t", "w6t", "w7t", "w1p", "w6p", "w7p", "w7w", "wayWhen", "connLead"]) {
         const text = new RegExp(`data-i18n="${k}">([^<]+)<`).exec(section)?.[1];
         expect(text, `${l.code}.${k}`).toBeTruthy();
         if (l.code !== "bg") expect(/[\u0400-\u04FF]/.test(text!) && l.code !== "ru", `${l.code}.${k}`).toBe(false);
@@ -516,11 +516,31 @@ describe("the six ways to connect", () => {
     rmSync(dist, { recursive: true, force: true });
   });
 
+  it("has the QR + light card marked new, and it is in the page text of every language", () => {
+    const section = /<section class="connect"[\s\S]*?<\/section>/.exec(html)![0];
+    const card = /<article class="card way reveal" data-tilt data-way="light">[\s\S]*?<\/article>/.exec(section)![0];
+    expect(card).toContain('class="way-new"');
+    expect(card.match(/<rect class="lc c\d an"/g)?.length).toBe(16);
+    expect(html).not.toMatch(/Шест начина|шест начина|шестте/);
+    for (const code of ["en", "ru", "de", "es", "pt", "fr", "zh"]) {
+      const pack = code === "en" ? EN : packs[code];
+      for (const k of ["f3t", "f3p", "s2p", "connTitle", "connLead", "w7t", "w7p", "w7w"]) expect(pack[k], `${code}.${k}`).toBeTruthy();
+      expect(`${pack.f3t}${pack.connTitle}`, code).not.toMatch(/\b(six|sechs|seis|six|шесть|шест)\b|六/i);
+    }
+  });
+
   it("scenes pause off-screen and for people who ask for less motion", () => {
     const css = read("site/site.css");
     const js = read("site/site.js");
     expect(css).toMatch(/\.js \.way:not\(\.live\) \.art \* \{ animation-play-state: paused/);
     expect(js).toMatch(/classList\.toggle\("live", en\.isIntersecting\)/);
+    // the light card: slow cross-fades only (each cell takes seconds per cycle), no red anywhere in its cells
+    expect(css).toMatch(/@keyframes w-cell \{ 0%, 100% \{ opacity: [\d.]+; \} 50% \{ opacity: [\d.]+; \} \}/);
+    for (const m of css.matchAll(/\.art \.lc[^{]*\{[^}]*animation(?:-duration)?: (?:w-cell )?([\d.]+)s/g)) expect(Number(m[1]), m[0]).toBeGreaterThanOrEqual(6);
+    for (const m of css.matchAll(/\.art \.lc[^{]*\{ fill: (#[0-9a-f]{6})/gi)) {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+      expect(r, m[1]).toBeLessThan(Math.max(g, b)); // never a red-dominant colour
+    }
     // transform and opacity only: nothing in the scenes' keyframes moves layout
     for (const m of css.matchAll(/@keyframes (w-[\w-]+) \{(.*)\}/g)) expect(m[2], m[1]).not.toMatch(/\b(width|height|top|left|margin|stroke-dash\w*)\s*:/);
   });
