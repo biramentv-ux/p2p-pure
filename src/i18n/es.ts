@@ -531,4 +531,7 @@ export const ES_DICTIONARY: Record<string, string> = {
   "Кажи този код на другия човек — по телефона или лично. Не го пращай през същия канал, през който е поканата.": "Dile este código a la otra persona, por teléfono o en persona. No lo envíes por el mismo canal que la invitación.",
   "Кодът съвпадна. Свързвам…": "El código coincide. Conectando…",
   "Демо режимът използва сигналния сървър за стая с код. Сървърът вижда само номера на стаята и шифрован текст. Не съхранява нищо.": "El modo Demo usa el servidor de señalización para una sala con código. El servidor solo ve el número de la sala y texto cifrado. No guarda nada.",
+  "Свързване по Bluetooth": "Conectar por Bluetooth",
+  "Bluetooth": "Bluetooth",
+  "Поканата минава по Bluetooth между два телефона наблизо. Не се използва сървър. После сравнете думите за безопасност.": "La invitación pasa por Bluetooth entre dos teléfonos cercanos. No se usa ningún servidor. Después comparen las palabras de seguridad.",
 };

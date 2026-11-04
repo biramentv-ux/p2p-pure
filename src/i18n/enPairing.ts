@@ -35,4 +35,7 @@ export const EN_PAIRING: Record<string, string> = {
   "Кажи този код на другия човек — по телефона или лично. Не го пращай през същия канал, през който е поканата.": "Tell this code to the other person, by phone or in person. Do not send it through the same channel as the invitation.",
   "Кодът съвпадна. Свързвам…": "The code matched. Connecting…",
   "Демо режимът използва сигналния сървър за стая с код. Сървърът вижда само номера на стаята и шифрован текст. Не съхранява нищо.": "Demo mode uses the signalling server for a room with a code. The server sees only the room number and encrypted text. It stores nothing.",
+  "Свързване по Bluetooth": "Connect over Bluetooth",
+  "Bluetooth": "Bluetooth",
+  "Поканата минава по Bluetooth между два телефона наблизо. Не се използва сървър. После сравнете думите за безопасност.": "The invitation goes over Bluetooth between two phones nearby. No server is used. Then compare the safety words.",
 };

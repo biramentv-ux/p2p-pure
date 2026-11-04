@@ -1,6 +1,5 @@
-// NOTE: the official draft-irtf-cfrg-cpace CPACE-RISTR255-SHA512 test vectors could not be
-// fetched in the build environment (ietf.org egress denied), so they are NOT included
-// here and none were invented. Only structural/property tests below.
+// Official CPACE-RISTR255-SHA512 vectors: draft-irtf-cfrg-cpace-21, file testvectors.json
+// ("G_Coffee25519") in https://github.com/cfrg/draft-irtf-cfrg-cpace, plus property tests.
 import { describe, it, expect } from "vitest";
 import { ristretto255 } from "@noble/curves/ed25519.js";
 import { CpaceError, cpaceFinish, cpaceStart, generatorString, lvCat, calculateGenerator } from "../../src/p2p/cpace";
@@ -51,7 +50,7 @@ describe("cpace exchange", () => {
     expect(cpaceFinish(a.state, b.msg, "initiator")).not.toEqual(cpaceFinish(b.state, a.msg, "initiator"));
   });
   it("deterministic with injected randomness", () => {
-    const rnd = () => new Uint8Array(64).fill(7);
+    const rnd = () => new Uint8Array(32).fill(7);
     expect(cpaceStart(input("pw"), rnd).msg).toEqual(cpaceStart(input("pw"), rnd).msg);
   });
   it("rejects the identity point", () => {
@@ -87,3 +86,45 @@ function concatBytes(a: Uint8Array, b: Uint8Array) {
   o.set(b, a.length);
   return o;
 }
+
+const hex = (h: string) => Uint8Array.from(h.match(/../g)!.map((b) => parseInt(b, 16)));
+const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+
+describe("official test vectors (draft-irtf-cfrg-cpace-21, ristretto255 / SHA-512)", () => {
+  const tv = {
+    PRS: "50617373776F7264",
+    CI: "0B415F696E69746961746F720B425F726573706F6E646572",
+    sid: "7E4B4791D6A8EF019B936C79FB7F2C57",
+    g: "222B6B195FE84B1652BADB6F6A3AE3D24341E7306967F0B8115B40D5698C7E56",
+    ya: "DA3D23700A9E5699258AEF94DC060DFDA5EBB61F02A5EA77FAD53F4FF0976D08",
+    ADa: "414461",
+    Ya: "D6BAC480F2C386C394EFC7C47ADB9925DCD2630B64F240C50F8D0EEC482B9157",
+    yb: "D2316B454718C35362D83D69DF6320F38578ED5984651435E2949762D900B80D",
+    ADb: "414462",
+    Yb: "3EA7E0B19560D7C0B0F5734F63B955286DFA8232B5EBE63324E2D9E7433F7258",
+    K: "80B69A8A76457AB6A4D7F887A4BF6B55A2F80AC19C333F917A05FC9887C8B40F",
+    ISK_IR:
+      "B69EFFBF61B51D56401C0F65601ABE428DE8206FEAAF0E32198896DCAE7B35CD2B38950A39DFD5D4A79164614C2984F7DAA460B588C1E80C3FA2068AF7900447",
+  };
+  const base = { prs: hex(tv.PRS), ci: hex(tv.CI), sid: hex(tv.sid) };
+
+  it("calculate_generator matches g", () => {
+    expect(toHex(calculateGenerator(base.prs, base.ci, base.sid).toBytes())).toBe(tv.g);
+  });
+
+  it("Ya, Yb and ISK_IR match on both sides", () => {
+    const a = cpaceStart({ ...base, ad: hex(tv.ADa) }, () => hex(tv.ya));
+    const b = cpaceStart({ ...base, ad: hex(tv.ADb) }, () => hex(tv.yb));
+    expect(toHex(a.msg)).toBe(toHex(lvCat(hex(tv.Ya), hex(tv.ADa))));
+    expect(toHex(b.msg)).toBe(toHex(lvCat(hex(tv.Yb), hex(tv.ADb))));
+    expect(toHex(cpaceFinish(a.state, b.msg, "initiator"))).toBe(tv.ISK_IR);
+    expect(toHex(cpaceFinish(b.state, a.msg, "responder"))).toBe(tv.ISK_IR);
+  });
+
+  it("K = ya * Yb", () => {
+    const y = hex(tv.ya);
+    let n = 0n;
+    for (let i = y.length - 1; i >= 0; i--) n = (n << 8n) | BigInt(y[i]);
+    expect(toHex(ristretto255.Point.fromBytes(hex(tv.Yb)).multiply(n).toBytes())).toBe(tv.K);
+  });
+});
