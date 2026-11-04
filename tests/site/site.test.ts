@@ -498,7 +498,11 @@ describe("publishing", () => {
   });
   it("publishes to a public repository only when PAGES_PUBLISH_REPO is set, keeping hidden files", () => {
     expect(wf).toContain("vars.PAGES_PUBLISH_REPO != ''");
-    expect(wf).toContain("include-hidden-files: true");
+    // handed to the publish job through the cache: artifacts fill the account's storage quota
+    expect(wf).toMatch(/actions\/cache\/save@[0-9a-f]{40}/);
+    expect(wf).toMatch(/actions\/cache\/restore@[0-9a-f]{40}/);
+    expect(wf).toContain("fail-on-cache-miss: true");
+    expect(wf).not.toMatch(/upload-artifact|download-artifact/);
     expect(wf).toMatch(/if: vars\.PAGES_PUBLISH_REPO == ''/);
     expect(wf).not.toMatch(/RELEASES_TOKEN\s*\}\}\s*\n\s*run:[^\n]*echo/);
   });
