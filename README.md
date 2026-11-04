@@ -7,7 +7,7 @@
 **Личен, децентрализиран, шифрован от край до край.**
 **A private, decentralised, end-to-end encrypted messenger.**
 
-[![Tests](https://img.shields.io/badge/unit_tests-861_passing-1f6fc4?style=for-the-badge)](#-тестове)
+[![Tests](https://img.shields.io/badge/unit_tests-800%2B_passing-1f6fc4?style=for-the-badge)](#-тестове)
 [![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-13213a?style=for-the-badge)](#-тестове)
 [![Platforms](https://img.shields.io/badge/web_·_Windows_·_Linux_·_Android_·_iOS-PWA_+_Tauri_+_Electron_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
 [![Languages](https://img.shields.io/badge/app-BG_·_EN_·_RU_·_DE_·_ES_·_PT-d41b7f?style=for-the-badge)](#-език) [![Site](https://img.shields.io/badge/site-8_languages-0ea5e9?style=for-the-badge)](https://dyrakarmy.online/)
@@ -32,7 +32,7 @@
 > Съобщенията се шифроват на устройството и се пращат **директно** между хората през WebRTC.
 > Няма централен сървър, който пази съобщения, акаунти или телефонни номера.
 
-*Състояние към 4 ноември 2026: работеща PWA за уеб и телефон; програми за Windows (инсталатор, portable, winget) и Linux (.deb, .rpm, AppImage, Flatpak); подписан APK за Android; сайт с меню и сваляне на [dyrakarmy.online](https://dyrakarmy.online/) на 8 езика; интерфейс на 6 езика; демо стая с код от 5 знака и 3 думи (PAKE); тестове на всички нива. Изходният код е частен, изданията и сайтът са публични. iOS проектът и TestFlight workflow-ът са написани, но не са пускани с Apple акаунт.*
+*Състояние към 4 ноември 2026: работеща PWA за уеб и телефон; програми за Windows (инсталатор, portable, winget) и Linux (.deb, .rpm, AppImage, Flatpak); подписан APK за Android; сайт с меню и сваляне на [dyrakarmy.online](https://dyrakarmy.online/) на 8 езика; интерфейс на 6 езика; шест начина за първа връзка (QR, кратък код с PAKE, Bluetooth, QR + звук, запознаване чрез общ приятел, Telegram бот) — виж [docs/CONNECTING.md](docs/CONNECTING.md); тестове на всички нива. Изходният код е частен, изданията и сайтът са публични. iOS проектът и TestFlight workflow-ът са написани, но не са пускани с Apple акаунт.*
 
 ## ✨ Какво може
 
@@ -42,6 +42,9 @@
 | 🔑 | **Възстановяване с 12 думи** | BIP39. Записваш ги веднъж и ги ползваш на ново устройство. |
 | 📷 | **Контакт с QR или кратък код** | Подписана покана. Краткият код е 10 знака, важи 10 минути и работи веднъж. |
 | 🛰️ | **Демо стая с PAKE** *(обновено)* | Превключвател „Локален (QR) / Демо (стая)“. Отдалеч единият отваря стая и казва код от 5 знака и 3 думи, например `K7M2Q · lemon-rocket-bridge`. Думите не стигат до сървъра: от тях двете устройства правят общ ключ (CPace), а поканата върви шифрована. |
+| 🔊 | **QR + звук** *(ново)* | Единият показва QR, другият отговаря със звук (около 15 секунди), първият го слуша с микрофона. Без сървър ([docs/SOUND-PAIRING.md](docs/SOUND-PAIRING.md)). |
+| 🤝 | **Запознаване чрез общ приятел** *(ново)* | Общ контакт препраща подписаните покани по вече шифрованите връзки. Без сървър; новият контакт започва като непроверен ([docs/INTRODUCTIONS.md](docs/INTRODUCTIONS.md)). |
+| 📡 | **Bluetooth** *(ново)* | В приложението за Android и iOS: поканата минава по BLE между два телефона наблизо ([docs/BLUETOOTH.md](docs/BLUETOOTH.md)). |
 | 🔢 | **12 думи за проверка** | Двамата виждат едни и същи 12 думи (3 групи по 4), изчислени от публичните X25519 ключове (v3, 132 бита). Ако съвпадат, никой не стои по средата. |
 | 💬 | **Шифровани чатове** | Double Ratchet. Историята и контактите се пазят в IndexedDB, шифровани с AES-GCM. |
 | 📎 | **Файлове до 100 MB** *(ново)* | Всякакви файлове и видео, директно между устройствата. Получателят приема или отказва; файлове до 25 MB остават шифровани в историята. |
@@ -60,6 +63,21 @@
 | 🧾 | **Подписан SBOM** *(ново)* | Всяко издание има SHA-256 суми и подписан (Sigstore) списък на зависимостите ([docs/SUPPLY-CHAIN.md](docs/SUPPLY-CHAIN.md)). |
 | 🌍 | **6 езика в приложението** *(обновено)* | Български, English, Русский, Deutsch, Español, Português (Brasil). Сайтът е и на Français и 简体中文. |
 | ⚡ | **Разширение за Chrome** | `Ctrl+Shift+M` отваря месинджъра. |
+
+## 🔗 Начини за свързване
+
+Шест начина за първата връзка. Подробно сравнение: [docs/CONNECTING.md](docs/CONNECTING.md).
+
+| Начин | Къде | Сървър? | Повече |
+|---|---|---|---|
+| QR лице в лице | Заедно | Не | [CONNECTING.md](docs/CONNECTING.md) |
+| Кратък код (5 знака и 3 думи, PAKE) | Отдалеч | Да: вижда номера на стаята и шифрован текст | [DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md) |
+| Bluetooth | Заедно, само в приложението за Android и iOS | Не за поканата | [BLUETOOTH.md](docs/BLUETOOTH.md) |
+| QR + звук | Заедно | Не | [SOUND-PAIRING.md](docs/SOUND-PAIRING.md) |
+| Запознаване чрез общ приятел | Отдалеч, при общ контакт | Не | [INTRODUCTIONS.md](docs/INTRODUCTIONS.md) |
+| Telegram бот или копиране на поканата | Отдалеч | Telegram вижда поканата | [telegram-bot-guide.md](docs/telegram-bot-guide.md) |
+
+След всеки начин сравнете 12-те думи. Подписът пази от подправяне на поканата, но не от препращане при първия контакт.
 
 ## 🧭 Как работи
 
@@ -82,7 +100,7 @@ flowchart LR
 <img src="docs/assets/tutorial-far-away.gif" alt="Анимация в 9 стъпки: профил, избор на режим, покана, демо стая, 12 думи за проверка, чат, разговор, група и устройства" width="640">
 
 1. **Профил.** Всеки създава профил на своя телефон с passkey или парола и записва 12-те думи.
-2. **Режим.** Избират „Локален (QR)“, ако са заедно, или „Демо (стая)“, ако са далеч.
+2. **Режим.** Избират „Локален (QR)“, ако са заедно, или „Демо (стая)“, ако са далеч. Има и други начини: Bluetooth, QR + звук, общ приятел ([docs/CONNECTING.md](docs/CONNECTING.md)).
 3. **Покана.** Ани натиска „Покажи моята покана“. Петър сканира QR кода или въвежда краткия код.
 4. **Демо стая.** От разстояние: Ани отваря стая и казва на Петър кода (5 знака и 3 думи) по телефона, Петър го въвежда и натиска „Присъедини се“.
 5. **Думи за проверка.** Сравняват 12-те думи на глас или по видео и натискат „Думите съвпадат“.
@@ -250,8 +268,8 @@ bash install.sh              # или: bash install.sh --appimage  (само з�
 - **Изтриването на чат** стига до другия само ако е онлайн.
 - **Групите:** поканата на чакащ кандидат не се запазва при презареждане; член, премахнат докато е офлайн, научава при следващото свързване.
 - **Кодът за сигурност (v3)** е 12 думи = 132 бита (преди: 6 думи, 66 бита). Вече проверените контакти остават проверени; новите сравнения ползват 12 думи.
-- **В разработка: Bluetooth сдвояване** за Android и iOS (собствен Capacitor плъгин, [docs/BLUETOOTH.md](docs/BLUETOOTH.md)). Кодът е в репото, но още не е включен в екрана „Свържи се“ и не е компилиран за телефон.
-- **CPace (PAKE) още не е сверен** с официалните тестови вектори на спецификацията. Кодът за сигурност (12-те думи) остава основната защита: сравнявайте го винаги.
+- **Bluetooth сдвояване** (Android и iOS, собствен Capacitor плъгин, [docs/BLUETOOTH.md](docs/BLUETOOTH.md)) има бутон в екрана „Свържи се“ само в приложението. Не е изпробван на реални телефони; ръчният тестов план е в документа.
+- **CPace (PAKE)** е сверен с официалните тестови вектори на draft-irtf-cfrg-cpace-21, но реализацията не е одитирана. Кодът за сигурност (12-те думи) остава основната защита: сравнявайте го винаги, при всеки начин на свързване.
 - **Криптографията не е одитирана** от независим екип. Double Ratchet е собствена реализация по публичната спецификация на Signal, не официалната `libsignal`.
 
 ## 🗂️ Структура
@@ -277,14 +295,14 @@ site/               сайтът dyrakarmy.online (8 езика), месиндж
 worker/             Cloudflare Worker: покани, демо стаи (Durable Object), Telegram
 scripts/            телефон (phone.mjs), Windows, winget, Linux (install.sh), мобилни файлове
 tests/              unit (Vitest), e2e и a11y (Playwright + Chromium), Windows (WebView2), Linux (Electron)
-docs/               ръководства: Windows, Linux, демо сигнализация, групи, Telegram бот
+docs/               ръководства: начини за свързване, Windows, Linux, демо сигнализация, Bluetooth, групи, Telegram бот
 ```
 
 ## 🧪 Тестове
 
 | Команда | Какво проверява |
 |---|---|
-| `npm test` | Unit тестове: 78 файла, 861 теста |
+| `npm test` | Unit тестове: 800+ теста |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Двама души в браузър: QR, 12 думи за проверка, шифрован обмен, replay защита |
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
@@ -337,7 +355,7 @@ docs/               ръководства: Windows, Linux, демо сигна�
 > Messages are encrypted on the device and sent **directly** between people over WebRTC.
 > There is no central server that stores messages, accounts or phone numbers.
 
-*Status as of 4 November 2026: a working PWA for web and phone; apps for Windows (installer, portable, winget) and Linux (.deb, .rpm, AppImage, Flatpak); a signed Android APK; a website with menu and downloads at [dyrakarmy.online](https://dyrakarmy.online/en/) in 8 languages; an interface in 6 languages; demo rooms with a 5-character, 3-word code (PAKE); tests at every level. The source code is private; releases and the site are public. The iOS project and TestFlight workflow are written but have not been run with an Apple account.*
+*Status as of 4 November 2026: a working PWA for web and phone; apps for Windows (installer, portable, winget) and Linux (.deb, .rpm, AppImage, Flatpak); a signed Android APK; a website with menu and downloads at [dyrakarmy.online](https://dyrakarmy.online/en/) in 8 languages; an interface in 6 languages; six ways to make the first connection (QR, short code with PAKE, Bluetooth, QR + sound, introduction by a mutual friend, Telegram bot), see [docs/CONNECTING.md](docs/CONNECTING.md); tests at every level. The source code is private; releases and the site are public. The iOS project and TestFlight workflow are written but have not been run with an Apple account.*
 
 ## ✨ What it does
 
@@ -347,6 +365,9 @@ docs/               ръководства: Windows, Linux, демо сигна�
 | 🔑 | **Recovery with 12 words** | BIP39. Write them down once and use them on a new device. |
 | 📷 | **Contact by QR or short code** | A signed invitation. The short code is 10 characters, valid for 10 minutes, single use. |
 | 🛰️ | **Demo room with PAKE** *(updated)* | A "Local (QR) / Demo (room)" switch. From afar, one person opens a room and tells a code of 5 characters and 3 words, e.g. `K7M2Q · lemon-rocket-bridge`. The words never reach the server: the two devices turn them into a shared key (CPace), and the invitation travels encrypted. |
+| 🔊 | **QR + sound** *(new)* | One side shows a QR, the other answers with sound (about 15 seconds), the first listens with the microphone. No server ([docs/SOUND-PAIRING.md](docs/SOUND-PAIRING.md)). |
+| 🤝 | **Introduction by a mutual friend** *(new)* | A shared contact relays the signed invitations over the existing encrypted links. No server; the new contact starts as not verified ([docs/INTRODUCTIONS.md](docs/INTRODUCTIONS.md)). |
+| 📡 | **Bluetooth** *(new)* | In the Android and iOS app: the invitation travels over BLE between two phones nearby ([docs/BLUETOOTH.md](docs/BLUETOOTH.md)). |
 | 🔢 | **12 words to verify** | Both sides see the same 12 words (3 groups of 4), computed from both public X25519 keys (v3, 132 bits). If they match, nobody sits in between. |
 | 💬 | **Encrypted chats** | Double Ratchet. History and contacts are kept in IndexedDB, encrypted with AES-GCM. |
 | 📎 | **Files up to 100 MB** *(new)* | Any file or video, straight between devices. The recipient accepts or declines; files up to 25 MB stay encrypted in the history. |
@@ -365,6 +386,21 @@ docs/               ръководства: Windows, Linux, демо сигна�
 | 🧾 | **Signed SBOM** *(new)* | Every release has SHA-256 checksums and a signed (Sigstore) dependency list ([docs/SUPPLY-CHAIN.md](docs/SUPPLY-CHAIN.md)). |
 | 🌍 | **6 languages in the app** *(updated)* | Български, English, Русский, Deutsch, Español, Português (Brasil). The site also speaks Français and 简体中文. |
 | ⚡ | **Chrome extension** | `Ctrl+Shift+M` opens the messenger. |
+
+## 🔗 Ways to connect
+
+Six ways to make the first connection. Full comparison: [docs/CONNECTING.md](docs/CONNECTING.md).
+
+| Way | Where | Server? | More |
+|---|---|---|---|
+| QR, face to face | In person | No | [CONNECTING.md](docs/CONNECTING.md) |
+| Short code (5 characters and 3 words, PAKE) | Remote | Yes: it sees the room id and ciphertext | [DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md) |
+| Bluetooth | In person, Android and iOS app only | None for the invitation | [BLUETOOTH.md](docs/BLUETOOTH.md) |
+| QR + sound | In person | No | [SOUND-PAIRING.md](docs/SOUND-PAIRING.md) |
+| Introduction by a mutual friend | Remote, with a shared contact | No | [INTRODUCTIONS.md](docs/INTRODUCTIONS.md) |
+| Telegram bot or copying the invitation | Remote | Telegram sees the invitation | [telegram-bot-guide.md](docs/telegram-bot-guide.md) (Bulgarian) |
+
+Compare the 12 words after any of them. A signature stops an invitation from being forged, not from being relayed at first contact.
 
 ## 🧭 How it works
 
@@ -387,7 +423,7 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 <img src="docs/assets/tutorial-far-away.gif" alt="Nine-step animation: profile, mode, invitation, demo room, 12 verification words, chat, call, group and devices (labels in Bulgarian)" width="640">
 
 1. **Profile.** Each person creates a profile on their phone with a passkey or a password and writes down the 12 words.
-2. **Mode.** They pick "Local (QR)" when together, or "Demo (room)" when far apart.
+2. **Mode.** They pick "Local (QR)" when together, or "Demo (room)" when far apart. There are other ways too: Bluetooth, QR + sound, a mutual friend ([docs/CONNECTING.md](docs/CONNECTING.md)).
 3. **Invitation.** Ani taps "Show my invitation". Petar scans the QR code or types the short code.
 4. **Demo room.** From a distance: Ani opens a room and tells Petar the code (5 characters and 3 words) over the phone; Petar types it and taps "Join".
 5. **Verification words.** They compare the 12 words out loud or on video and tap "The words match".
@@ -555,8 +591,8 @@ The extension collects no data; it only opens the app.
 - **Deleting a chat** reaches the other person only if they are online.
 - **Groups:** a pending candidate's invitation is not kept across a reload; a member removed while offline learns about it on the next connection.
 - **The safety code (v3)** is 12 words = 132 bits (previously 6 words, 66 bits). Contacts already verified stay verified; new comparisons use 12 words.
-- **In progress: Bluetooth pairing** for Android and iOS (own Capacitor plugin, [docs/BLUETOOTH.md](docs/BLUETOOTH.md)). The code is in the repository but not yet wired into the "Connect" screen and not yet compiled for a phone.
-- **CPace (PAKE) is not yet checked** against the specification's official test vectors. The safety code (the 12 words) remains the main protection: always compare it.
+- **Bluetooth pairing** (Android and iOS, own Capacitor plugin, [docs/BLUETOOTH.md](docs/BLUETOOTH.md)) has a button on the "Connect" screen only in the native app. It has not been tried on real phones; the manual test plan is in the document.
+- **CPace (PAKE)** is checked against the official test vectors of draft-irtf-cfrg-cpace-21, but the implementation is not audited. The safety code (the 12 words) remains the main protection: always compare it, whichever way you connected.
 - **The cryptography is not independently audited.** The Double Ratchet is our own implementation of Signal's public specification, not the official `libsignal`.
 
 ## 🗂️ Structure
@@ -582,14 +618,14 @@ site/               the dyrakarmy.online website (8 languages); the messenger li
 worker/             Cloudflare Worker: invitations, demo rooms (Durable Object), Telegram
 scripts/            phone (phone.mjs), Windows, winget, Linux (install.sh), mobile files
 tests/              unit (Vitest), e2e and a11y (Playwright + Chromium), Windows (WebView2), Linux (Electron)
-docs/               guides: Windows, Linux, demo signalling, groups, Telegram bot
+docs/               guides: ways to connect, Windows, Linux, demo signalling, Bluetooth, groups, Telegram bot
 ```
 
 ## 🧪 Tests
 
 | Command | What it checks |
 |---|---|
-| `npm test` | Unit tests: 78 files, 861 tests |
+| `npm test` | Unit tests: 800+ tests |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Two people in a browser: QR, 12 verification words, encrypted exchange, replay protection |
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
