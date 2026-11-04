@@ -1,4 +1,5 @@
 import { EN, BG_EXTRA } from "./i18n.js";
+import { DEFAULT_LOCALE, localeOf } from "./locales.js";
 import { RELEASES_URL, detectOS, formatSize } from "./downloads.js";
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -13,46 +14,36 @@ const store = {
 };
 
 /* ------------------------------------------------------------------ language */
-// Bulgarian is the text already in the page; read it once so it can be put back.
-const bg = new Map();
-for (const el of $$("[data-i18n]")) bg.set(el, el.textContent);
-for (const el of $$("[data-i18n-html]")) bg.set(el, el.innerHTML);
-for (const el of $$("[data-i18n-aria]")) bg.set(el, el.getAttribute("aria-label"));
-
-// Each language is its own page ("/" Bulgarian, "/en/" English, built by scripts/site/build.mjs), so
-// search engines can find both. The page says which one it is; the switch is a link to the other.
-const lang = root.lang === "en" ? "en" : "bg";
+// Each language is its own page, written at build time (scripts/site/build.mjs): "/" Bulgarian,
+// "/en/", "/es/" … (site/locales.js). The page already carries its texts; read them once so the
+// download button can go back to its own words. Only the texts made while the page runs (button
+// labels, the demo, "copied") come from the language's pack, loaded for this page alone.
+const own = new Map();
+for (const el of $$("[data-i18n]")) own.set(el, el.textContent);
+const lang = localeOf(root.dataset.lang) ? root.dataset.lang : DEFAULT_LOCALE;
+const pack = lang === "bg" ? BG_EXTRA : lang === "en" ? EN : (await import(`./i18n/${lang}.js`)).default;
 let releases = {};
 
-const t = (key) => (lang === "en" ? EN[key] : BG_EXTRA[key]) ?? "";
+const t = (key) => pack[key] ?? EN[key] ?? "";
 
 function applyLang() {
-  root.lang = lang;
-  document.title = t("title");
-  for (const el of $$("[data-i18n]")) {
-    const key = el.dataset.i18n;
-    el.textContent = lang === "en" ? EN[key] ?? bg.get(el) : bg.get(el);
-  }
-  for (const el of $$("[data-i18n-html]")) {
-    const key = el.dataset.i18nHtml;
-    el.innerHTML = lang === "en" ? EN[key] ?? bg.get(el) : bg.get(el);
-  }
-  for (const el of $$("[data-i18n-aria]")) {
-    const key = el.dataset.i18nAria;
-    el.setAttribute("aria-label", lang === "en" ? EN[key] ?? bg.get(el) : bg.get(el));
-  }
-  const btn = $("[data-lang-toggle]");
-  btn.textContent = lang === "en" ? "БГ" : "EN";
-  btn.setAttribute("aria-label", lang === "en" ? "Превключи на български" : "Switch to English");
   fillDownloads();
   restartDemo();
   markMarquee();
   placeInk();
 }
-$("[data-lang-toggle]").addEventListener("click", () => {
+
+const langMenu = $("[data-langs-menu]");
+for (const a of $$("[data-lang-list] a")) {
   // remembered, so the next visit opens in this language (boot.js); the link itself does the switch
-  store.set("site-lang", lang === "en" ? "bg" : "en");
-});
+  a.addEventListener("click", () => store.set("site-lang", a.dataset.code || a.getAttribute("hreflang")));
+}
+if (langMenu) {
+  document.addEventListener("click", (e) => { if (langMenu.open && !langMenu.contains(e.target)) langMenu.open = false; });
+  langMenu.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && langMenu.open) { langMenu.open = false; $("summary", langMenu).focus(); }
+  });
+}
 
 /* ------------------------------------------------------------------ theme */
 $("[data-theme-toggle]").addEventListener("click", () => {
@@ -202,7 +193,7 @@ let demoVisible = true;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const scramble = (n) => Array.from({ length: n }, () => GLYPHS[(Math.random() * GLYPHS.length) | 0]).join("");
 
-function msgs() { return lang === "en" ? EN.demoMsgs : BG_EXTRA.demoMsgs; }
+function msgs() { return t("demoMsgs"); }
 
 async function typeInto(el, text, run) {
   el.textContent = "";
@@ -317,7 +308,7 @@ function fillDownloads() {
 }
 
 function setPrimary() {
-  const name = (lang === "en" ? EN : BG_EXTRA).osNames[os] || "";
+  const name = t("osNames")[os] || "";
   const direct = { windows: "windowsSetup", linux: "deb", android: "apk" }[os];
   const hit = direct && releases[direct];
   for (const a of $$("[data-primary-download]")) {
@@ -333,7 +324,7 @@ function setPrimary() {
       label.textContent = t("ctaWebFor");
     } else {
       a.href = "#download";
-      label.textContent = lang === "en" ? EN.ctaDownload : bg.get(label) ?? label.textContent;
+      label.textContent = own.get(label) ?? label.textContent;
     }
     a.dataset.os = os;
   }
@@ -341,7 +332,7 @@ function setPrimary() {
   if (note && hit) {
     note.textContent = `${hit.name} · ${formatSize(hit.size)}${hit.preview ? ` · ${t("badgePreview")}` : ""}`;
   } else if (note) {
-    note.textContent = lang === "en" ? EN.ctaNote : bg.get(note);
+    note.textContent = own.get(note) ?? note.textContent;
   }
 }
 

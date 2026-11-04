@@ -5,7 +5,7 @@ export const EN = {
   ogTitle: "P2P Messenger · Your letters. Sealed.",
   ogDescription: "No server, no phone number, no cloud. Direct and end-to-end encrypted.",
   skip: "Skip to content",
-  navLabel: "Main menu", menuLabel: "Menu", themeLabel: "Light or dark theme", footLabel: "Links",
+  navLabel: "Main menu", menuLabel: "Menu", langLabel: "Language", themeLabel: "Light or dark theme", footLabel: "Links",
   navFeatures: "Features", navHow: "How it works", navSecurity: "Security", navDownload: "Download", navFaq: "FAQ",
   openApp: "Open in browser", menuQuick: "Straight to the file for", osWeb: "Browser",
   heroKicker: "No server · no phone number · no cloud",
