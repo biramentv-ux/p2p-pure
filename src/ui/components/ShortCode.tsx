@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { fetchInvitation, formatShortCode, shareInvitation, ShortInviteError } from "../../p2p/shortInvite";
+import { formatPairingCode, parsePairingCode, type PairingCode } from "../../p2p/pairingCode";
+import { copyWithAutoClear } from "../clipboard";
 import { useI18n } from "../../i18n";
 
 /** Uploads a signed invitation and shows the short code to read aloud or type on the other device. */
@@ -83,5 +85,81 @@ export function ShortCodeEnter({ onPayload }: { onPayload: (payload: string) => 
         {busy ? t("Проверявам…") : t("Провери кода")}
       </button>
     </div>
+  );
+}
+
+/**
+ * Demo room pairing code: the room id the Worker issued and the three words made on this
+ * device. Shown big, grouped, and copyable. The words never go to the server.
+ */
+export function PairingCodeShare({ code }: { code: PairingCode }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const full = formatPairingCode(code);
+  async function copy() {
+    try {
+      await copyWithAutoClear(full);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <div>
+      <p className="short-code pairing-code" aria-label={t("Код за сдвояване: {code}", { code: full })}>
+        <span className="pairing-room">{code.room}</span>
+        <span aria-hidden="true"> · </span>
+        <span className="pairing-words" style={{ letterSpacing: "0.05em" }}>
+          {code.words.join("-")}
+        </span>
+      </p>
+      <button type="button" className="secondary" onClick={() => void copy()}>
+        {copied ? t("Копирано") : t("Копирай кода")}
+      </button>
+    </div>
+  );
+}
+
+/** One field for the whole pairing code (room id and three words), parsed locally. */
+export function PairingCodeEnter({ onSubmit }: { onSubmit: (code: PairingCode) => void }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState("");
+  const [tried, setTried] = useState(false);
+  const helpId = useId();
+  const errorId = useId();
+  const parsed = parsePairingCode(value);
+  const showError = tried && value.trim() !== "" && !parsed;
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        setTried(true);
+        if (parsed) onSubmit(parsed);
+      }}
+    >
+      <label>
+        {t("Код за сдвояване")}
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="K7M2Q · lemon-rocket-bridge"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          maxLength={80}
+          aria-describedby={showError ? `${helpId} ${errorId}` : helpId}
+          aria-invalid={showError}
+        />
+      </label>
+      <p id={helpId}>{t("Въведи петте знака и трите думи. Стигат първите 4 букви от всяка дума.")}</p>
+      {showError && (
+        <p id={errorId} role="alert">
+          {t("Кодът не е разпознат. Провери петте знака и трите думи.")}
+        </p>
+      )}
+      <button type="submit" disabled={value.trim() === ""}>
+        {t("Присъедини се")}
+      </button>
+    </form>
   );
 }

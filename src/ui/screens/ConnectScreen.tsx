@@ -21,11 +21,11 @@ import { identityX25519Public } from "../../identity/x25519";
 import { useI18n } from "../../i18n";
 import { QrCode } from "../components/QrCode";
 import { QrScanner } from "../components/QrScanner";
-import { ShortCodeEnter, ShortCodeShare } from "../components/ShortCode";
+import { PairingCodeEnter, PairingCodeShare, ShortCodeEnter, ShortCodeShare } from "../components/ShortCode";
 import { OfflineSignalingProvider } from "../../signaling/offlineProvider";
-import { WebSocketSignalingProvider } from "../../signaling/websocketProvider";
+import { PakeError, PakeSignalingProvider } from "../../signaling/pakeProvider";
 import { getSignalMode, setSignalMode, type SignalMode } from "../../signaling/mode";
-import { formatShortCode, normalizeShortCode } from "../../p2p/shortInvite";
+import type { PairingCode } from "../../p2p/pairingCode";
 import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
 
 export interface ConnectedResult {
@@ -47,11 +47,11 @@ const RESPONDER_TIMEOUT_MS = 5 * 60_000;
 
 type View =
   | { k: "choose" }
-  | { k: "busy"; label: string }
+  | { k: "busy"; label: string; cancellable?: boolean }
   | { k: "offer-qr"; payload: string; hex: string; net: string }
   | { k: "scan-answer" }
   | { k: "scan-offer" }
-  | { k: "demo-wait"; code: string; net: string }
+  | { k: "demo-wait"; code: PairingCode; net: string; matched: boolean }
   | { k: "demo-join" }
   | { k: "answer-qr"; payload: string; hex: string; net: string }
   | {
@@ -111,10 +111,16 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   // Offline signaling: generated offers and answers come back through the provider.
   const providerRef = useRef<OfflineSignalingProvider | null>(null);
   const pendingHexRef = useRef<string>("");
-  // Demo signalling: an open room connection, and the mode the user picked (persisted).
-  const wsRef = useRef<WebSocketSignalingProvider | null>(null);
+  // Demo signalling: an open PAKE room connection, and the mode the user picked (persisted).
+  const wsRef = useRef<PakeSignalingProvider | null>(null);
   const [mode, setMode] = useState<SignalMode>(() => getSignalMode());
-  useEffect(() => () => wsRef.current?.disconnect(), []);
+  useEffect(
+    () => () => {
+      wsRef.current?.disconnect();
+      wsRef.current = null;
+    },
+    [],
+  );
   // A full book (99) is said before a connection is started; a saved contact can still reconnect.
   const [full, setFull] = useState(false);
   useEffect(() => {
@@ -166,7 +172,9 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     clearAll();
     mySdpRef.current = null;
     let message: string;
-    if (err instanceof PeerLinkError && mySdp) {
+    if (err instanceof PakeError) {
+      message = pakeErrorMessage(err);
+    } else if (err instanceof PeerLinkError && mySdp) {
       // Timeouts and closed channels: say what it usually means and what to try next.
       const summary = summarizeCandidates(mySdp);
       message =
@@ -185,6 +193,18 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     }
     setError(message);
     setView({ k: "choose" });
+  }
+
+  /** Demo room errors, in words a person can act on. The room is never retried. */
+  function pakeErrorMessage(err: PakeError): string {
+    switch (err.code) {
+      case "wrong_code":
+        return t("Кодът не съвпада. Започнете отначало с нов код.");
+      case "timeout":
+        return t("Времето изтече. Започнете отначало.");
+      default:
+        return t("Връзката през сървъра прекъсна. Опитайте пак.");
+    }
   }
 
   function reset() {
@@ -277,32 +297,59 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     setView(mode === "demo" ? { k: "demo-join" } : { k: "scan-offer" });
   }
 
-  /** Demo: opens a room, shows its code, and sends the offer once the other device has joined. */
+  /**
+   * Demo: opens a PAKE room and shows its code (room id + three words). The offer is sent only
+   * after both sides proved they know the words, so the server never sees SDP or did:key.
+   */
   async function startDemoOffer(offer: Invitation, payload: string) {
-    const ws = new WebSocketSignalingProvider();
-    wsRef.current = ws;
-    ws.onAnswerReceived((p) => {
+    const pake = new PakeSignalingProvider();
+    wsRef.current = pake;
+    pake.onAnswerReceived((p) => {
       if (p.invitation) void onAnswerScanned(p.invitation);
     });
-    const code = await ws.openRoom();
-    setView({ k: "demo-wait", code, net: t(describeReachability(summarizeCandidates(mySdpRef.current ?? ""))) });
-    await ws.waitForPeer();
-    await ws.sendOffer(toSignalingPayload(offer, payload));
+    pake.onError((e) => {
+      if (wsRef.current === pake) fail(e);
+    });
+    try {
+      const code = await pake.openRoom();
+      setView({
+        k: "demo-wait",
+        code,
+        net: t(describeReachability(summarizeCandidates(mySdpRef.current ?? ""))),
+        matched: false,
+      });
+      await pake.waitForPeer();
+      setView((v) => (v.k === "demo-wait" ? { ...v, matched: true } : v));
+      await pake.sendOffer(toSignalingPayload(offer, payload));
+    } catch (err) {
+      // Cancelled by the person (reset or leaving the screen): nothing to report.
+      if (wsRef.current !== pake) return;
+      throw err;
+    }
   }
 
-  /** Demo: joins the room whose code the user typed, and waits for the offer. */
-  async function startDemoJoin(code: string) {
+  /** Demo: joins the room named in the typed code, runs the PAKE, then waits for the offer. */
+  async function startDemoJoin(code: PairingCode) {
     setError(null);
     setView({ k: "busy", label: t("Свързвам се със стаята…") });
+    const pake = new PakeSignalingProvider();
+    wsRef.current = pake;
     try {
-      const ws = new WebSocketSignalingProvider();
-      wsRef.current = ws;
-      ws.onOfferReceived((p) => {
+      pake.onOfferReceived((p) => {
         if (p.invitation) void onOfferScanned(p.invitation);
       });
-      await ws.joinRoom(code);
-      setView({ k: "busy", label: t("Чакам поканата от другия човек…") });
+      pake.onError((e) => {
+        if (wsRef.current === pake) fail(e);
+      });
+      await pake.joinRoom(code);
+      setView({ k: "busy", label: t("Чакам другия човек…"), cancellable: true });
+      await pake.waitForPeer();
+      // The offer may already be in hand; then onOfferScanned owns the view.
+      if (!busyRef.current) {
+        setView({ k: "busy", label: t("Кодът съвпадна. Чакам поканата от другия човек…"), cancellable: true });
+      }
     } catch (err) {
+      if (wsRef.current !== pake) return;
       fail(err);
     }
   }
@@ -390,8 +437,14 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       <div className="screen">
         <h1>{t("Стая")}</h1>
         <p>{t("Другият човек въвежда този код в „Сканирай чужда покана“, режим Демо.")}</p>
-        <p className="short-code" aria-label={t("Кратък код")}>
-          {formatShortCode(view.code)}
+        <PairingCodeShare code={view.code} />
+        <p>
+          {t(
+            "Кажи този код на другия човек — по телефона или лично. Не го пращай през същия канал, през който е поканата.",
+          )}
+        </p>
+        <p role="status" aria-live="polite">
+          {view.matched ? t("Кодът съвпадна. Свързвам…") : t("Чакам другия човек…")}
         </p>
         <p className="net-hint">{view.net}</p>
         <button className="secondary" onClick={reset}>
@@ -438,7 +491,9 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
         </div>
         <p>
           {mode === "demo"
-            ? t("Демо режимът използва сигналния сървър за стая с кратък код. Сървърът не съхранява нищо.")
+            ? t(
+                "Демо режимът използва сигналния сървър за стая с код. Сървърът вижда само номера на стаята и шифрован текст. Не съхранява нищо.",
+              )
             : t("Локалният режим не прави мрежови заявки.")}
         </p>
         <p>
@@ -461,7 +516,14 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   if (view.k === "busy") {
     return (
       <div className="screen">
-        <p>{view.label}</p>
+        <p role="status" aria-live="polite">
+          {view.label}
+        </p>
+        {view.cancellable && (
+          <button className="secondary" onClick={reset}>
+            {t("Отказ")}
+          </button>
+        )}
       </div>
     );
   }
@@ -563,28 +625,13 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   );
 }
 
-/** Demo: the other device's room code, typed in. */
-function DemoCodeEntry({ onSubmit, onCancel }: { onSubmit: (code: string) => void; onCancel: () => void }) {
+/** Demo: the other device's pairing code (room id and three words), typed in. */
+function DemoCodeEntry({ onSubmit, onCancel }: { onSubmit: (code: PairingCode) => void; onCancel: () => void }) {
   const { t } = useI18n();
-  const [value, setValue] = useState("");
-  const code = normalizeShortCode(value);
   return (
     <div className="screen">
       <h1>{t("Въведи кода на стаята")}</h1>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (code) onSubmit(code);
-        }}
-      >
-        <label>
-          {t("Кратък код")}
-          <input value={value} onChange={(e) => setValue(e.target.value)} autoComplete="off" spellCheck={false} />
-        </label>
-        <button type="submit" disabled={!code}>
-          {t("Присъедини се")}
-        </button>
-      </form>
+      <PairingCodeEnter onSubmit={onSubmit} />
       <button className="secondary" onClick={onCancel}>
         {t("Отказ")}
       </button>

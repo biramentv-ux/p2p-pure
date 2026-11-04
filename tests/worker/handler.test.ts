@@ -171,17 +171,43 @@ describe("demo WebSocket signaling routes", () => {
     SIGNAL_ROOM: { idFromName: () => "id", get: () => ({ fetch: async () => new Response(null) }) },
   } as Env;
 
-  it("POST /ws/rooms returns a short code and the room lifetime", async () => {
+  it("POST /ws/rooms returns a 5-character room id and the room lifetime", async () => {
     const res = await worker.fetch(new Request("https://sig.test/ws/rooms", { method: "POST" }), roomEnv);
     expect(res.status).toBe(201);
     const body = (await res.json()) as { code: string; ttlSec: number };
-    expect(body.code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{10}$/);
+    expect(body.code).toMatch(/^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{5}$/);
     expect(body.ttlSec).toBe(600);
   });
 
   it("GET /ws/rooms/:code without an upgrade header is refused", async () => {
     const res = await worker.fetch(new Request("https://sig.test/ws/rooms/ABCDEFGHJK"), roomEnv);
     expect(res.status).toBe(426);
+  });
+
+  it("GET /ws/rooms/:code accepts 5-character ids and legacy 10-character ids", async () => {
+    const seen: string[] = [];
+    const e = {
+      ...env,
+      SIGNAL_ROOM: {
+        idFromName: (name: string) => {
+          seen.push(name);
+          return name;
+        },
+        get: () => ({ fetch: async () => new Response(null, { status: 204 }) }),
+      },
+    } as unknown as Env;
+    for (const code of ["k7m2q", "K7M2Q", "ABCDE-FGHJK"]) {
+      const req = new Request(`https://sig.test/ws/rooms/${code}`, { headers: { upgrade: "websocket" } });
+      expect((await worker.fetch(req, e)).status).toBe(204);
+    }
+    expect(seen).toEqual(["K7M2Q", "K7M2Q", "ABCDEFGHJK"]);
+  });
+
+  it("GET /ws/rooms/:code refuses other lengths and characters", async () => {
+    for (const code of ["K7M2", "K7M2QX", "K7M20", "ABCDEFGHJ", "ABCDEFGHJKM"]) {
+      const req = new Request(`https://sig.test/ws/rooms/${code}`, { headers: { upgrade: "websocket" } });
+      expect((await worker.fetch(req, roomEnv)).status).toBe(400);
+    }
   });
 
   it("GET /ws/rooms/:code with a malformed code is refused", async () => {

@@ -19,7 +19,9 @@ import {
   isValidInvitation,
   newDeliveryToken,
   newInviteCode,
+  newRoomId,
   normalizeInviteCode,
+  normalizeRoomId,
   parseCommand,
   parseDeleteCallback,
 } from "./logic";
@@ -285,17 +287,19 @@ export default {
       return json({ code, expiresInSec: INVITE_TTL_SEC }, 201);
     }
 
-    // Demo WebSocket signaling. POST /ws/rooms makes a code; GET /ws/rooms/:code upgrades to
-    // the room, where the first peer is the offerer and the second the answerer.
+    // Demo WebSocket signaling. POST /ws/rooms makes a 5-character room id; GET /ws/rooms/:code
+    // upgrades to the room, where the first peer is the offerer and the second the answerer.
+    // New clients run a PAKE inside the room, so the frames are ciphertext. Legacy clients use
+    // 10-character ids and plaintext frames; both id lengths are accepted.
     if (request.method === "POST" && url.pathname === "/ws/rooms") {
       if (await overInviteLimit(request, env)) return json({ error: "rate_limited" }, 429);
       if (!env.SIGNAL_ROOM) return json({ error: "unavailable" }, 503);
-      return json({ code: newInviteCode(), ttlSec: Math.round(ROOM_TTL_MS / 1000) }, 201);
+      return json({ code: newRoomId(), ttlSec: Math.round(ROOM_TTL_MS / 1000) }, 201);
     }
     const roomMatch = /^\/ws\/rooms\/([^/]+)$/.exec(url.pathname);
     if (request.method === "GET" && roomMatch) {
       if (request.headers.get("upgrade") !== "websocket") return json({ error: "expected_websocket" }, 426);
-      const code = normalizeInviteCode(safeDecode(roomMatch[1]) ?? "");
+      const code = normalizeRoomId(safeDecode(roomMatch[1]) ?? "");
       if (!code) return json({ error: "invalid_code" }, 400);
       if (!env.SIGNAL_ROOM) return json({ error: "unavailable" }, 503);
       const stub = env.SIGNAL_ROOM.get(env.SIGNAL_ROOM.idFromName(code));
