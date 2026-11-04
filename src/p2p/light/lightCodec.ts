@@ -21,7 +21,7 @@
  *      (limit 0.25) and the mean luminance of the whole pattern by far less than 0.02 between
  *      consecutive frames. There is therefore no luminance "flash" at all in WCAG terms.
  *   4. No saturated red: no data colour has a linear red share R/(R+G+B) ≥ 0.8 (WCAG "red
- *      flash" definition), the largest is magenta at 0.42, and none is R-dominant
+ *      flash" definition; the largest is the yellow at 0.50, then magenta 0.42), none is R-dominant
  *      (R > G + B in sRGB).
  *   5. High-contrast finder markers exist only at the four corners and never change.
  * ────────────────────────────────────────────────────────────────────────────────────

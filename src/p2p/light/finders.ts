@@ -4,8 +4,9 @@
  * The four corner finders are QR-style concentric squares with run ratio 1:1:3:1:1
  * (black ring, white ring, black centre). Detection, in the spirit of ZXing/jsQR:
  *
- *   1. Luminance Y = (R + 2G + B) / 4, then an adaptive threshold: a pixel is "dark" when
- *      Y < 0.7 · (box mean of Y around it). The data cells all have nearly the same
+ *   1. Luma Y = 0.2R + 0.7G + 0.1B (≈ WCAG weights; all data colours land at 124–142),
+ *      then an adaptive threshold: a pixel is "dark" when Y < 0.85 · (box mean of Y
+ *      around it). The data cells all have nearly the same
  *      relative luminance (flash safety) and differ only by chroma, so the data area never
  *      binarises dark — only the finders, the orientation tick and background clutter do.
  *   2. Every other row is run-length encoded; five consecutive runs dark/light/dark/light/dark
@@ -66,7 +67,7 @@ export class FinderDetector {
       const base = y * w
       for (let x = 0; x < w; x++) {
         const p = (base + x) * 4
-        const v = (data[p] + 2 * data[p + 1] + data[p + 2]) >> 2
+        const v = (2 * data[p] + 7 * data[p + 1] + data[p + 2] + 5) / 10 | 0
         lum[base + x] = v
         rowSum += v
         ii[(y + 1) * W1 + x + 1] = ii[y * W1 + x + 1] + rowSum
@@ -82,9 +83,9 @@ export class FinderDetector {
         const x1 = Math.min(w, x + r + 1)
         const sum = ii[y1 * W1 + x1] - ii[y0 * W1 + x1] - ii[y1 * W1 + x0] + ii[y0 * W1 + x0]
         const area = (x1 - x0) * (y1 - y0)
-        // dark ⇔ Y < 0.7 · mean, and at least 12 below it (keeps flat regions light)
+        // dark ⇔ Y < 0.85 · mean, and at least 12 below it (keeps flat regions light)
         const Y = lum[y * w + x] * area
-        bin[y * w + x] = Y * 10 < sum * 7 && Y + 12 * area < sum ? 1 : 0
+        bin[y * w + x] = Y * 100 < sum * 85 && Y + 12 * area < sum ? 1 : 0
       }
     }
   }
