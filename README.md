@@ -16,8 +16,8 @@
 
 [🇧🇬 **Български**](#-български) · [🇬🇧 **English**](#-english)
 
-<a href="docs/public/assets/promo-bg.mp4"><img src="docs/public/assets/promo-bg.gif" alt="Промо видео: P2P Messenger за 30 секунди" width="49%"></a>
-<a href="docs/public/assets/promo-en.mp4"><img src="docs/public/assets/promo-en.gif" alt="Promo video: P2P Messenger in 30 seconds" width="49%"></a>
+<a href="docs/public/assets/promo-bg.mp4"><img src="docs/public/assets/promo-bg.gif" alt="Промо видео: P2P Messenger и шестте начина за свързване (43 секунди)" width="49%"></a>
+<a href="docs/public/assets/promo-en.mp4"><img src="docs/public/assets/promo-en.gif" alt="Promo video: P2P Messenger and the six ways to connect (43 seconds)" width="49%"></a>
 
 ▶️ Видео със звук: [български](docs/public/assets/promo-bg.mp4) · [English](docs/public/assets/promo-en.mp4)
 

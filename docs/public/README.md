@@ -1,7 +1,7 @@
 # P2P Messenger
 
-<a href="assets/promo-bg.mp4"><img src="assets/promo-bg.gif" alt="Промо видео: P2P Messenger за 30 секунди" width="49%"></a>
-<a href="assets/promo-en.mp4"><img src="assets/promo-en.gif" alt="Promo video: P2P Messenger in 30 seconds" width="49%"></a>
+<a href="assets/promo-bg.mp4"><img src="assets/promo-bg.gif" alt="Промо видео: P2P Messenger и шестте начина за свързване (43 секунди)" width="49%"></a>
+<a href="assets/promo-en.mp4"><img src="assets/promo-en.gif" alt="Promo video: P2P Messenger and the six ways to connect (43 seconds)" width="49%"></a>
 
 ▶️ Видео със звук: [български](assets/promo-bg.mp4) · [English](assets/promo-en.mp4)
 
