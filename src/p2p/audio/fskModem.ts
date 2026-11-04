@@ -264,11 +264,8 @@ interface Peak {
   score: number
 }
 
-const enum Phase {
-  Search,
-  Receive,
-  Done,
-}
+const Phase = { Search: 0, Receive: 1, Done: 2 } as const
+type Phase = (typeof Phase)[keyof typeof Phase]
 
 export class FskDecoder {
   private readonly fs: number
@@ -297,7 +294,7 @@ export class FskDecoder {
   private peaks: Peak[] = []
 
   // receive
-  private phase: Phase = Phase.Search
+  private phase: Phase = Phase.Search as Phase
   private frameStart = 0 // chirp A start (absolute samples, fractional)
   private ratio = 1
   private symbolIndex = 0
