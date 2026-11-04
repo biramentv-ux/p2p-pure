@@ -7,14 +7,19 @@
 **Личен, децентрализиран, шифрован от край до край.**
 **A private, decentralised, end-to-end encrypted messenger.**
 
-[![Tests](https://img.shields.io/badge/unit_tests-428_passing-1f6fc4?style=for-the-badge)](#-тестове)
+[![Tests](https://img.shields.io/badge/unit_tests-794_passing-1f6fc4?style=for-the-badge)](#-тестове)
 [![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-13213a?style=for-the-badge)](#-тестове)
 [![Platforms](https://img.shields.io/badge/web_·_Windows_·_Linux_·_Android_·_iOS-PWA_+_Tauri_+_Electron_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
-[![Languages](https://img.shields.io/badge/languages-BG_·_EN-d41b7f?style=for-the-badge)](#-език)
+[![Languages](https://img.shields.io/badge/app-BG_·_EN_·_RU_·_DE_·_ES_·_PT-d41b7f?style=for-the-badge)](#-език) [![Site](https://img.shields.io/badge/site-8_languages-0ea5e9?style=for-the-badge)](https://dyrakarmy.online/)
 
 ### 🌍 Language / Език
 
 [🇧🇬 **Български**](#-български) · [🇬🇧 **English**](#-english)
+
+<a href="docs/public/assets/promo-bg.mp4"><img src="docs/public/assets/promo-bg.gif" alt="Промо видео: P2P Messenger за 30 секунди" width="49%"></a>
+<a href="docs/public/assets/promo-en.mp4"><img src="docs/public/assets/promo-en.gif" alt="Promo video: P2P Messenger in 30 seconds" width="49%"></a>
+
+▶️ Видео със звук: [български](docs/public/assets/promo-bg.mp4) · [English](docs/public/assets/promo-en.mp4)
 
 </div>
 
@@ -27,7 +32,7 @@
 > Съобщенията се шифроват на устройството и се пращат **директно** между хората през WebRTC.
 > Няма централен сървър, който пази съобщения, акаунти или телефонни номера.
 
-*Състояние към 26 октомври 2026: работеща PWA за уеб и телефон, програми за Windows (инсталатор, portable и winget) и Linux (.deb, .rpm, AppImage), Capacitor проект за Android и iOS, разширение за Chrome, двуезичен интерфейс и тестове на всички нива. Native билдовете за Android и iOS не са тествани на физически устройства.*
+*Състояние към 4 ноември 2026: работеща PWA за уеб и телефон; програми за Windows (инсталатор, portable, winget) и Linux (.deb, .rpm, AppImage, Flatpak); подписан APK за Android; сайт с меню и сваляне на [dyrakarmy.online](https://dyrakarmy.online/) на 8 езика; интерфейс на 6 езика; тестове на всички нива. Изходният код е частен, изданията и сайтът са публични. iOS проектът и TestFlight workflow-ът са написани, но не са пускани с Apple акаунт.*
 
 ## ✨ Какво може
 
@@ -46,7 +51,14 @@
 | 🪟 | **Windows** *(ново)* | Инсталатор без админ права, portable zip и `winget`. Цялото приложение е вътре. |
 | 🐧 | **Linux** *(ново)* | `.deb`, `.rpm`, AppImage, Flatpak и `install.sh` с проверка на сумите. Цялото приложение е вътре. |
 | 🎨 | **Нов дизайн** *(ново)* | „Запечатана поща“: небесно синьо и електрик пурпурно-розово, IBM Plex с кирилица, светъл и тъмен режим, AA контраст. |
-| 🌍 | **Два езика** | Български (по подразбиране) и English. |
+| 🔔 | **Известия и звуци** *(ново)* | Само от познати: контакт или член на твоя група. Няколко синтезирани звука и гласа по избор, брой непрочетени в заглавието ([docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)). |
+| 📇 | **До 99 контакта** *(ново)* | Изричен лимит; при пълен списък приложението казва какво да направиш. |
+| 📲 | **Местене на нов телефон** *(ново)* | Сканираш QR от старото устройство; профилът и контактите минават шифровано, без сървър, а старото се изтрива ([docs/MULTIDEVICE.md](docs/MULTIDEVICE.md)). |
+| 🎵 | **Плейър и поставяне** *(ново)* | Музиката и гласовите файлове се пускат в чата; картинка се поставя с `Ctrl+V`. |
+| 🛰️ | **Собствен TURN** *(ново, по избор)* | За мрежи, които блокират директната връзка. Нищо не е включено по подразбиране. |
+| 🤖 | **Android APK** *(ново)* | Подписан, с проверка на подписа и без данни в резервните копия ([docs/ANDROID-APK.md](docs/ANDROID-APK.md)). Има и чернова за F-Droid. |
+| 🧾 | **Подписан SBOM** *(ново)* | Всяко издание има SHA-256 суми и подписан (Sigstore) списък на зависимостите ([docs/SUPPLY-CHAIN.md](docs/SUPPLY-CHAIN.md)). |
+| 🌍 | **6 езика в приложението** *(обновено)* | Български, English, Русский, Deutsch, Español, Português (Brasil). Сайтът е и на Français и 简体中文. |
 | ⚡ | **Разширение за Chrome** | `Ctrl+Shift+M` отваря месинджъра. |
 
 ## 🧭 Как работи
@@ -85,11 +97,11 @@ flowchart LR
 
 | Начин | За кого | Какво трябва |
 |---|---|---|
-| **Сайтът** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Информация и сваляне на всички версии с един бутон, според устройството | Само браузър. Винаги онлайн, обновява се при всяка промяна в `main` и при ново издание ([docs/SITE.md](docs/SITE.md)). Кодът може да е частен, а изданията и сайтът публични: [docs/PRIVATE-REPO.md](docs/PRIVATE-REPO.md). |
-| **Онлайн версията** `…/app/` | Месинджърът направо в браузъра, на телефон или компютър | Само браузър. На собствения домейн: `https://dyrakarmy.online/app/`. |
-| **Windows** | Компютър с Windows 10/11 | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
-| **Linux** | Компютър с Linux (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `.deb`, `.rpm`, `AppImage` или `install.sh` |
-| **Android** | Телефон с Android 7+ | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-…-android.apk`, отваряш го на телефона ([docs/ANDROID-APK.md](docs/ANDROID-APK.md)) |
+| **Сайтът** [dyrakarmy.online](https://dyrakarmy.online/) | Информация и сваляне на всички версии с един бутон, според устройството | Само браузър. На 8 езика, винаги онлайн (GitHub Pages), обновява се при всяка промяна в `main` и при ново издание ([docs/SITE.md](docs/SITE.md)). |
+| **Онлайн версията** [dyrakarmy.online/app/](https://dyrakarmy.online/app/) | Месинджърът направо в браузъра, на телефон или компютър | Само браузър. |
+| **Windows** | Компютър с Windows 10/11 | [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases) → `P2P-Messenger-Setup-x64.exe` |
+| **Linux** | Компютър с Linux (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases) → `.deb`, `.rpm`, `AppImage`, `.flatpak` или `install.sh` |
+| **Android** | Телефон с Android 7+ | [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases) → `P2P-Messenger-…-android.apk`, отваряш го на телефона ([docs/ANDROID-APK.md](docs/ANDROID-APK.md)) |
 | **Локално копие** | Разработка, или ако сайтът не работи | Git и Node.js, виж по-долу. |
 
 ## 💻 Локално стартиране, стъпка по стъпка
@@ -162,7 +174,7 @@ npm run preview    # http://localhost:4173
 
 ### Вариант А: от онлайн версията (без компютър)
 
-1. Отвори **https://biramentv-ux.github.io/p2p-pure/** в Chrome (Android) или Safari (iPhone).
+1. Отвори **https://dyrakarmy.online/app/** в Chrome (Android) или Safari (iPhone).
 2. Добави го като приложение:
    - **Android, Chrome:** меню ⋮ → **Add to Home screen / Инсталиране на приложението**.
    - **iPhone, Safari:** бутон „Сподели“ → **Add to Home Screen / Към началния екран**.
@@ -204,7 +216,7 @@ npx cap open android     # отваря Android Studio; или ios за Xcode (T
 
 ## 🪟 Windows
 
-Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases):
+Свали от [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases):
 
 - `P2P-Messenger-Setup-x64.exe`: инсталатор, без администраторски права;
 - `P2P-Messenger-portable-x64.zip`: без инсталиране.
@@ -215,7 +227,7 @@ npx cap open android     # отваря Android Studio; или ios за Xcode (T
 
 ## 🐧 Linux
 
-Свали от [Releases](https://github.com/biramentv-ux/p2p-pure/releases) `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE), `AppImage` или `.flatpak` (`flatpak install --user ./файла.flatpak`, без достъп до файловете ти), или пусни `install.sh`: той избира пакета, **проверява контролната сума** и инсталира.
+Свали от [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases) `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE), `AppImage` или `.flatpak` (`flatpak install --user ./файла.flatpak`, без достъп до файловете ти), или пусни `install.sh`: той избира пакета, **проверява контролната сума** и инсталира.
 
 ```bash
 bash install.sh              # или: bash install.sh --appimage  (само за теб, без root)
@@ -251,11 +263,15 @@ src/
   call/             разговори
   history/          шифрована история (IndexedDB)
   contacts/         контакти и потвърждение (шифровани, индекс HMAC(DID))
+  notify/           известия и синтезирани звуци
+  transfer/         местене на профила на ново устройство
+  i18n/             езиците на приложението (bg, en, ru, de, es, pt)
   ui/               екрани и компоненти
   post.css          темата „Запечатана поща“ (светла и тъмна)
 src-tauri/          програмата за Windows (Tauri 2)
 electron/           програмата за Linux (Electron: .deb, .rpm, AppImage)
 extension/          разширение за Chrome (MV3)
+site/               сайтът dyrakarmy.online (8 езика), месинджърът е на /app/
 worker/             Cloudflare Worker: покани, демо стаи (Durable Object), Telegram
 scripts/            телефон (phone.mjs), Windows, winget, Linux (install.sh), мобилни файлове
 tests/              unit (Vitest), e2e и a11y (Playwright + Chromium), Windows (WebView2), Linux (Electron)
@@ -266,7 +282,7 @@ docs/               ръководства: Windows, Linux, демо сигна�
 
 | Команда | Какво проверява |
 |---|---|
-| `npm test` | Unit тестове: 50 файла, 428 теста |
+| `npm test` | Unit тестове: 74 файла, 794 теста |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Двама души в браузър: QR, 12 думи за проверка, шифрован обмен, replay защита |
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
@@ -285,17 +301,22 @@ docs/               ръководства: Windows, Linux, демо сигна�
 | `gradle.yml` | push и PR към `main` | Android билд с Capacitor |
 | `pages.yml` | push към `main`, след Linux издание | Публикува онлайн версията в GitHub Pages (и подписаното Linux хранилище в `/linux/`, ако има) |
 | `windows-desktop.yml` | ръчно или таг `desktop-v*` | Инсталатор, portable, тест в WebView2, winget, Release |
+| `linux-desktop.yml` | ръчно или таг `desktop-v*` | `.deb`, `.rpm`, AppImage, Flatpak, тест на инсталирането, Release |
+| `android-apk.yml` | ръчно или таг `android-v*` | Подписан APK със суми, Release |
+| `ios-testflight.yml` | промяна в `ios/` или ръчно | Компилация на macOS; с Apple секретите и качване в TestFlight ([docs/IOS.md](docs/IOS.md)) |
+| `release-sbom.yml` | публикувано издание | SBOM (CycloneDX), суми и Sigstore подпис към изданието |
+| `public-docs.yml` | промяна в публичните документи | Копира README, лиценза, SECURITY и ръководствата в публичното репо `p2p-pure-releases` |
 | `worker-deploy.yml` | промяна в `worker/` или ръчно | Тестове и публикуване на сигналния Worker в Cloudflare |
 
 **Сигналният Worker** (кратки кодове и демо стаи) се публикува от GitHub, след като добавиш секретите `CLOUDFLARE_API_TOKEN` и `CLOUDFLARE_ACCOUNT_ID`. Стъпките: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-**Онлайн версията** в GitHub Pages се публикува автоматично от `main` (еднократно: **Settings → Pages → Source: GitHub Actions**). Профилът (passkey) е обвързан с адреса, затова профил от `github.io` и от `dyrakarmy.online` са отделни; пренасят се с 12-те думи.
-
-**Сайтът** `dyrakarmy.online` се обслужва от компютъра на собственика през Cloudflare Tunnel: `scripts/windows/deploy.ps1` обновява билда, а тунелът го прави достъпен. Смяна на токена на тунела: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
+**Сайтът и онлайн версията** (`dyrakarmy.online`, месинджърът на `/app/`) се публикуват автоматично от `main` в GitHub Pages на публичното репо `p2p-pure-releases`, така че работят без компютъра на собственика. Кодът е частен, а изданията и сайтът са публични: [docs/PRIVATE-REPO.md](docs/PRIVATE-REPO.md). Профилът (passkey) е обвързан с адреса; на друг адрес се пренася с 12-те думи.
 
 ## 🌍 Език
 
-Интерфейсът е на български по подразбиране и на английски, ако браузърът е на английски. Всички низове са в `src/i18n/en.ts`; ключът е българският текст.
+Приложението е на 6 езика: български (по подразбиране), English, Русский, Deutsch, Español и Português (Brasil). Езикът се взема от браузъра и може да се смени в приложението; изборът се помни. Ключът е българският текст, преводите са в `src/i18n/<език>.ts`.
+
+Сайтът е на 8 езика (добавени Français и 简体中文), всеки на свой адрес: `/`, `/en/`, `/es/`, `/pt/`, `/fr/`, `/de/`, `/ru/`, `/zh/` ([docs/SITE.md](docs/SITE.md)). Преводите са машинни и още не са прегледани от носители на езиците.
 
 ## 🔒 Сигурност
 
@@ -314,7 +335,7 @@ docs/               ръководства: Windows, Linux, демо сигна�
 > Messages are encrypted on the device and sent **directly** between people over WebRTC.
 > There is no central server that stores messages, accounts or phone numbers.
 
-*Status as of 26 October 2026: a working PWA for web and phone, apps for Windows (installer, portable and winget) and Linux (.deb, .rpm, AppImage), a Capacitor project for Android and iOS, a Chrome extension, a bilingual interface and tests at every level. The Android and iOS builds have not been tested on physical devices.*
+*Status as of 4 November 2026: a working PWA for web and phone; apps for Windows (installer, portable, winget) and Linux (.deb, .rpm, AppImage, Flatpak); a signed Android APK; a website with menu and downloads at [dyrakarmy.online](https://dyrakarmy.online/en/) in 8 languages; an interface in 6 languages; tests at every level. The source code is private; releases and the site are public. The iOS project and TestFlight workflow are written but have not been run with an Apple account.*
 
 ## ✨ What it does
 
@@ -333,7 +354,14 @@ docs/               ръководства: Windows, Linux, демо сигна�
 | 🪟 | **Windows** *(new)* | Installer without admin rights, portable zip and `winget`. The whole app is inside. |
 | 🐧 | **Linux** *(new)* | `.deb`, `.rpm`, AppImage and `install.sh` that verifies checksums. The whole app is inside. |
 | 🎨 | **New design** *(new)* | "Sealed Post": sky blue and electric magenta, IBM Plex with Cyrillic, light and dark mode, AA contrast. |
-| 🌍 | **Two languages** | Bulgarian (default) and English. |
+| 🔔 | **Notifications and sounds** *(new)* | Only from people you know: a contact or a member of your group. Several synthesized sounds and voices to choose from, unread count in the title ([docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)). |
+| 📇 | **Up to 99 contacts** *(new)* | An explicit limit; when the list is full, the app says what to do. |
+| 📲 | **Move to a new phone** *(new)* | Scan a QR from the old device; the profile and contacts move over encrypted, with no server, and the old one is wiped ([docs/MULTIDEVICE.md](docs/MULTIDEVICE.md)). |
+| 🎵 | **Player and paste** *(new)* | Music and voice files play in the chat; paste a picture with `Ctrl+V`. |
+| 🛰️ | **Your own TURN** *(new, optional)* | For networks that block direct links. Nothing is enabled by default. |
+| 🤖 | **Android APK** *(new)* | Signed, signature verified, no app data in backups ([docs/ANDROID-APK.md](docs/ANDROID-APK.md)). An F-Droid draft is included. |
+| 🧾 | **Signed SBOM** *(new)* | Every release has SHA-256 checksums and a signed (Sigstore) dependency list ([docs/SUPPLY-CHAIN.md](docs/SUPPLY-CHAIN.md)). |
+| 🌍 | **6 languages in the app** *(updated)* | Български, English, Русский, Deutsch, Español, Português (Brasil). The site also speaks Français and 简体中文. |
 | ⚡ | **Chrome extension** | `Ctrl+Shift+M` opens the messenger. |
 
 ## 🧭 How it works
@@ -372,10 +400,11 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 
 | Way | For whom | What you need |
 |---|---|---|
-| **The online version** [biramentv-ux.github.io/p2p-pure](https://biramentv-ux.github.io/p2p-pure/) | Fastest, on phone or computer | Just a browser. Always online, updated on every change to `main`. |
-| **The site** `https://dyrakarmy.online` | The same, on the own domain | Online while the owner's computer runs. |
-| **Windows** | A Windows 10/11 computer | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `P2P-Messenger-Setup-x64.exe` |
-| **Linux** | A Linux computer (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure/releases) → `.deb`, `.rpm`, `AppImage` or `install.sh` |
+| **The site** [dyrakarmy.online/en/](https://dyrakarmy.online/en/) | Information and every download behind one button that fits your device | Just a browser. In 8 languages, always online (GitHub Pages), updated on every change to `main` and every release ([docs/SITE.md](docs/SITE.md)). |
+| **The online version** [dyrakarmy.online/app/](https://dyrakarmy.online/app/) | The messenger right in the browser, on phone or computer | Just a browser. |
+| **Windows** | A Windows 10/11 computer | [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases) → `P2P-Messenger-Setup-x64.exe` |
+| **Linux** | A Linux computer (x86_64) | [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases) → `.deb`, `.rpm`, `AppImage`, `.flatpak` or `install.sh` |
+| **Android** | An Android 7+ phone | [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases) → `P2P-Messenger-…-android.apk`, open it on the phone ([docs/ANDROID-APK.md](docs/ANDROID-APK.md)) |
 | **A local copy** | Development, or when the site is down | Git and Node.js, see below. |
 
 ## 💻 Running locally, step by step
@@ -448,7 +477,7 @@ Open the app in **two separate browser profiles** (for example a normal and a pr
 
 ### Option A: from the online version (no computer)
 
-1. Open **https://biramentv-ux.github.io/p2p-pure/** in Chrome (Android) or Safari (iPhone).
+1. Open **https://dyrakarmy.online/app/** in Chrome (Android) or Safari (iPhone).
 2. Add it as an app:
    - **Android, Chrome:** menu ⋮ → **Add to Home screen / Install app**.
    - **iPhone, Safari:** the Share button → **Add to Home Screen**.
@@ -490,7 +519,7 @@ You need Android Studio or Xcode. Before release: the SHA-256 fingerprint in `as
 
 ## 🪟 Windows
 
-Download from [Releases](https://github.com/biramentv-ux/p2p-pure/releases):
+Download from [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases):
 
 - `P2P-Messenger-Setup-x64.exe`: an installer, no admin rights needed;
 - `P2P-Messenger-portable-x64.zip`: no install.
@@ -501,7 +530,7 @@ The package is not signed yet: on first start choose **More info → Run anyway*
 
 ## 🐧 Linux
 
-Download the `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) or `AppImage` from [Releases](https://github.com/biramentv-ux/p2p-pure/releases), or run `install.sh`: it picks the package, **verifies the checksum** and installs.
+Download the `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE) or `AppImage` from [Releases](https://github.com/biramentv-ux/p2p-pure-releases/releases), or run `install.sh`: it picks the package, **verifies the checksum** and installs.
 
 ```bash
 bash install.sh              # or: bash install.sh --appimage  (just for you, no root)
@@ -537,11 +566,15 @@ src/
   call/             calls
   history/          encrypted history (IndexedDB)
   contacts/         contacts and verification (encrypted, keyed by HMAC(DID))
+  notify/           notifications and synthesized sounds
+  transfer/         moving the profile to a new device
+  i18n/             the app's languages (bg, en, ru, de, es, pt)
   ui/               screens and components
   post.css          the "Sealed Post" theme (light and dark)
 src-tauri/          the Windows app (Tauri 2)
 electron/           the Linux app (Electron: .deb, .rpm, AppImage)
 extension/          Chrome extension (MV3)
+site/               the dyrakarmy.online website (8 languages); the messenger lives at /app/
 worker/             Cloudflare Worker: invitations, demo rooms (Durable Object), Telegram
 scripts/            phone (phone.mjs), Windows, winget, Linux (install.sh), mobile files
 tests/              unit (Vitest), e2e and a11y (Playwright + Chromium), Windows (WebView2), Linux (Electron)
@@ -552,7 +585,7 @@ docs/               guides: Windows, Linux, demo signalling, groups, Telegram bo
 
 | Command | What it checks |
 |---|---|
-| `npm test` | Unit tests: 50 files, 428 tests |
+| `npm test` | Unit tests: 74 files, 794 tests |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Two people in a browser: QR, 12 verification words, encrypted exchange, replay protection |
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
@@ -571,17 +604,22 @@ docs/               guides: Windows, Linux, demo signalling, groups, Telegram bo
 | `gradle.yml` | push and PR to `main` | Android build with Capacitor |
 | `pages.yml` | push to `main`, after a Linux release | Publishes the online version to GitHub Pages (and the signed Linux repository under `/linux/`, if any) |
 | `windows-desktop.yml` | manual or a `desktop-v*` tag | Installer, portable, WebView2 test, winget, Release |
+| `linux-desktop.yml` | manual or a `desktop-v*` tag | `.deb`, `.rpm`, AppImage, Flatpak, an install test, Release |
+| `android-apk.yml` | manual or an `android-v*` tag | Signed APK with checksums, Release |
+| `ios-testflight.yml` | a change in `ios/`, or manual | Compiles on macOS; with the Apple secrets also uploads to TestFlight ([docs/IOS.md](docs/IOS.md)) |
+| `release-sbom.yml` | a published release | SBOM (CycloneDX), checksums and a Sigstore signature on the release |
+| `public-docs.yml` | a change to the public documents | Copies the README, license, SECURITY and guides to the public `p2p-pure-releases` repository |
 | `worker-deploy.yml` | a change in `worker/`, or manual | Tests and deploys the signalling Worker to Cloudflare |
 
 **The signalling Worker** (short codes and demo rooms) is deployed from GitHub once you add the `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets. Steps: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-**The online version** on GitHub Pages is published automatically from `main` (one-time: **Settings → Pages → Source: GitHub Actions**). A passkey belongs to its address, so profiles on `github.io` and on `dyrakarmy.online` are separate; move one with the 12 words.
-
-**The site** `dyrakarmy.online` is served from the owner's computer through a Cloudflare Tunnel: `scripts/windows/deploy.ps1` updates the build, and the tunnel makes it reachable. Rotating the tunnel token: [docs/runbooks/tunnel-token-rotation.md](docs/runbooks/tunnel-token-rotation.md).
+**The site and the online version** (`dyrakarmy.online`, the messenger at `/app/`) are published automatically from `main` to GitHub Pages of the public `p2p-pure-releases` repository, so they run without the owner's computer. The code is private; releases and the site are public: [docs/PRIVATE-REPO.md](docs/PRIVATE-REPO.md). A passkey belongs to its address; on another address, bring the profile over with the 12 words.
 
 ## 🌍 Language
 
-The interface is Bulgarian by default and English when the browser is in English. All strings are in `src/i18n/en.ts`; the key is the Bulgarian text.
+The app speaks 6 languages: Bulgarian (default), English, Русский, Deutsch, Español and Português (Brasil). It follows the browser and can be changed in the app; the choice is remembered. The key is the Bulgarian text; translations are in `src/i18n/<language>.ts`.
+
+The site speaks 8 (adding Français and 简体中文), each at its own address: `/`, `/en/`, `/es/`, `/pt/`, `/fr/`, `/de/`, `/ru/`, `/zh/` ([docs/SITE.md](docs/SITE.md)). The translations are machine-made and not yet reviewed by native speakers.
 
 ## 🔒 Security
 
