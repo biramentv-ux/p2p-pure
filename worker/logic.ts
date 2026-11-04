@@ -153,3 +153,34 @@ export function normalizeInviteCode(input: string): string | null {
 export function inviteKey(code: string): string {
   return `i:${code}`;
 }
+
+/**
+ * Demo WebSocket rooms. New clients get a 5-character room id (~24 bits); the
+ * PAKE words the clients add on top never reach the Worker. Older clients still
+ * use 10-character ids, so both lengths are accepted when joining a room.
+ */
+export const ROOM_ID_LENGTH = 5;
+export const LEGACY_ROOM_ID_LENGTH = INVITE_CODE_LENGTH;
+
+/** Random room id from the invite alphabet. Rejection sampling, like newInviteCode. */
+export function newRoomId(random: (n: number) => Uint8Array = (n) => crypto.getRandomValues(new Uint8Array(n))): string {
+  const limit = 256 - (256 % INVITE_CODE_ALPHABET.length);
+  let out = "";
+  while (out.length < ROOM_ID_LENGTH) {
+    for (const b of random(ROOM_ID_LENGTH)) {
+      if (b < limit && out.length < ROOM_ID_LENGTH) out += INVITE_CODE_ALPHABET[b % INVITE_CODE_ALPHABET.length];
+    }
+  }
+  return out;
+}
+
+/**
+ * Accepts a typed room id: any case, spaces or dashes. Both the 5-character
+ * id and the legacy 10-character id are valid. Returns null otherwise.
+ */
+export function normalizeRoomId(input: string): string | null {
+  const code = input.toUpperCase().replace(/[\s-]/g, "");
+  if (code.length !== ROOM_ID_LENGTH && code.length !== LEGACY_ROOM_ID_LENGTH) return null;
+  for (const ch of code) if (!INVITE_CODE_ALPHABET.includes(ch)) return null;
+  return code;
+}
