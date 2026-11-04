@@ -114,3 +114,5 @@ jobs:
       uses: gradle/actions/dependency-submission@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       with:
         build-root-directory: android
+        # the graph is submitted in this run; the copy kept as an artifact is only for debugging
+        artifact-retention-days: 1
