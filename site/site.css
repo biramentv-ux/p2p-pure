@@ -525,8 +525,11 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
 @keyframes orbit { from { transform: rotate(0deg) translateX(52px) rotate(0deg); } to { transform: rotate(360deg) translateX(52px) rotate(-360deg); } }
 @keyframes panel-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-/* ---------- six ways to connect ---------- */
-.ways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+/* ---------- seven ways to connect ---------- */
+/* 8 tracks of 2: four cards in the first row, and the last three centred under them */
+.ways { display: grid; grid-template-columns: repeat(8, 1fr); gap: 16px; }
+.ways > .way { grid-column: span 2; }
+.ways > .way:nth-child(5) { grid-column: 2 / span 2; }
 .way { padding: 18px 18px 24px; display: flex; flex-direction: column; }
 .way-art { border-radius: calc(var(--r-l) - 8px); background: linear-gradient(135deg, var(--a-soft), var(--b-soft)); border: 1px solid var(--line); padding: 8px 6px; overflow: hidden; }
 .way .art { display: block; width: 100%; height: auto; max-height: 150px; overflow: visible; }
@@ -570,6 +573,14 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
 .art .bub path:first-child { fill: var(--surface-solid); stroke: var(--b); stroke-width: 1.6; stroke-linejoin: round; }
 .art .bub .tx { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; opacity: 0.6; }
 .art .plane { fill: var(--a); }
+/* light: three soft colours of about the same brightness, no red; a cell only fades, slowly */
+.art .lc { fill: #6cc4ff; }
+.art .lc.c2 { fill: #6fe0b6; }
+.art .lc.c3 { fill: #a99bff; }
+.art .ray { fill: none; stroke: var(--a); stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 2 6; opacity: 0.4; }
+.art .vf path { fill: none; stroke: var(--b); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.art .vf circle { fill: none; stroke: var(--b); stroke-width: 1.6; opacity: 0.7; }
+.art .lens { fill: var(--muted); }
 
 .art .qr-l { animation: w-blink 4.8s ease-in-out infinite; }
 .art .qr-r { animation: w-blink 4.8s ease-in-out 2.4s infinite; }
@@ -602,10 +613,19 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
 .art .who ~ .ok, .art .l3 ~ .ok { animation-name: w-pop-late; animation-duration: 5.4s; }
 .art .bub { animation: w-bubble 4.8s ease-in-out infinite; }
 .art .plane { animation: w-plane 4.8s ease-in-out infinite; }
+.art .lc { animation: w-cell 6s ease-in-out infinite; }
+.art .lc:nth-child(3n) { animation-duration: 7.2s; animation-delay: -1.7s; }
+.art .lc:nth-child(3n+1) { animation-delay: -3.1s; }
+.art .lc:nth-child(5n) { animation-duration: 8.4s; animation-delay: -5.2s; }
+.art .lc:nth-child(7n) { animation-delay: -0.8s; }
+.art .ray { animation: w-glow 4.2s ease-in-out infinite; }
+.art .ray.r2 { animation-delay: -1.4s; } .art .ray.r3 { animation-delay: -2.8s; }
+.art .vf { animation: w-glow 4.2s ease-in-out infinite; }
 
 /* off-screen scenes stand still (site.js adds .live while a card is in view) */
 .js .way:not(.live) .art * { animation-play-state: paused; }
 
+@keyframes w-cell { 0%, 100% { opacity: 0.85; } 50% { opacity: 0.4; } }
 @keyframes w-blink { 0%, 100% { opacity: 1; } 45%, 55% { opacity: 0.35; } }
 @keyframes w-scan { 0% { transform: translateY(0); opacity: 0; } 8% { opacity: 0.9; } 42% { transform: translateY(34px); opacity: 0.9; } 50%, 100% { transform: translateY(34px); opacity: 0; } }
 @keyframes w-pop { 0%, 55% { opacity: 0; transform: scale(0.5); } 68% { opacity: 1; transform: scale(1.12); } 76%, 92% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1); } }
@@ -633,6 +653,8 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
   .bento { grid-template-columns: repeat(2, 1fr); }
   .sec-grid { grid-template-columns: repeat(2, 1fr); }
   .ways { grid-template-columns: repeat(2, 1fr); }
+  .ways > .way, .ways > .way:nth-child(5) { grid-column: auto; }
+  .ways > .way:last-child { grid-column: 1 / -1; justify-self: center; width: calc(50% - 8px); }
 }
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; min-height: auto; padding-bottom: 88px !important; }
@@ -655,6 +677,7 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
   .ratchet { width: 200px; height: 200px; opacity: 0.6; }
   .sec-grid { grid-template-columns: 1fr; }
   .ways { grid-template-columns: 1fr; }
+  .ways > .way:last-child { width: auto; }
   .demo { grid-template-columns: 1fr 0.5fr 1fr; }
   .device { min-height: 250px; padding: 12px; border-radius: 20px; }
   .device .words { display: none; }
