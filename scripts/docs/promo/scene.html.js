@@ -62,7 +62,7 @@ export function html(lang, ctx) {
     <div class="scr">${body}</div></div>`;
   const head = (k, i, neu) => `<div class="head"><div class="kick" id="${k}-k">${L.way} ${i} / 6</div><h2 id="${k}-h">${L[k][0]}${neu ? `<u class="new" id="${k}-n">${L.neu}</u>` : ""}</h2><p id="${k}-p">${L[k][1]}</p></div>`;
   const idle = `<div class="lay idle" data-l="idle">${`<div class="ic">${I.seal("gi" + Math.random().toString(36).slice(2, 6))}</div>`}</div>`;
-  const okl = (n) => `<div class="lay okl" data-l="ok"><div class="okc">${I.check}</div><span>${L.connected}</span></div>`;
+  const okl = () => `<div class="lay okl" data-l="ok"><div class="okc">${I.check}</div><span>${L.connected}</span></div>`;
   const qrl = (seed) => `<div class="lay qrl" data-l="qr"><div class="qrc">${qr(seed, 150)}</div></div>`;
   const caml = (seed) => `<div class="lay caml" data-l="cam"><div class="vf"><div class="dim">${qr(seed, 140)}</div><b class="c1"></b><b class="c2"></b><b class="c3"></b><b class="c4"></b><i class="sl" data-l="scan"></i></div></div>`;
   const wordsHtml = ctx.words.map((w, i) => `<div class="chip w" id="w${i}"><small>${String(i + 1).padStart(2, "0")}</small>${w}</div>`).join("");
