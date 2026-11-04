@@ -63,6 +63,28 @@ Do not use the 1.7.0-alpha versions: they are not stable.
   password path, as it does on the web.
 - The web path is unchanged. Test on a real Android device before shipping.
 
+## Bluetooth pairing (BlePairingPlugin)
+
+`java/bg/p2pmessenger/app/BlePairingPlugin.java` is the Capacitor plugin `BlePairing`. It moves the
+first-contact invitation over Bluetooth Low Energy instead of a QR code. `MainActivity` registers it
+next to `PasskeyBridgePlugin`.
+
+- Initiator = GATT peripheral. Advertises the service UUID; the 4-character tag is in the scan
+  response as service data (ASCII). The Bluetooth adapter name is never changed.
+- Responder = GATT central. Scans with a service UUID filter, reads the tag from the service data
+  (fallback: local name `P2P-XXXX`), connects, asks for MTU 517, enables notifications on TX.
+- Methods: `checkAvailability({ role? })`, `requestPermissions()`, `startPeripheral({ tag })`,
+  `startScan()`, `connect({ deviceId })`, `send({ data })`, `stop()`.
+  Events: `deviceFound`, `connected`, `subscribed`, `data`, `disconnected`, `error`.
+- `mobile:sync` adds to the manifest: `BLUETOOTH` and `BLUETOOTH_ADMIN` (`maxSdkVersion="30"`),
+  `BLUETOOTH_SCAN` (`usesPermissionFlags="neverForLocation"`), `BLUETOOTH_ADVERTISE`,
+  `BLUETOOTH_CONNECT` and `<uses-feature android.hardware.bluetooth_le required="false">`. Android 11
+  and older also need `ACCESS_FINE_LOCATION` (already there) and the system location switch on, or
+  scans return nothing.
+- The BLE link is not encrypted or bonded. The pairing protocol on top must protect the data.
+- Not compiled and not run on a device (no Android SDK here). Test advertising, scanning, MTU and
+  notifications on two real phones, including Android 11 and Android 13+, before shipping.
+
 ## Not verified here
 
 No Android device or Android Studio was used to write this overlay. Treat it as a plan until the
