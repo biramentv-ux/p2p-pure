@@ -92,6 +92,7 @@ async function launch(extraArgs = []) {
   const args = [`--user-data-dir=${profile}`, `--remote-debugging-port=${PORT}`, ...extraArgs];
   if (process.env.NO_SANDBOX) args.push("--no-sandbox");
   if (WAYLAND) args.push("--ozone-platform=wayland");
+  await portFree(10_000);
   const child = spawn(APP_BIN ?? dev, APP_BIN ? args : [...args, resolve("electron/main.mjs")], { stdio: "ignore", detached: true, env: appEnv });
   let exited = false;
   child.on("exit", () => (exited = true));
@@ -114,9 +115,31 @@ async function launch(extraArgs = []) {
         process.kill(-child.pid, "SIGTERM");
       } catch {}
       if (!exited) await new Promise((r) => (child.once("exit", r), setTimeout(r, 5000)));
+      // The launcher can exit before the app's own processes do. Until the debugging port is
+      // free, the next launch() could attach to this dying instance and lose its page
+      // ("Target page, context or browser has been closed"), so wait for the port, then force.
+      if (!(await portFree(10_000))) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {}
+        await portFree(5_000);
+      }
     },
   };
   return { app, page };
+}
+
+/** Resolves true once nothing answers on the debugging port, false after `ms`. */
+async function portFree(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    const busy = await fetch(`http://127.0.0.1:${PORT}/json/version`, { signal: AbortSignal.timeout(500) })
+      .then(() => true)
+      .catch(() => false);
+    if (!busy) return true;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
 }
 
 const state = (page) =>
