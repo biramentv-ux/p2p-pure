@@ -16,7 +16,9 @@ GitHub Actions работния процес `release-sbom.yml` чрез OIDC. �
 подписал „някой с ключа“. Записът е и в публичния дневник на Sigstore (Rekor).
 
 Работният процес: `.github/workflows/release-sbom.yml` (стартира при публикуване на
-издание и ръчно от Actions → Release SBOM → Run workflow, с таг).
+издание и ръчно от Actions → Release SBOM → Run workflow, с таг). При ръчно пускане
+тагът не е нужно да съществува в изходното хранилище: тогава SBOM се прави от избрания клон
+(същия commit, от който ръчно пуснатите Windows и Linux сборки правят изданието).
 
 > Подписват се SBOM файловете и сумите им. Инсталаторите на десктопа имат свои
 > проверки (`SHA256SUMS-linux.txt`, Windows подпис): вижте `docs/SIGNING.md`.
