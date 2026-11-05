@@ -214,6 +214,35 @@ describe("desktop workflows", () => {
     expect(read("scripts/release/desktop-release.sh")).toMatch(/SHA256SUMS-sbom\.txt/);
   });
 
+  it("a hand-started SBOM run works without the tag in this repository (uses the started commit)", () => {
+    const wf = read(".github/workflows/release-sbom.yml");
+    expect(wf).toContain("ref: ${{ steps.subject.outputs.ref }}");
+    expect(wf).not.toContain("ref: refs/tags/${{ env.TAG }}");
+    // Run the resolve step with a fake `gh` that knows only one tag.
+    const m = wf.match(/- name: Resolve subject ref[\s\S]*?run: \|\r?\n([\s\S]*?)\r?\n\r?\n/);
+    expect(m).not.toBeNull();
+    const script = m![1].replace(/^ {10}/gm, "");
+    const dir = mkdtempSync(join(tmpdir(), "sbom-ref-"));
+    const bin = join(dir, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "gh"), '#!/bin/sh\n[ "$2" = "repos/o/r/git/ref/tags/desktop-v1.0.0" ]\n');
+    chmodSync(join(bin, "gh"), 0o755);
+    const resolveRef = (tag: string, event: string) => {
+      const out = join(dir, `out-${tag}-${event}`);
+      writeFileSync(out, "");
+      const r = spawnSync("bash", ["-c", script], {
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, TAG: tag, EVENT: event, SHA: "abc123",
+          GITHUB_REPOSITORY: "o/r", GITHUB_REF_NAME: "main", GITHUB_OUTPUT: out },
+        encoding: "utf8",
+      });
+      return { status: r.status, out: readFileSync(out, "utf8") };
+    };
+    expect(resolveRef("desktop-v1.0.0", "workflow_dispatch")).toEqual({ status: 0, out: "ref=refs/tags/desktop-v1.0.0\n" });
+    expect(resolveRef("desktop-v1.0.0", "push")).toEqual({ status: 0, out: "ref=refs/tags/desktop-v1.0.0\n" });
+    expect(resolveRef("desktop-v2.0.0", "workflow_dispatch")).toEqual({ status: 0, out: "ref=abc123\n" });
+    expect(resolveRef("desktop-v2.0.0", "release").status).toBe(1);
+  });
+
   it("a hanging winget install cannot use up the whole verify job", () => {
     const step = win.slice(win.indexOf("- name: Install with winget from the release"));
     expect(step.split("run:")[0]).toMatch(/timeout-minutes: \d+/);

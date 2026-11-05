@@ -11,7 +11,9 @@ name: Release SBOM
 # never fires here.
 #
 # Other releases: on `release: published` (not fired for a release made with the default
-# GITHUB_TOKEN), or by hand (workflow_dispatch) with the tag. The tag must exist in this repository.
+# GITHUB_TOKEN), or by hand (workflow_dispatch) with the tag. By hand the tag need not exist in this
+# repository: then the SBOM is made from the commit the workflow was started on (github.sha), the
+# same commit the hand-started Windows and Linux builds record in the shared draft.
 
 on:
   push:
@@ -21,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to attach the SBOMs to (e.g. desktop-v0.7.0)
+        description: Release tag to attach the SBOMs to (e.g. desktop-v0.7.0); without it in this repo, the selected branch is used
         required: true
         type: string
 
@@ -55,14 +57,33 @@ jobs:
         with:
           persist-credentials: false
 
-      # Subject: the tree of the release tag (only its lockfiles/manifests are read).
+      # Subject ref: the release tag when this repository has it. A hand-started run may name a
+      # tag that exists only in the releases repository (the Windows/Linux builds started by hand
+      # create it there): then the commit the run was started on, like those builds.
+      - name: Resolve subject ref
+        id: subject
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" > /dev/null 2>&1; then
+            echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+          elif [[ "$EVENT" == workflow_dispatch ]]; then
+            echo "::notice::tag $TAG is not in $GITHUB_REPOSITORY; SBOM from $SHA ($GITHUB_REF_NAME)"
+            echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::tag $TAG not found in $GITHUB_REPOSITORY"; exit 1
+          fi
+
+      # Subject: the tree of that ref (only its lockfiles/manifests are read).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/${{ env.TAG }}
+          ref: ${{ steps.subject.outputs.ref }}
           path: src
           persist-credentials: false
 
-      # The commit the tag names: the shared desktop draft records it (desktop-release.sh).
+      # The subject commit: the shared desktop draft records it (desktop-release.sh).
       - name: Tag commit
         id: commit
         run: echo "sha=$(git -C src rev-parse HEAD)" >> "$GITHUB_OUTPUT"
