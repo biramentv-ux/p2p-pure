@@ -25,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { JSDOM } from "jsdom";
 import { pickDownloads, REPO } from "../../site/downloads.js";
+import { EXTENSION_SRC, packExtension } from "../extension/pack.mjs";
 import { CLOSED_KEYS, DEFAULT_LOCALE, LOCALES, localeOf } from "../../site/locales.js";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -113,6 +114,13 @@ const fromSub = (v) => (!v || /^(#|[a-z][a-z0-9+.-]*:|\/|\.\.\/)/i.test(v) ? v :
  * One language's page, rendered at build time from the Bulgarian one and that language's texts, so
  * it exists without JavaScript and search engines see it. `texts` holds every key of site/i18n.js EN.
  */
+let enPopup;
+/** The extension's own English strings (extension/_locales/en): other languages' pages show the popup as Chrome shows it there. */
+function enPopupMessages() {
+  enPopup ??= JSON.parse(readFileSync(join(EXTENSION_SRC, "_locales/en/messages.json"), "utf8"));
+  return enPopup;
+}
+
 export function renderLocale(bgHtml, texts, loc) {
   const dom = new JSDOM(bgHtml);
   const d = dom.window.document;
@@ -130,6 +138,15 @@ export function renderLocale(bgHtml, texts, loc) {
   for (const el of d.querySelectorAll("[data-i18n]")) { const v = get(el.getAttribute("data-i18n")); if (v) el.textContent = v; }
   for (const el of d.querySelectorAll("[data-i18n-html]")) { const v = get(el.getAttribute("data-i18n-html")); if (v) el.innerHTML = v; }
   for (const el of d.querySelectorAll("[data-i18n-aria]")) { const v = get(el.getAttribute("data-i18n-aria")); if (v) el.setAttribute("aria-label", v); }
+  // the mock of the extension popup: the extension has Bulgarian and English only, so every other page shows the English one
+  if (loc.code !== "bg") {
+    for (const el of d.querySelectorAll("[data-ext-msg]")) {
+      const m = enPopupMessages()[el.getAttribute("data-ext-msg")];
+      if (!m) throw new Error(`site: extension/_locales/en has no message ${el.getAttribute("data-ext-msg")}`);
+      el.textContent = m.message;
+    }
+    for (const el of d.querySelectorAll("[data-ext-mock]")) el.setAttribute("lang", "en");
+  }
   // a gap would show Bulgarian on a foreign page: stop the build instead (the tests check the packs too)
   if (missing.length) throw new Error(`site: ${loc.code} has no text for ${[...new Set(missing)].join(", ")}`);
   for (const el of d.querySelectorAll("[href], [src]")) {
@@ -238,6 +255,33 @@ export function sitemapXml(url, lastmod) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${entries}\n</urlset>\n`;
 }
 
+/** The stable address of the Chrome extension package, relative to the site root. */
+export const EXTENSION_ZIP = "downloads/p2p-messenger-quick-launch.zip";
+
+/**
+ * Packs the extension from the same checkout as the site and publishes it under downloads/:
+ * a stable name (the button), the versioned name, and extension.json with what the page shows.
+ * The bytes are the same on every build of the same files (scripts/extension/pack.mjs).
+ */
+export function publishExtension(dist, src = EXTENSION_SRC) {
+  const pkg = packExtension({ src });
+  const dir = join(dist, "downloads");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "p2p-messenger-quick-launch.zip"), pkg.zip);
+  writeFileSync(join(dir, pkg.file), pkg.zip);
+  const info = { version: pkg.version, size: pkg.size, sha256: pkg.sha256, file: pkg.file };
+  writeFileSync(join(dir, "extension.json"), `${JSON.stringify(info, null, 2)}\n`);
+  return info;
+}
+
+/** Fills the (empty) extension block of the page. Same escaping as the releases block. */
+export function injectExtension(html, info) {
+  const json = JSON.stringify(info).replaceAll("<", "\\u003c");
+  const marker = /(<script type="application\/json" id="extension-info">)[\s\S]*?(<\/script>)/;
+  if (!marker.test(html)) throw new Error("extension block not found in site/index.html");
+  return html.replace(marker, (_m, a, b) => `${a}${json}${b}`);
+}
+
 export function injectReleases(html, picked) {
   const LS = String.fromCharCode(0x2028), PS = String.fromCharCode(0x2029);
   const json = JSON.stringify(picked).replaceAll("<", "\\u003c").replaceAll(LS, "\\u2028").replaceAll(PS, "\\u2029");
@@ -301,7 +345,7 @@ function run(cmd, args, env) {
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(" ")} failed (${r.status})`);
 }
 
-export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "site"), releases, closed = isClosed(), repo = releasesRepo(), url = siteUrl(), now = new Date() } = {}) {
+export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "site"), extensionSrc = EXTENSION_SRC, releases, closed = isClosed(), repo = releasesRepo(), url = siteUrl(), now = new Date() } = {}) {
   if (!existsSync(join(dist, "index.html"))) throw new Error(`${dist}/index.html is missing: build the app first`);
   const appTmp = `${dist}-app`;
   rmSync(appTmp, { recursive: true, force: true });
@@ -332,7 +376,8 @@ export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "s
 
   // releases (and, when the source is private, the wording) of the public page
   const toRepo = (t) => t.replaceAll(`github.com/${REPO}/releases`, `github.com/${repo}/releases`).replaceAll("{{PUBLIC_REPO}}", repo);
-  const html = injectReleases(applyMode(toRepo(readFileSync(join(dist, "index.html"), "utf8")), { closed, lang: "bg" }), pickDownloads(releases ?? []));
+  const extension = publishExtension(dist, extensionSrc);
+  const html = injectExtension(injectReleases(applyMode(toRepo(readFileSync(join(dist, "index.html"), "utf8")), { closed, lang: "bg" }), pickDownloads(releases ?? [])), extension);
   const dl = join(dist, "downloads.js");
   writeFileSync(dl, readFileSync(dl, "utf8").replace(`REPO = "${REPO}"`, `REPO = "${repo}"`));
   const i18n = join(dist, "i18n.js");

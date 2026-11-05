@@ -115,6 +115,7 @@
             </a>
           </div>
           <p class="cta-note reveal" data-primary-note data-i18n="ctaNote">Отворен код · Windows, Linux, Android, iPhone и браузър</p>
+          <p class="ext-link reveal"><a href="#download" data-open-tab="extension" data-i18n="extHeroLink">Разширение за Chrome →</a></p>
         </div>
 
         <!-- the live demo: a message is sealed, travels with nobody in between, and is opened -->
@@ -414,6 +415,7 @@
           <button role="tab" type="button" data-tab="android" id="tab-android" aria-controls="dl-android">Android</button>
           <button role="tab" type="button" data-tab="ios" id="tab-ios" aria-controls="dl-ios">iPhone · iPad</button>
           <button role="tab" type="button" data-tab="web" id="tab-web" aria-controls="dl-web" data-i18n="osWeb">Браузър</button>
+          <button role="tab" type="button" data-tab="extension" id="tab-extension" aria-controls="dl-extension" data-i18n="osExtension">Разширение</button>
           <span class="tab-ink" aria-hidden="true"></span>
         </div>
 
@@ -468,6 +470,37 @@
             <p class="panel-lead" data-i18n="webLead">Chrome, Edge, Firefox или Safari, на компютър или телефон. След първото отваряне работи и без интернет за заредените части.</p>
             <a class="btn btn-main" href="app/"><span data-i18n="openApp">Отвори в браузъра</span></a>
           </div>
+
+          <div class="panel" role="tabpanel" id="dl-extension" aria-labelledby="tab-extension" data-panel="extension" hidden>
+            <div class="panel-head"><h3 data-i18n="extTitle">Разширение за Chrome</h3><span class="badge" data-ext-badge></span></div>
+            <div class="ext-grid">
+              <div class="ext-demo" role="img" aria-label="Как изглежда прозорчето на разширението" data-i18n-aria="extMockLabel">
+                <div class="ext-bar" aria-hidden="true"><i></i><i></i><i></i><span class="ext-addr">dyrakarmy.online/app/</span><span class="ext-pin"></span></div>
+                <div class="ext-popup" aria-hidden="true" data-ext-mock lang="bg">
+                  <div class="ext-brand"><span class="ext-ico"></span><div><div class="ext-h1" data-ext-msg="popupTitle">P2P Messenger</div><div class="ext-sub" data-ext-msg="popupSubtitle">Личен, директен, без сървъри.</div></div></div>
+                  <div class="ext-status" data-ext-msg="statusClosed">Още не е отворен.</div>
+                  <div class="ext-btn primary" data-ext-msg="openMessenger">Отвори месинджъра</div>
+                  <div class="ext-btn" data-ext-msg="openWindow">Отвори в малък прозорец</div>
+                  <div class="ext-foot"><p data-ext-msg="shortcutHint">Клавиши: Ctrl+Shift+M (Command+Shift+M на Mac)</p><p data-ext-msg="privacyNote">Разширението само отваря приложението. Не събира данни и няма собствени сървъри.</p></div>
+                </div>
+              </div>
+              <div class="ext-info">
+                <p class="panel-lead" data-i18n-html="extLead">Малък бутон до адресната лента, който отваря месинджъра с един клик или с <code>Ctrl+Shift+M</code>. Ако вече е отворен в раздел, го връща напред. Не събира данни и няма свои сървъри.</p>
+                <div class="files">
+                  <a class="file main" href="downloads/p2p-messenger-quick-launch.zip" download="p2p-messenger-quick-launch.zip" data-ext-file><b data-i18n="extFile">Свали разширението</b><small>.zip · Chromium</small><span class="meta" data-ext-meta></span></a>
+                </div>
+                <div class="code-line" data-ext-sha-line hidden><span class="mono"><span class="sha-label">SHA-256</span> <span data-ext-sha></span></span><button class="copy" type="button" data-copy-from="[data-ext-sha]" data-i18n="copy">Копирай</button></div>
+                <p class="hint" data-i18n="extBrowsers">Работи в Chrome, Edge, Brave и други браузъри на Chromium. Във Firefox и Safari ползвай приложението директно.</p>
+                <p class="hint ext-store" data-i18n="extStore">Не е в Chrome Web Store, затова се добавя ръчно като „разархивирано разширение“. Chrome може да покаже предупреждение за режим за разработчици: това е нормално.</p>
+              </div>
+            </div>
+            <ol class="mini-steps ext-steps">
+              <li data-i18n="ext1">Свали файла и го разархивирай в папка, която няма да триеш: Chrome чете разширението оттам.</li>
+              <li data-i18n-html="ext2">Отвори <code>chrome://extensions</code> (в Edge: <code>edge://extensions</code>) и включи „Режим за разработчици“ горе вдясно.</li>
+              <li data-i18n="ext3">Натисни „Зареди неопакован“ (Load unpacked) и избери разархивираната папка, в която е manifest.json.</li>
+              <li data-i18n-html="ext4">Готово. Закачи иконата от пъзела до адресната лента и натисни <code>Ctrl+Shift+M</code> (на Mac: <code>Command+Shift+M</code>).</li>
+            </ol>
+          </div>
         </div>
         <p class="all-releases reveal"><a href="https://github.com/biramentv-ux/p2p-pure/releases" rel="noopener" data-i18n="allReleases">Всички издания и бележки в GitHub →</a></p>
       </section>
@@ -521,5 +554,7 @@
 
     <!-- Filled in by the build (scripts/site/build.mjs) from the GitHub releases. -->
     <script type="application/json" id="releases">{}</script>
+    <!-- Version, size and SHA-256 of downloads/p2p-messenger-quick-launch.zip, filled in by the build. -->
+    <script type="application/json" id="extension-info">{}</script>
   </body>
 </html>

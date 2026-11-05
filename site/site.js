@@ -342,6 +342,19 @@ function setPrimary() {
   }
 }
 
+/* the Chrome extension: version, size and SHA-256 come from the build (downloads/extension.json) */
+function fillExtension() {
+  let info = {};
+  try { info = JSON.parse($("#extension-info")?.textContent || "{}") || {}; } catch { info = {}; }
+  const badge = $("[data-ext-badge]");
+  if (!info.version || !info.sha256) return; // the link still works; only the details are missing
+  badge.textContent = `v${info.version}`;
+  $("[data-ext-meta]").textContent = [formatSize(info.size), info.file].filter(Boolean).join(" · ");
+  $("[data-ext-sha]").textContent = info.sha256;
+  $("[data-ext-sha-line]").hidden = false;
+}
+fillExtension();
+
 /* tabs */
 const tabs = $$(".os-tabs [role=tab]");
 const ink = $(".tab-ink");
@@ -371,9 +384,12 @@ $(".os-tabs")?.addEventListener("keydown", (e) => {
   selectTab(tabs[(next + tabs.length) % tabs.length].dataset.tab, true);
 });
 function tabFromHash() {
-  const m = /^#dl-(windows|linux|android|ios|web)$/.exec(location.hash);
+  const m = /^#dl-(windows|linux|android|ios|web|extension)$/.exec(location.hash);
   if (m) selectTab(m[1]);
+  return Boolean(m);
 }
+// links that open a tab of the downloads section (the Chrome extension link in the hero)
+for (const a of $$("[data-open-tab]")) a.addEventListener("click", () => selectTab(a.dataset.openTab));
 addEventListener("hashchange", tabFromHash);
 addEventListener("resize", placeInk);
 document.fonts?.ready.then(placeInk);
@@ -398,5 +414,5 @@ for (const b of $$(".copy")) {
 
 /* ------------------------------------------------------------------ start */
 selectTab(OS_TAB[os] || "windows");
-tabFromHash();
+if (tabFromHash()) requestAnimationFrame(() => $(location.hash)?.scrollIntoView());
 applyLang();
