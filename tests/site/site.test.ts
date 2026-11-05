@@ -3,11 +3,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 // @ts-expect-error plain ES modules, shared with the browser
 import { detectOS, formatSize, pickDownloads, versionOf } from "../../site/downloads.js";
 // @ts-expect-error plain ES module script
-import { FONT_FILES, OPEN_CLAIM, applyMode, assemble, injectReleases, killSwitchWorker, releasesRepo, siteUrl } from "../../scripts/site/build.mjs";
+import { EXTENSION_ZIP, FONT_FILES, OPEN_CLAIM, applyMode, assemble, injectExtension, injectReleases, killSwitchWorker, releasesRepo, siteUrl } from "../../scripts/site/build.mjs";
 // @ts-expect-error plain ES module
 import { BG_EXTRA, EN } from "../../site/i18n.js";
 // @ts-expect-error plain ES module
@@ -579,3 +580,103 @@ describe("publishing", () => {
   });
 });
 
+
+describe("the Chrome extension download", () => {
+  const html = read("site/index.html");
+  const dirs: string[] = [];
+  afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+
+  async function built(env: { closed?: boolean } = {}) {
+    const d = mkdtempSync(join(tmpdir(), "site-ext-"));
+    dirs.push(d);
+    const dist = join(d, "dist");
+    mkdirSync(dist);
+    writeFileSync(join(dist, "index.html"), "<!doctype html><title>app</title>");
+    await assemble({ dist, site: join(root, "site"), releases: [], ...env });
+    return dist;
+  }
+
+  it("has a sixth, accessible tab and panel after the browser one, in the page and in every language", async () => {
+    expect(html).toMatch(/<button role="tab" type="button" data-tab="extension" id="tab-extension" aria-controls="dl-extension"/);
+    expect(html).toMatch(/<div class="panel" role="tabpanel" id="dl-extension" aria-labelledby="tab-extension" data-panel="extension" hidden>/);
+    expect(html.match(/role="tab"/g)?.length).toBe(6);
+    const dist = await built();
+    for (const l of LOCALES as Locale[]) {
+      const page = readFileSync(join(dist, l.path, "index.html"), "utf8");
+      expect(page, l.code).toContain('id="tab-extension"');
+      expect(page, l.code).toContain('id="dl-extension"');
+      expect(page, l.code).toContain('data-open-tab="extension"');
+      // the download link is relative to the page, so it resolves from every language folder
+      expect(page, l.code).toContain(`href="${l.path ? "../" : ""}${EXTENSION_ZIP}"`);
+    }
+    expect(readFileSync(join(dist, "ru/index.html"), "utf8")).toContain("Расширение для Chrome");
+    expect(readFileSync(join(dist, "zh/index.html"), "utf8")).toContain("Chrome 扩展程序");
+  });
+
+  it("every extension text exists in English and in all six other packs", () => {
+    const keys = ["osExtension", "extTitle", "extLead", "extMockLabel", "extFile", "extBrowsers", "extStore", "ext1", "ext2", "ext3", "ext4", "extHeroLink"];
+    for (const k of keys) {
+      expect(EN[k], `en.${k}`).toBeTruthy();
+      for (const l of FOREIGN) expect(packs[l.code][k], `${l.code}.${k}`).toBeTruthy();
+    }
+  });
+
+  it("says plainly that it is not in the Chrome Web Store and shows the four steps", () => {
+    expect(EN.extStore).toMatch(/not in the Chrome Web Store/);
+    expect(html).toMatch(/Load unpacked/);
+    expect(EN.ext2).toContain("chrome://extensions");
+    expect(EN.ext2).toMatch(/Developer mode/);
+    expect(html.match(/data-i18n(?:-html)?="ext[1-4]"/g)?.length).toBe(4);
+    expect(html).not.toMatch(/Chrome Web Store,? (е|is) available|available in the Chrome Web Store/i);
+  });
+
+  it("shows the popup as the extension has it: Bulgarian on the Bulgarian page, the extension's English elsewhere", async () => {
+    const bg = JSON.parse(read("extension/_locales/bg/messages.json"));
+    const en = JSON.parse(read("extension/_locales/en/messages.json"));
+    for (const m of html.matchAll(/data-ext-msg="(\w+)">([^<]*)</g)) expect(m[2], m[1]).toBe(bg[m[1]].message);
+    const dist = await built();
+    const enPage = readFileSync(join(dist, "ru/index.html"), "utf8");
+    for (const m of enPage.matchAll(/data-ext-msg="(\w+)">([^<]*)</g)) expect(m[2], m[1]).toBe(en[m[1]].message);
+    expect(enPage).toMatch(/data-ext-mock(="")? lang="en"/);
+    // the toolbar icon in the mock is the extension's own icon
+    expect(readFileSync(join(root, "site/ext-icon.png")).equals(readFileSync(join(root, "extension/icons/icon-48.png")))).toBe(true);
+  });
+
+  it("the build publishes the zip under a stable and a versioned name, with extension.json that matches the bytes", async () => {
+    const dist = await built();
+    const info = JSON.parse(readFileSync(join(dist, "downloads/extension.json"), "utf8"));
+    const manifest = JSON.parse(read("extension/manifest.json"));
+    expect(info).toEqual({ version: manifest.version, size: expect.any(Number), sha256: expect.stringMatching(/^[0-9a-f]{64}$/), file: `p2p-messenger-quick-launch-${manifest.version}.zip` });
+    const stable = readFileSync(join(dist, EXTENSION_ZIP));
+    const versioned = readFileSync(join(dist, "downloads", info.file));
+    expect(stable.equals(versioned)).toBe(true);
+    expect(stable.length).toBe(info.size);
+    expect(createHash("sha256").update(stable).digest("hex")).toBe(info.sha256);
+    // a zip: local header first, manifest.json inside, nothing but the extension folder
+    expect(stable.subarray(0, 4).toString("hex")).toBe("504b0304");
+    expect(stable.includes(Buffer.from("manifest.json"))).toBe(true);
+    expect(stable.includes(Buffer.from("tests/"))).toBe(false);
+    // the page carries the same facts for the script to show
+    const page = readFileSync(join(dist, "index.html"), "utf8");
+    expect(page).toContain(`id="extension-info">${JSON.stringify(info)}</script>`);
+  });
+
+  it("is deterministic: the same files give the same bytes", async () => {
+    const a = JSON.parse(readFileSync(join(await built(), "downloads/extension.json"), "utf8"));
+    const b = JSON.parse(readFileSync(join(await built({ closed: true }), "downloads/extension.json"), "utf8"));
+    expect(a.sha256).toBe(b.sha256);
+  });
+
+  it("is built by the Pages workflow's own build step on every push to main", () => {
+    const wf = read(".github/workflows/pages.yml");
+    expect(wf).toMatch(/push:\s*\n\s*branches: \[main\]/);
+    expect(wf).toMatch(/node scripts\/site\/build\.mjs --build/);
+    expect(read("scripts/site/build.mjs")).toMatch(/publishExtension\(dist/);
+  });
+
+  it("escapes the data block like the releases one", () => {
+    const out = injectExtension('<script type="application/json" id="extension-info">{}</script>', { file: "</script><b>" });
+    expect(out).not.toMatch(/<\/script><b>/);
+    expect(() => injectExtension("<p>nothing</p>", {})).toThrow(/extension block/);
+  });
+});
