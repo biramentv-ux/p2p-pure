@@ -1,7 +1,7 @@
 {
   "name": "p2p-messenger",
   "productName": "P2P Messenger",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Encrypted peer-to-peer messenger. Messages, calls and history stay on the devices; no account, no phone number.",
   "author": {
     "name": "DyrakArmy",
