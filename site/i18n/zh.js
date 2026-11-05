@@ -79,6 +79,7 @@ export default {
   iosBadge: "通过 Safari", ios1: "在 Safari 中打开 <a href=\"app/\">应用</a>。", ios2: "轻点“分享”（带箭头的方框）。", ios3: "选择“添加到主屏幕”。全屏运行，和真正的 App 一样。",
   iosHint: "App Store 上暂时还没有。网页版是同一份代码，功能一样不少。",
   webTitle: "直接在浏览器里用", webBadge: "无需安装", webLead: "Chrome、Edge、Firefox 或 Safari，电脑和手机都行。首次访问后，已加载的部分可以离线使用。",
+  osExtension: "扩展程序", extTitle: "Chrome 扩展程序", extMockLabel: "扩展程序弹出窗口的样子", extLead: "地址栏旁的一个小按钮，点一下或按 <code>Ctrl+Shift+M</code> 就能打开信使。如果已在某个标签页打开，就把它切到前面。它不收集任何数据，也没有自己的服务器。", extFile: "下载扩展程序", extBrowsers: "适用于 Chrome、Edge、Brave 和其他基于 Chromium 的浏览器。Firefox 和 Safari 请直接使用应用。", extStore: "它不在 Chrome 应用商店（Chrome Web Store）里，所以要手动作为“已解压的扩展程序”添加。Chrome 可能会显示开发者模式的提示：这是正常的。", ext1: "下载文件，并解压到一个你不会删除的文件夹：Chrome 会从那里读取扩展程序。", ext2: "打开 <code>chrome://extensions</code>（Edge 中是 <code>edge://extensions</code>），并打开右上角的“开发者模式”。", ext3: "点击“加载已解压的扩展程序”（Load unpacked），选择解压后的文件夹，也就是里面有 manifest.json 的那个。", ext4: "完成。在地址栏旁的拼图菜单中固定图标，然后按 <code>Ctrl+Shift+M</code>（Mac 上是 <code>Command+Shift+M</code>）。", extHeroLink: "Chrome 扩展程序 →",
   allReleases: "GitHub 上的所有版本和说明 →", footReleases: "版本发布",
   soon: "见版本发布页", badgePreview: "测试版", badgeSoon: "即将推出",
   faqKicker: "常见问题", faqTitle: "大家常问。<br /><em>我们直说。</em>",

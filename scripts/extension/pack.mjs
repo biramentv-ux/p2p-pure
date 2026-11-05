@@ -6,14 +6,15 @@
  * No dependencies: a small zip writer (deflate + CRC-32). Only files under extension/
  * are included, so the repo's tests, docs and secrets never end up in the package.
  */
+import { createHash } from "node:crypto";
 import { deflateRawSync } from "node:zlib";
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const SRC = resolve("extension");
-const OUT_DIR = resolve("dist", "extension");
-const manifest = JSON.parse(readFileSync(join(SRC, "manifest.json"), "utf8"));
-const OUT = join(OUT_DIR, `p2p-messenger-quick-launch-${manifest.version}.zip`);
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+/** The same extension is also published by the site build (scripts/site/build.mjs). */
+export const EXTENSION_SRC = join(ROOT, "extension");
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -38,11 +39,12 @@ function walk(dir) {
   });
 }
 
-/** DOS date/time for "now" in local time, as the zip format stores it. */
-function dosStamp(date = new Date()) {
-  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
-  const day = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
-  return { time, day };
+/**
+ * DOS date/time stored in the zip. Fixed at 1980-01-01 00:00, so the same files always give the same
+ * bytes (and the same SHA-256) no matter when or where the package is made.
+ */
+function dosStamp() {
+  return { time: 0, day: (0 << 9) | (1 << 5) | 1 };
 }
 
 function buildZip(entries) {
@@ -95,14 +97,33 @@ function buildZip(entries) {
   return Buffer.concat([...locals, centralBuf, end]);
 }
 
-const files = walk(SRC).sort();
-const entries = files.map((path) => ({
-  // Zip paths always use forward slashes.
-  name: relative(SRC, path).split(sep).join("/"),
-  data: readFileSync(path),
-}));
+/**
+ * Packs the extension folder. Deterministic: sorted names, fixed timestamps, no local state.
+ * Returns the file name, the bytes, and what the site shows next to the download button.
+ */
+export function packExtension({ src = EXTENSION_SRC } = {}) {
+  const manifest = JSON.parse(readFileSync(join(src, "manifest.json"), "utf8"));
+  const entries = walk(src).sort().map((path) => ({
+    // Zip paths always use forward slashes.
+    name: relative(src, path).split(sep).join("/"),
+    data: readFileSync(path),
+  }));
+  const zip = buildZip(entries);
+  return {
+    version: manifest.version,
+    file: `p2p-messenger-quick-launch-${manifest.version}.zip`,
+    zip,
+    size: zip.length,
+    sha256: createHash("sha256").update(zip).digest("hex"),
+    entries: entries.map((e) => e.name),
+  };
+}
 
-mkdirSync(OUT_DIR, { recursive: true });
-writeFileSync(OUT, buildZip(entries));
-console.log(`Packed ${entries.length} files into ${OUT}`);
-for (const e of entries) console.log(`  ${e.name}`);
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  const outDir = resolve("dist", "extension");
+  const pkg = packExtension();
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, pkg.file), pkg.zip);
+  console.log(`Packed ${pkg.entries.length} files into ${join(outDir, pkg.file)}`);
+  for (const name of pkg.entries) console.log(`  ${name}`);
+}

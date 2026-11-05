@@ -692,6 +692,45 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
   .scroll-hint { display: none; }
 }
 
+/* ---------- Chrome extension tab: a static copy of the popup (extension/popup.css), light as Chrome shows it by default ---------- */
+.ext-grid { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: clamp(22px, 4vw, 44px); align-items: start; }
+.ext-info .panel-lead { margin-bottom: 18px; }
+.ext-info .hint { margin-top: 14px; }
+.ext-info .code-line { margin-top: 12px; }
+.ext-info .code-line .mono { white-space: normal; word-break: break-all; overflow: visible; line-height: 1.5; }
+.sha-label { color: var(--muted); }
+.ext-steps { margin-top: 28px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px 24px; }
+.ext-link { margin-top: 10px; font-size: 0.95rem; }
+.ext-link a { color: var(--a); text-decoration: none; font-weight: 600; border-bottom: 1px solid currentColor; }
+.mini-steps code, .ext-lead code, .ext-info code { font-family: var(--mono); font-size: 0.86em; padding: 1px 6px; border-radius: 6px; background: var(--a-soft); border: 1px solid var(--line-strong); color: var(--text-h); white-space: nowrap; }
+
+.ext-demo { width: 100%; max-width: 380px; border-radius: 16px; border: 1px solid var(--line-strong); background: var(--bg-2); overflow: hidden; box-shadow: 0 30px 60px -36px var(--glow-a); }
+.ext-bar { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--line-strong); }
+.ext-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+.ext-addr { flex: 1; margin: 0 8px; padding: 4px 12px; border-radius: 999px; background: var(--bg); font-family: var(--mono); font-size: 0.72rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ext-pin { width: 22px; height: 22px; border-radius: 6px; background: url("ext-icon.png") center/20px no-repeat; outline: 2px solid var(--b); outline-offset: 2px; }
+.ext-popup {
+  --p-ink: #f1f5fa; --p-card: #ffffff; --p-line: #cbd7e6; --p-text: #13213a; --p-h: #0c1628; --p-muted: #5c6880; --p-act: #1f6fc4; --p-seal: #d41b7f;
+  width: 340px; max-width: calc(100% - 24px); margin: 14px auto 18px; display: flex; flex-direction: column; gap: 14px; padding: 20px 18px 18px;
+  color: var(--p-text); font: 15px/1.5 var(--sans); letter-spacing: 0.005em;
+  background: var(--p-ink); border-top: 4px solid var(--p-seal); border-image: linear-gradient(90deg, var(--p-seal), var(--p-act)) 1;
+  border-radius: 0 0 10px 10px; box-shadow: 0 1px 0 #fff inset, 0 14px 30px -18px rgba(19, 33, 58, 0.5); user-select: none;
+}
+.ext-brand { display: flex; align-items: center; gap: 12px; }
+.ext-ico { flex: none; width: 40px; height: 40px; border-radius: 6px; background: url("ext-icon.png") center/40px no-repeat; }
+.ext-h1 { font-family: var(--serif); font-weight: 600; font-size: 21px; line-height: 1.15; letter-spacing: -0.01em; color: var(--p-h); }
+.ext-sub { margin-top: 2px; color: var(--p-muted); font-size: 13px; }
+.ext-status { padding: 11px 14px; border-radius: 6px; background: var(--p-card); color: var(--p-text); }
+.ext-btn { min-height: 48px; display: grid; place-items: center; padding: 0.6rem 1rem; text-align: center; border-radius: 6px; font-weight: 600; border: 1.5px solid var(--p-line); background: var(--p-card); color: var(--p-h); }
+.ext-btn.primary { border-color: transparent; background: var(--p-act); color: #fff; }
+.ext-popup .ext-btn + .ext-btn { margin-top: -4px; }
+.ext-foot { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; border-top: 1.5px dashed var(--p-line); color: var(--p-muted); font-size: 12px; }
+.ext-foot p { margin: 0; }
+@media (max-width: 860px) {
+  .ext-grid { grid-template-columns: minmax(0, 1fr); }
+  .ext-demo { margin: 0 auto; }
+}
+
 /* ---------- motion off ---------- */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

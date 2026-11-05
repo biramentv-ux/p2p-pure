@@ -97,7 +97,21 @@ flowchart LR
 - **Локален** (`OfflineSignalingProvider`): поканата е подписан текст, показан като QR. Без мрежови заявки.
 - **Демо** (`PakeSignalingProvider` върху `WebSocketSignalingProvider`): стая в Worker-а с 5-знаков номер и 3 думи, които остават на устройствата. Двете страни пускат CPace с думите, потвърждават ключа и чак тогава пращат поканата, шифрована (XChaCha20-Poly1305). Грешна дума проваля сдвояването; стаята не се ползва повторно. Старите клиенти с 10-знакови стаи още се приемат. Подробности: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-## 🎬 Урок: как Ани и Петър се свързват
+## 🎬 Урок: 7 начина да се свържете
+
+<img src="docs/assets/tutorial-connect-bg.gif" alt="Анимация: 7 начина да се свържете. 1 QR лице в лице, 2 кратък код (демо стая), 3 Bluetooth, 4 QR + звук, 5 QR + светлина, 6 запознаване чрез общ приятел, 7 Telegram бот или копирана покана. После двамата сравняват 12-те думи" width="640">
+
+1. **QR лице в лице.** „Локален (QR)“: единият показва QR, другият го сканира и показва свой QR в отговор. Без сървър.
+2. **Кратък код.** „Демо (стая)“: код от 5 знака и 3 думи, казан на глас. Сървърът вижда само номера на стаята.
+3. **Bluetooth.** Само в приложението: единият показва 4-знаков код, другият го избира от списъка.
+4. **QR + звук.** QR в едната посока, в другата отговорът се чува (около 15 секунди, нужен е микрофон).
+5. **QR + светлина.** QR в едната посока, в другата отговорът се чете от камерата като цветна анимация (3 до 8 секунди), след предупреждение за фоточувствителност.
+6. **Общ приятел.** Той избира двама свои контакти с „Запознай двама“; и двамата приемат. Тримата трябва да са свързани едновременно.
+7. **Telegram бот / копирана покана.** Поканата (`p2p1:…`) се праща през бота или през какъвто канал искате.
+
+След всеки начин сравнете **12-те думи** по друг канал и натиснете „Думите съвпадат“. Сравнение на начините, сигурност и платформи: [docs/CONNECTING.md](docs/CONNECTING.md). Анимацията се прави със `node scripts/docs/tutorial-connect-gif.mjs`.
+
+### Пътят на Ани и Петър от край до край
 
 <img src="docs/assets/tutorial-far-away.gif" alt="Анимация в 9 стъпки: профил, избор на режим, покана, демо стая, 12 думи за проверка, чат, разговор, група и устройства" width="640">
 
@@ -422,7 +436,21 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 - **Local** (`OfflineSignalingProvider`): the invitation is signed text shown as a QR code. No network requests.
 - **Demo** (`PakeSignalingProvider` over `WebSocketSignalingProvider`): a room on the Worker with a 5-character number and 3 words that stay on the devices. Both sides run CPace with the words, confirm the key, and only then send the invitation, encrypted (XChaCha20-Poly1305). A wrong word fails the pairing; a room is never reused. Old clients with 10-character rooms are still accepted. Details: [docs/DEMO-SIGNALING.md](docs/DEMO-SIGNALING.md).
 
-## 🎬 Tutorial: how Ani and Petar connect
+## 🎬 Tutorial: 7 ways to connect
+
+<img src="docs/assets/tutorial-connect-en.gif" alt="Animation: 7 ways to connect. 1 QR face to face, 2 short code (demo room), 3 Bluetooth, 4 QR + sound, 5 QR + light, 6 introduction by a mutual friend, 7 Telegram bot or copied invitation. Then both compare the 12 words" width="640">
+
+1. **QR, face to face.** "Local (QR)": one shows a QR, the other scans it and shows a QR back. No server.
+2. **Short code.** "Demo (room)": a code of 5 characters and 3 words, said aloud. The server sees only the room number.
+3. **Bluetooth.** App only: one phone shows a 4-character code, the other picks it from the list.
+4. **QR + sound.** QR one way; the reply comes back as sound (about 15 seconds, needs a microphone).
+5. **QR + light.** QR one way; the reply is read by the camera as a colour animation (3 to 8 seconds), after a warning for light-sensitive people.
+6. **Mutual friend.** They pick two of their contacts with "Introduce two people"; both accept. All three must be connected at the same time.
+7. **Telegram bot / copied invitation.** The invitation (`p2p1:…`) is sent through the bot or any channel you like.
+
+After any method, compare the **12 words** over another channel and tap "The words match". Comparison of the methods, security and platforms: [docs/CONNECTING.md](docs/CONNECTING.md). The animation is built with `node scripts/docs/tutorial-connect-gif.mjs`.
+
+### Ani and Petar, end to end
 
 <img src="docs/assets/tutorial-far-away.gif" alt="Nine-step animation: profile, mode, invitation, demo room, 12 verification words, chat, call, group and devices (labels in Bulgarian)" width="640">
 
