@@ -134,12 +134,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "FINGERPRINT=$fp" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      # Handed to the next job through the Actions cache, not an artifact: artifacts count against
+      # the account's storage quota, and a full quota stopped every release (as with pages.yml).
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          name: p2p-messenger-android-apk
-          path: out/*
-          if-no-files-found: error
-          retention-days: 3
+          path: out
+          key: p2p-messenger-android-apk-${{ github.run_id }}
 
   release:
     needs: build
@@ -149,10 +149,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          name: p2p-messenger-android-apk
           path: out
+          key: p2p-messenger-android-apk-${{ github.run_id }}
+          fail-on-cache-miss: true
       - name: Attach to the release
         env:
           # The releases live here: this repository, or a separate public one when the source is
