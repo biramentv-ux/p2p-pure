@@ -163,7 +163,6 @@ function build(lang) {
   const T = (k) => D[k][i];
   const L = (bg, en) => (i === 0 ? bg : en);
   const nm = (k) => (i === 0 ? people[k][0] : { A: "Ani", B: "Petar", C: "Iva" }[k]);
-  const ph = (inner, o = {}) => `<h4>${o.h ?? ""}</h4>${inner}`;
   const methods = [
     { n: 1, name: L("QR лице в лице", "QR, face to face"), steps: [
       { t: L("И двамата избират „Локален (QR)“", "Both pick “Local (QR)”"),
@@ -276,9 +275,8 @@ function build(lang) {
   return { frames, T, L, nm };
 }
 
-const peopleName = (lang, key) => (lang === "bg" ? people[key][0] : { A: "Ani", B: "Petar", C: "Iva" }[key]);
 
-function pageHtml(lang, f, idx) {
+function pageHtml(lang, f) {
   const { T, L, nm } = build(lang);
   const dots = (cur, done) => `<div class="dots">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<i class="${n === cur ? "on" : n < done ? "done" : ""}">${n}</i>`).join("")}</div>`;
   const top = (cur, done) => `<div class="top"><b>${T("brand")} · ${L("как се свързват двама", "how two people connect")}</b>${dots(cur, done)}</div>`;
