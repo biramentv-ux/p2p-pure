@@ -10,6 +10,33 @@ interface CallPanelProps {
   onHangup: () => void;
   onToggleMute: () => void;
   onToggleCamera: () => void;
+  /** Front ↔ back camera; absent when the device has one camera (Н6). */
+  onSwitchCamera?: () => void;
+  /** Share the screen / stop sharing; absent where the browser cannot share a screen. */
+  onToggleScreen?: () => void;
+}
+
+const QUALITY_LABEL = { good: "Добра връзка", fair: "Средна връзка", poor: "Слаба връзка" } as const;
+
+/** Three bars and a word: how the link is doing, with the numbers on hover. */
+function QualityBadge({ call }: { call: CallSnapshot }) {
+  const { t } = useI18n();
+  if (call.quality === "unknown") return null;
+  const bars = call.quality === "good" ? 3 : call.quality === "fair" ? 2 : 1;
+  const s = call.stats;
+  const detail = s
+    ? t("Закъснение {rtt} ms · загуби {loss}%", { rtt: s.rttMs ?? "?", loss: s.lossPct ?? 0 })
+    : "";
+  return (
+    <span className={`call-quality q-${call.quality}`} title={detail} role="status">
+      <span className="bars" aria-hidden="true">
+        {[1, 2, 3].map((n) => (
+          <i key={n} className={n <= bars ? "on" : ""} />
+        ))}
+      </span>
+      {t(QUALITY_LABEL[call.quality])}
+    </span>
+  );
 }
 
 /** Binds a MediaStream to a media element. */
@@ -21,7 +48,7 @@ function useStream(stream: MediaStream | null) {
   return ref;
 }
 
-export function CallPanel({ call, contactName, onAccept, onDecline, onHangup, onToggleMute, onToggleCamera }: CallPanelProps) {
+export function CallPanel({ call, contactName, onAccept, onDecline, onHangup, onToggleMute, onToggleCamera, onSwitchCamera, onToggleScreen }: CallPanelProps) {
   const { t } = useI18n();
   const remoteVideo = useStream(call.kind === "video" ? call.remote : null);
   const remoteAudio = useStream(call.kind === "audio" ? call.remote : null);
@@ -53,7 +80,12 @@ export function CallPanel({ call, contactName, onAccept, onDecline, onHangup, on
           : t("В разговор");
     return (
       <section className="call-panel" aria-label={t("Разговор")}>
-        <p role="status">{t("{label} ({kind})", { label, kind: kindLabel })}</p>
+        <p role="status">
+          {t("{label} ({kind})", { label, kind: kindLabel })}{" "}
+          {call.phase === "active" && <QualityBadge call={call} />}
+        </p>
+        {call.reconnecting && <p role="status">{t("Мрежата се смени. Премествам разговора…")}</p>}
+        {call.sharing && <p role="status">{t("Споделяш екрана си.")}</p>}
         {call.kind === "video" && (
           <div className="call-video">
             <video ref={remoteVideo} autoPlay playsInline aria-label={t("Видео на събеседника")} />
@@ -68,6 +100,16 @@ export function CallPanel({ call, contactName, onAccept, onDecline, onHangup, on
           {call.kind === "video" && (
             <button className="secondary" onClick={onToggleCamera} aria-pressed={call.cameraOff}>
               {call.cameraOff ? t("Включи камерата") : t("Изключи камерата")}
+            </button>
+          )}
+          {call.kind === "video" && onSwitchCamera && !call.sharing && (
+            <button className="secondary" onClick={onSwitchCamera}>
+              {t("Смени камерата")}
+            </button>
+          )}
+          {call.kind === "video" && onToggleScreen && (
+            <button className="secondary" onClick={onToggleScreen} aria-pressed={call.sharing}>
+              {call.sharing ? t("Спри споделянето") : t("Сподели екрана")}
             </button>
           )}
           <button onClick={onHangup}>{t("Край")}</button>

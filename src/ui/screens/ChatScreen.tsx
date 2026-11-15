@@ -22,7 +22,7 @@ import { buildPhotoFrames, PhotoReceiver, sanitizeText, sniffMime } from "../../
 import { prepareImage } from "../image";
 import { CallController, type CallSnapshot } from "../../call/callController";
 import { encodeSignal, isCallSignal, SignalAssembler } from "../../call/signal";
-import { acquireMedia } from "../../call/media";
+import { acquireCamera, acquireMedia, acquireScreen, hasSeveralCameras, networkTargets } from "../../call/media";
 import { CallPanel } from "../components/CallPanel";
 import { LanguageSwitch } from "../components/LanguageSwitch";
 import { useI18n } from "../../i18n";
@@ -91,6 +91,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const [transfer, setTransfer] = useState<{ label: string; done: number; total: number } | null>(null);
   const receiverRef = useRef(new PhotoReceiver());
   const [call, setCall] = useState<CallSnapshot | null>(null);
+  const [cameras, setCameras] = useState(false);
   const callRef = useRef<CallController | null>(null);
   const assemblerRef = useRef(new SignalAssembler());
   const [locating, setLocating] = useState(false);
@@ -194,7 +195,13 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           for (const part of encodeSignal(signal)) link.send(await session.seal(part));
         }),
       onChange: (snap) => alive && setCall(snap),
+      acquireVideo: acquireCamera,
+      acquireScreen,
+      // Perfect negotiation needs one polite side for an ICE restart outside a call.
+      polite: !session.isInitiator,
+      network: networkTargets(),
     });
+    void hasSeveralCameras().then((several) => alive && setCameras(several));
     callRef.current = controller;
     setCall(controller.state);
 
@@ -723,6 +730,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           onHangup={() => void callRef.current?.hangup()}
           onToggleMute={() => callRef.current?.setMuted(!call.muted)}
           onToggleCamera={() => callRef.current?.setCameraOff(!call.cameraOff)}
+          onSwitchCamera={cameras && callRef.current?.canSwitchCamera ? () => void callRef.current?.switchCamera() : undefined}
+          onToggleScreen={callRef.current?.canShareScreen || call.sharing ? () => void callRef.current?.toggleScreenShare() : undefined}
         />
       )}
 
