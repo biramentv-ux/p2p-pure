@@ -2,7 +2,12 @@
  * Portuguese (Brazil) package. Keys are the exact Bulgarian source strings used in the code (same keys as en.ts).
  * Placeholders ({name}, {n}, ...) must appear in both the key and the value; tests/i18n/i18n.test.ts enforces this.
  */
+import { PROTECT_PT } from "./protect";
+import { CONNECT_PT } from "./connectCalls";
+
 export const PT_DICTIONARY: Record<string, string> = {
+  ...PROTECT_PT,
+  ...CONNECT_PT,
   "Премести на ново устройство": "Mover para um novo dispositivo",
   "Имам друго устройство": "Tenho outro dispositivo",
   "Премести идентичността на ново устройство": "Mova sua identidade para um novo dispositivo",

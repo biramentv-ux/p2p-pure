@@ -3,14 +3,18 @@ import type { UnlockedIdentity } from "../../identity";
 import { useI18n } from "../../i18n";
 import { TurnSettings } from "../components/TurnSettings";
 import { NotificationSettings } from "../components/NotificationSettings";
+import { SecuritySettings } from "../components/SecuritySettings";
+import { RendezvousSettings } from "../components/RendezvousSettings";
 
 interface ShowQrScreenProps {
   identity: UnlockedIdentity;
   /** Opens the one-time move of the identity to a new device. */
   onMove?: () => void;
+  /** Panic wipe of this device (Н7). */
+  onPanic?: () => Promise<void>;
 }
 
-export function ShowQrScreen({ identity, onMove }: ShowQrScreenProps) {
+export function ShowQrScreen({ identity, onMove, onPanic }: ShowQrScreenProps) {
   const { t } = useI18n();
   return (
     <div className="screen">
@@ -27,6 +31,8 @@ export function ShowQrScreen({ identity, onMove }: ShowQrScreenProps) {
       )}
       <NotificationSettings />
       <TurnSettings identity={identity} />
+      <RendezvousSettings />
+      {onPanic && <SecuritySettings onPanic={onPanic} />}
     </div>
   );
 }

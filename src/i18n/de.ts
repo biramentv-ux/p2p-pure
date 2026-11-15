@@ -2,7 +2,12 @@
  * German package. Keys are the exact Bulgarian source strings used in the code (same keys as en.ts).
  * Placeholders ({name}, {n}, ...) must appear in both the key and the value; tests/i18n/i18n.test.ts enforces this.
  */
+import { PROTECT_DE } from "./protect";
+import { CONNECT_DE } from "./connectCalls";
+
 export const DE_DICTIONARY: Record<string, string> = {
+  ...PROTECT_DE,
+  ...CONNECT_DE,
   "Премести на ново устройство": "Auf neues Gerät umziehen",
   "Имам друго устройство": "Ich habe ein anderes Gerät",
   "Премести идентичността на ново устройство": "Identität auf ein neues Gerät umziehen",

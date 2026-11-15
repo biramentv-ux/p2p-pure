@@ -112,8 +112,11 @@ export interface ActiveTransfer {
   name: string;
   size: number;
   direction: "in" | "out";
-  /** offer: waiting for this side to accept; waiting: our offer waits for the peer; moving: bytes flow. */
-  phase: "offer" | "waiting" | "moving";
+  /**
+   * offer: waiting for this side to accept; waiting: our offer waits for the peer; moving: bytes
+   * flow; paused: the link dropped, the file continues on the next link with this contact.
+   */
+  phase: "offer" | "waiting" | "moving" | "paused";
   done: number;
 }
 
@@ -142,11 +145,13 @@ export function TransferList({ items, onAccept, onCancel }: TransferListProps) {
                   ? t("иска да ти изпрати файл")
                   : it.phase === "waiting"
                     ? t("чака другият да приеме")
-                    : it.direction === "in"
+                    : it.phase === "paused"
+                      ? t("прекъснато на {percent}%, продължава при следващото свързване", { percent })
+                      : it.direction === "in"
                       ? t("получавам {percent}%", { percent })
                       : t("изпращам {percent}%", { percent })}
               </small>
-              {it.phase === "moving" && (
+              {(it.phase === "moving" || it.phase === "paused") && (
                 <progress max={100} value={percent} aria-label={t("Напредък на {name}", { name: it.name })} />
               )}
             </span>

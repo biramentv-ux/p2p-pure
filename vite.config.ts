@@ -14,6 +14,10 @@ function contentSecurityPolicy(): Plugin {
   // Desktop (Tauri) build only: the window talks to its two Windows Hello commands over
   // Tauri's IPC protocol. Without these sources the call is blocked and falls back.
   let tauriIpc = ''
+  // Н2: the public Nostr relays the rendezvous may use (src/rendezvous/relayPool.ts
+  // DEFAULT_RELAYS; a test build passes its own with VITE_NOSTR_RELAYS). Exactly these, not
+  // "wss:", so a script that got in cannot open a socket to anywhere else.
+  let nostrRelays = 'wss://relay.damus.io wss://nos.lol wss://relay.primal.net wss://relay.snort.social'
   return {
     name: 'csp-meta',
     apply: 'build',
@@ -21,6 +25,7 @@ function contentSecurityPolicy(): Plugin {
       if (config.mode === 'desktop') tauriIpc = ' ipc: http://ipc.localhost'
       const env = loadEnv(config.mode, config.envDir ?? process.cwd(), 'VITE_')
       if (env.VITE_INVITE_API) inviteOrigin = new URL(env.VITE_INVITE_API).origin
+      if (env.VITE_NOSTR_RELAYS) nostrRelays = env.VITE_NOSTR_RELAYS.split(',').map((s) => s.trim()).filter(Boolean).join(' ')
     },
     transformIndexHtml: {
       order: 'post',
@@ -34,7 +39,7 @@ function contentSecurityPolicy(): Plugin {
           "font-src 'self' data:",
           // Demo signalling also uses a WebSocket to the same host (wss:// or ws://).
           // GIPHY search and the chosen GIF's download, from the sender's device only.
-          `connect-src 'self' ${inviteOrigin} ${inviteOrigin.replace(/^http/, 'ws')} https://api.giphy.com https://*.giphy.com${tauriIpc}`,
+          `connect-src 'self' ${inviteOrigin} ${inviteOrigin.replace(/^http/, 'ws')} https://api.giphy.com https://*.giphy.com ${nostrRelays}${tauriIpc}`,
           "worker-src 'self'",
           "manifest-src 'self'",
           "media-src 'self' blob:",

@@ -191,6 +191,46 @@ try {
   await alice.page.locator('a.file-download[download="архив-100MB.bin"]').waitFor({ timeout: 30_000 });
   check("the sender sees the sent file in the chat", true);
 
+  // ---- Resume (Н5): the link drops half-way; the next link finishes the same file ----
+  const resumeHash = await alice.page.evaluate(async (size) => {
+    const parts = [];
+    for (let off = 0; off < size; off += 65536) parts.push(crypto.getRandomValues(new Uint8Array(Math.min(65536, size - off))));
+    const file = new File(parts, "resume-60MB.bin", { type: "application/octet-stream" });
+    const d = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    const input = [...document.querySelectorAll("input[type=file]")].find((x) => !x.accept);
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }, 60 * MB);
+  await bob.page.getByText("иска да ти изпрати файл").waitFor({ timeout: 60_000 });
+  await bob.page.locator(".transfer").getByRole("button", { name: "Приеми" }).click();
+  // Cut the link once a few chunks are through, well before the end.
+  await bob.page.waitForFunction(() => Number(document.querySelector(".transfer progress")?.value ?? 0) >= 5, null, { timeout: 120_000 });
+  await bob.page.getByRole("button", { name: "Назад" }).click();
+  await alice.page.getByText("прекъснато на").waitFor({ timeout: 30_000 });
+  check("a dropped link shows the file as paused on the sender", true);
+  await alice.page.getByRole("button", { name: "Назад" }).click();
+  // Reconnect the same two contacts (verified: no safety step).
+  await alice.page.getByRole("button", { name: "Контакти" }).click();
+  await alice.page.getByRole("button", { name: "Чат", exact: true }).first().click();
+  await alice.page.getByRole("button", { name: "Покажи моята покана" }).click();
+  const offerR = await readQr(alice.page);
+  await bob.page.getByRole("button", { name: "Контакти" }).click();
+  await bob.page.getByRole("button", { name: "Чат", exact: true }).first().click();
+  await bob.page.getByRole("button", { name: "Сканирай чужда покана" }).click();
+  await pasteCode(bob.page, offerR);
+  const answerR = await readQr(bob.page);
+  await alice.page.getByRole("button", { name: "Сканирай отговора" }).click();
+  await pasteCode(alice.page, answerR);
+  await alice.page.locator(".chat").waitFor({ timeout: 60_000 });
+  await bob.page.locator(".chat").waitFor({ timeout: 60_000 });
+  await bob.page.locator('a.file-download[download="resume-60MB.bin"]').waitFor({ timeout: 300_000 });
+  check("the file continues on the next link and arrives byte for byte", (await hashOfLink(bob.page, "resume-60MB.bin")) === resumeHash);
+  await alice.page.locator('a.file-download[download="resume-60MB.bin"]').waitFor({ timeout: 30_000 });
+  check("the sender's chat gets the finished file", true);
+
   // ---- Over the limit: refused before any offer ----
   const offersBefore = await bob.page.getByText("иска да ти изпрати файл").count();
   await alice.page.evaluate((size) => {

@@ -430,6 +430,8 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
 .sec-item b { display: block; color: var(--text-h); font-size: 1.12rem; margin-bottom: 8px; }
 .sec-item b::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 10px; vertical-align: 2px; background: var(--a); box-shadow: 0 0 10px var(--a); }
 .sec-item.warn b::before { background: #f5b13d; box-shadow: 0 0 10px #f5b13d; }
+/* The honest warning closes the grid: with an item count that leaves it alone in its row, it takes the whole row. */
+.sec-item.warn:last-child:nth-child(3n + 1) { grid-column: 1 / -1; }
 .sec-item p { color: var(--muted); font-size: 0.97rem; }
 
 /* ---------- download ---------- */

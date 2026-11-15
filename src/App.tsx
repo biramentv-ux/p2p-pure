@@ -23,6 +23,15 @@ import { TransferReceiveScreen, TransferSendScreen } from "./ui/screens/Transfer
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
 import { LanguageSwitch } from "./ui/components/LanguageSwitch";
 import { useAutoLock } from "./ui/useAutoLock";
+import { LOCK_EVENT, loadLockSettings } from "./ui/lockSettings";
+import { PanicWipe } from "./ui/components/SecuritySettings";
+import { panicWipe } from "./security/panic";
+import { purgeExpired } from "./history/messageStore";
+import { SWEEP_MS } from "./history/disappearing";
+import { parkedFiles } from "./p2p/fileTransfer";
+import { listContacts } from "./contacts/contacts";
+import { RV_EVENT, configuredRelays, rendezvousEnabled } from "./rendezvous/settings";
+import type { Rendezvous } from "./rendezvous/rendezvous";
 import { installNotifier, notifyIncoming, previewText } from "./notify/notifier";
 import "./App.css";
 
@@ -35,7 +44,7 @@ type AppState =
 type Screen =
   | { k: "identity" }
   | { k: "contacts" }
-  | { k: "connect"; expected?: Contact; forGroup?: boolean; forIntro?: boolean }
+  | { k: "connect"; expected?: Contact; forGroup?: boolean; forIntro?: boolean; rvOffer?: string }
   | { k: "group" }
   | { k: "intro"; mode: IntroduceMode }
   | { k: "transfer" }
@@ -70,6 +79,9 @@ function App() {
   // The group lives across screens. It is closed only when the device locks, and it is
   // saved encrypted, so it comes back after unlock.
   const groupRef = useRef<GroupSession | null>(null);
+  /** The group restore that runs after unlock, until it settles (the panic wipe waits for it). */
+  const restoreRef = useRef<Promise<GroupSession | null> | null>(null);
+  const wipingRef = useRef(false);
   // Sounds and notifications for the group: it runs behind every screen, so it is watched here.
   const groupWatch = useRef<{ group: GroupSession; off: () => void } | null>(null);
   const [, setGroupRestored] = useState(0);
@@ -78,6 +90,11 @@ function App() {
   const introRef = useRef<IntroHub | null>(null);
   const introWatch = useRef<{ hub: IntroHub; off: () => void } | null>(null);
   const [introPending, setIntroPending] = useState(0);
+  // Н2: rendezvous through public Nostr relays (opt-in), running while unlocked.
+  const [rvOn, setRvOn] = useState(() => rendezvousEnabled());
+  const [rv, setRv] = useState<Rendezvous | null>(null);
+  /** A known contact's device is looking for this one. */
+  const [rvIncoming, setRvIncoming] = useState<{ contact: Contact; offer: string } | null>(null);
   // New device without an identity: receiving one from another device (src/transfer).
   const [receiving, setReceiving] = useState(false);
   /** The introductions screen to return to after a connect for the hub. */
@@ -159,20 +176,114 @@ function App() {
   useEffect(() => {
     screenRef.current = screen;
   }, [screen]);
-  useAutoLock(state.kind === "unlocked", () => {
+  const [lock, setLock] = useState(() => loadLockSettings());
+  useEffect(() => {
+    const reload = () => setLock(loadLockSettings());
+    window.addEventListener(LOCK_EVENT, reload);
+    return () => window.removeEventListener(LOCK_EVENT, reload);
+  }, []);
+
+  /** Closes every link and forgets every key in memory (lock and panic wipe). */
+  function dropEverything() {
     const current = screenRef.current;
     if (current.k === "chat") current.link.close();
     closeIntro();
-    groupRef.current?.closeAll();
+    const group = groupRef.current;
     groupRef.current = null;
     watchGroup(null);
     lockContacts();
     deactivateTurn();
+    parkedFiles.clear();
     setScreen({ k: "identity" });
-    getUnlockMethod()
-      .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
-      .catch(() => setState({ kind: "no-identity" }));
-  });
+    return group;
+  }
+
+  useAutoLock(
+    state.kind === "unlocked",
+    () => {
+      dropEverything()?.closeAll();
+      getUnlockMethod()
+        .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
+        .catch(() => setState({ kind: "no-identity" }));
+    },
+    lock.minutes * 60 * 1000,
+    lock.onHide,
+  );
+
+  /** Panic wipe (Н7): from the settings, or from the unlock screen without unlocking. */
+  async function panic() {
+    wipingRef.current = true;
+    try {
+      const group = dropEverything();
+      // A group still being restored after unlock would save its secrets back after the wipe:
+      // wait for it, and stop and drain it together with the others.
+      const restoring = await (restoreRef.current ?? Promise.resolve(null)).catch(() => null);
+      await panicWipe([group, restoring]);
+    } finally {
+      wipingRef.current = false;
+    }
+    setLock(loadLockSettings());
+    setState({ kind: "no-identity" });
+  }
+
+  useEffect(() => {
+    const reload = () => setRvOn(rendezvousEnabled());
+    window.addEventListener(RV_EVENT, reload);
+    return () => window.removeEventListener(RV_EVENT, reload);
+  }, []);
+
+  // Н2: listen for known contacts on their rotating topics while unlocked and turned on. The
+  // relay code loads only then (dynamic import), so nobody else pays for it.
+  useEffect(() => {
+    if (state.kind !== "unlocked" || !rvOn) return;
+    let alive = true;
+    let service: Rendezvous | null = null;
+    let refresh: ReturnType<typeof setInterval> | undefined;
+    const keyPair = state.identity.keyPair;
+    const did = state.identity.did;
+    void Promise.all([import("./rendezvous/rendezvous"), import("./rendezvous/relayPool")]).then(([{ Rendezvous }, { RelayPool }]) => {
+      if (!alive) return;
+      service = new Rendezvous({
+        myDid: did,
+        mySecretKey: keyPair.secretKey,
+        pool: new RelayPool(configuredRelays()),
+        contacts: () => listContacts().catch(() => []),
+        onOffer: (contact, offer) => {
+          void getContact(contact.did).then((full) => {
+            if (!alive || !full) return;
+            setRvIncoming({ contact: full, offer });
+            notifyIncoming(
+              { chatId: `rv:${full.did}`, known: full.verified, title: full.name, preview: tRef.current("Търси те през интернет"), hidden: tRef.current("Ново съобщение") },
+              false,
+            );
+          });
+        },
+      });
+      void service.refresh();
+      // New or deleted contacts are picked up within a minute.
+      refresh = setInterval(() => void service?.refresh(), 60_000);
+      setRv(service);
+    });
+    return () => {
+      alive = false;
+      clearInterval(refresh);
+      service?.stop();
+      setRv(null);
+      setRvIncoming(null);
+    };
+  }, [state, rvOn]);
+
+  // Disappearing messages: expired rows (and their files) leave the device, also while locked.
+  // Paused file transfers past their 30 minutes are forgotten here too.
+  useEffect(() => {
+    const sweep = () => {
+      parkedFiles.expire();
+      void purgeExpired().catch(() => undefined);
+    };
+    sweep();
+    const timer = setInterval(sweep, SWEEP_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   // The contact book is encrypted with a key derived from the history key, so it is opened
   // (and pre-v5 plaintext contacts migrated) before any screen can read it. If the migration
@@ -195,10 +306,15 @@ function App() {
     if (state.kind !== "unlocked" || !historyKey) return;
     let alive = true;
     const keys = state.identity.keyPair;
-    GroupSession.restore(keys, historyKey, { linkFactory: webrtcLinks, findContact: getContact })
+    const restoring = GroupSession.restore(keys, historyKey, { linkFactory: webrtcLinks, findContact: getContact });
+    restoreRef.current = restoring;
+    restoring
       .then((restored) => {
+        if (restoreRef.current === restoring) restoreRef.current = null;
         const current = groupRef.current;
         if (!restored) return;
+        // A panic wipe is running: it stops and drains this session itself (panic()).
+        if (wipingRef.current) return;
         if (!alive || (current && (current.snapshot.state !== null || current.snapshot.linked.length > 0))) {
           restored.closeAll();
           return;
@@ -243,10 +359,15 @@ function App() {
   if (state.kind === "locked") {
     return (
       <Frame>
-        <UnlockScreen
-          method={state.method}
-          onUnlocked={enter}
-        />
+        <div className="unlock-stack">
+          <UnlockScreen
+            method={state.method}
+            onUnlocked={enter}
+          />
+          <div className="screen panic-locked">
+            <PanicWipe onPanic={panic} />
+          </div>
+        </div>
       </Frame>
     );
   }
@@ -356,7 +477,30 @@ function App() {
         </nav>
       }
     >
-      {screen.k === "identity" && <ShowQrScreen identity={identity} onMove={() => setScreen({ k: "transfer" })} />}
+      {rvIncoming && screen.k !== "connect" && (
+        <section className="screen rv-banner" role="alertdialog" aria-label={t("Търси те през интернет")}>
+          <p>
+            <strong>{rvIncoming.contact.name}</strong> {t("те търси през интернет.")}
+          </p>
+          <div className="call-actions">
+            <button
+              onClick={() => {
+                const { contact, offer } = rvIncoming;
+                setRvIncoming(null);
+                setScreen({ k: "connect", expected: contact, rvOffer: offer });
+              }}
+            >
+              {t("Свържи се")}
+            </button>
+            <button className="secondary" onClick={() => setRvIncoming(null)}>
+              {t("Не сега")}
+            </button>
+          </div>
+        </section>
+      )}
+      {screen.k === "identity" && (
+        <ShowQrScreen identity={identity} onMove={() => setScreen({ k: "transfer" })} onPanic={panic} />
+      )}
       {screen.k === "transfer" && (
         <TransferSendScreen
           identity={identity}
@@ -371,6 +515,7 @@ function App() {
           onMoved={() => {
             // The device was wiped: drop everything in memory and return to the first-run screen.
             lockContacts();
+            parkedFiles.clear();
             setScreen({ k: "identity" });
             setState({ kind: "no-identity" });
           }}
@@ -393,9 +538,11 @@ function App() {
       )}
       {screen.k === "connect" && (
         <ConnectScreen
-          key={screen.expected?.did ?? "new"}
+          key={`${screen.expected?.did ?? "new"}${screen.rvOffer ? ":rv" : ""}`}
           identity={identity}
           expected={screen.expected}
+          rendezvous={screen.forGroup || screen.forIntro ? null : rv}
+          rvOffer={screen.rvOffer}
           onConnected={onConnected}
           onCancel={() =>
             setScreen(

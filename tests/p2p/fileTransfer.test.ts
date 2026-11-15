@@ -2,7 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import {
   CHUNK_BYTES,
   DOWNLOAD_MIME,
+  FileResumeStore,
+  FileTransferError,
   FileTransfers,
+  RESUME_TTL_MS,
   cleanFileName,
   sniffInlineMime,
   type FileEvents,
@@ -191,5 +194,267 @@ describe("file transfer", () => {
     expect(cleanFileName("снимка\u202egpj.exe")).toBe("снимкаgpj.exe");
     expect(cleanFileName("...")).toBe("файл");
     expect([...cleanFileName("я".repeat(500))].length).toBe(120);
+  });
+});
+
+describe("file transfer resume", () => {
+  /** Two sides with resume options; the link can be cut and a new pair of instances made. */
+  function resumable(store: { a: FileResumeStore; b: FileResumeStore }) {
+    const log = { received: [] as Blob[], sent: [] as FileMeta[], paused: [] as string[], resumed: [] as string[], failed: [] as string[] };
+    let cutAfter = Infinity;
+    let chunks = 0;
+    function link() {
+      let a!: FileTransfers;
+      let b!: FileTransfers;
+      let up = true;
+      const ev = (side: string): FileEvents => ({
+        offered: (m) => void b.accept(m.id),
+        progress: () => undefined,
+        received: (_m, blob) => log.received.push(blob),
+        sent: (m) => log.sent.push(m),
+        failed: (_id, reason) => log.failed.push(`${side}:${reason}`),
+        paused: (_m, _d, dir) => log.paused.push(`${side}:${dir}`),
+        resumed: (_m, _d, dir) => log.resumed.push(`${side}:${dir}`),
+      });
+      a = new FileTransfers(
+        {
+          sendControl: async (t) => {
+            if (!up) throw new Error("closed");
+            b.handleControl(t);
+          },
+          sendBinary: async (bytes) => {
+            if (!up) throw new Error("closed");
+            if (chunks++ >= cutAfter) {
+              up = false;
+              throw new Error("closed");
+            }
+            b.handleBinary(bytes);
+          },
+        },
+        ev("a"),
+        undefined,
+        { store: store.a, peer: "did:key:b" },
+      );
+      b = new FileTransfers(
+        {
+          sendControl: async (t) => {
+            if (!up) throw new Error("closed");
+            a.handleControl(t);
+          },
+          sendBinary: async () => undefined,
+        },
+        ev("b"),
+        undefined,
+        { store: store.b, peer: "did:key:a" },
+      );
+      return { a, b, cut: () => ((up = false), a.close(), b.close()) };
+    }
+    return { log, link, cutAt: (n: number) => (cutAfter = n) };
+  }
+
+  it("a dropped link pauses the file and the next link finishes it byte for byte", async () => {
+    const data = bytes(CHUNK_BYTES * 5 + 77);
+    const stores = { a: new FileResumeStore(), b: new FileResumeStore() };
+    const r = resumable(stores);
+    r.cutAt(2);
+    const first = r.link();
+    const err = await first.a.send(new Blob([data as BlobPart]), "видео.mp4").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(FileTransferError);
+    expect((err as FileTransferError).paused).toBe(true);
+    first.cut();
+    expect(r.log.paused.sort()).toEqual(["a:out", "b:in"]);
+    expect(r.log.failed).toEqual([]);
+    expect(stores.a.count("did:key:b")).toBe(1);
+    expect(stores.b.count("did:key:a")).toBe(1);
+
+    r.cutAt(Infinity);
+    const second = r.link();
+    await second.a.resume();
+    await second.b.resume();
+    await settle();
+    expect(r.log.resumed.sort()).toEqual(["a:out", "b:in"]);
+    expect(r.log.received).toHaveLength(1);
+    expect(new Uint8Array(await r.log.received[0].arrayBuffer())).toEqual(data);
+    expect(r.log.sent).toHaveLength(1);
+    expect(stores.a.count("did:key:b")).toBe(0);
+  });
+
+  it("a resume request for a file the sender no longer has ends it on the receiver", async () => {
+    const stores = { a: new FileResumeStore(), b: new FileResumeStore() };
+    const r = resumable(stores);
+    r.cutAt(1);
+    const first = r.link();
+    await first.a.send(new Blob([bytes(CHUNK_BYTES * 3) as BlobPart]), "x").catch(() => undefined);
+    first.cut();
+    stores.a.clear(); // the sender locked the app (or restarted)
+    r.cutAt(Infinity);
+    const second = r.link();
+    await second.b.resume();
+    await settle();
+    expect(r.log.received).toHaveLength(0);
+    expect(r.log.failed).toContain("b:Изпращачът спря файла.");
+  });
+
+  it("parked transfers expire and offers nobody accepted are not parked", async () => {
+    let now = 0;
+    const store = new FileResumeStore(() => now);
+    const events = { offered: vi.fn(), progress: vi.fn(), received: vi.fn(), sent: vi.fn(), failed: vi.fn() };
+    const f = new FileTransfers({ sendControl: async () => undefined, sendBinary: async () => undefined }, events, undefined, { store, peer: "p" });
+    const offer = { id: "AAAAAAAAAAA", name: "x", size: 10, mime: DOWNLOAD_MIME, sha256: "A".repeat(43), key: "A".repeat(43), n: 1 };
+    f.handleControl(`\u0001F|${JSON.stringify(offer)}`);
+    f.close();
+    expect(store.count("p")).toBe(0);
+    expect(events.failed).toHaveBeenCalledWith("AAAAAAAAAAA", "Връзката прекъсна.", "in");
+
+    const g = new FileTransfers({ sendControl: async () => undefined, sendBinary: async () => undefined }, events, undefined, { store, peer: "p" });
+    g.handleControl(`\u0001F|${JSON.stringify(offer)}`);
+    await g.accept("AAAAAAAAAAA");
+    g.close();
+    expect(store.count("p")).toBe(1);
+    now = RESUME_TTL_MS + 1;
+    expect(store.count("p")).toBe(0);
+    expect(store.take("p")).toEqual({ out: [], inc: [] });
+  });
+
+  it("a bad resume index is ignored", async () => {
+    const stores = { a: new FileResumeStore(), b: new FileResumeStore() };
+    const r = resumable(stores);
+    r.cutAt(1);
+    const first = r.link();
+    await first.a.send(new Blob([bytes(CHUNK_BYTES * 3) as BlobPart]), "x").catch(() => undefined);
+    first.cut();
+    r.cutAt(Infinity);
+    const second = r.link();
+    await second.a.resume();
+    const id = r.log.paused.length ? stores.b.take("did:key:a").inc[0].meta.id : "";
+    for (const next of [-1, 3, 1.5, "1"]) second.a.handleControl(`\u0001R|${JSON.stringify({ id, next })}`);
+    await settle();
+    expect(r.log.sent).toHaveLength(0);
+    expect(r.log.received).toHaveLength(0);
+  });
+});
+
+describe("file transfer resume: lost first frames", () => {
+  it("the receiver's first request is lost; the sender's W makes it ask again, once streamed", async () => {
+    const data = bytes(CHUNK_BYTES * 4 + 9);
+    const sa = new FileResumeStore();
+    const sb = new FileResumeStore();
+    let a!: FileTransfers;
+    let b!: FileTransfers;
+    let up = true;
+    let cut = 1;
+    let dropFirstR = false;
+    const got: Blob[] = [];
+    const sent: string[] = [];
+    const ev = (): FileEvents => ({
+      offered: (m) => void b.accept(m.id),
+      progress: () => undefined,
+      received: (_m, blob) => void got.push(blob),
+      sent: (m) => void sent.push(m.id),
+      failed: () => undefined,
+    });
+    const make = () => {
+      up = true;
+      a = new FileTransfers(
+        {
+          sendControl: async (t) => {
+            if (!up) throw new Error("closed");
+            b.handleControl(t);
+          },
+          sendBinary: async (x) => {
+            if (!up || cut-- <= 0) {
+              up = false;
+              throw new Error("closed");
+            }
+            b.handleBinary(x);
+          },
+        },
+        ev(),
+        undefined,
+        { store: sa, peer: "b" },
+      );
+      b = new FileTransfers(
+        {
+          sendControl: async (t) => {
+            if (!up) throw new Error("closed");
+            if (dropFirstR && t.startsWith("\u0001R|")) {
+              dropFirstR = false;
+              return; // lost: the other chat screen was not listening yet
+            }
+            a.handleControl(t);
+          },
+          sendBinary: async () => undefined,
+        },
+        ev(),
+        undefined,
+        { store: sb, peer: "a" },
+      );
+    };
+    make();
+    await a.send(new Blob([data as BlobPart]), "x").catch(() => undefined);
+    a.close();
+    b.close();
+    cut = Infinity;
+    dropFirstR = true;
+    make();
+    await b.resume(); // its R is lost
+    await a.resume(); // its W reaches b, which asks again
+    await settle();
+    expect(got).toHaveLength(1);
+    expect(new Uint8Array(await got[0].arrayBuffer())).toEqual(data);
+    expect(sent).toHaveLength(1);
+  });
+});
+
+describe("file frames do not collide with other frames", () => {
+  it("photo, call, control and group frames are not file frames", async () => {
+    const { isFileFrame } = await import("../../src/p2p/fileTransfer");
+    for (const mark of ["P|", "D|", "C|", "K|", "G|", "I|"]) expect(isFileFrame(`\u0001${mark}x`), mark).toBe(false);
+    for (const mark of ["F|", "A|", "X|", "R|", "W|"]) expect(isFileFrame(`\u0001${mark}x`), mark).toBe(true);
+  });
+});
+
+describe("file transfer resume: review fixes", () => {
+  it("a link that closes while the last chunk drains parks the file with its key intact", async () => {
+    const store = new FileResumeStore();
+    const events = { offered: vi.fn(), progress: vi.fn(), received: vi.fn(), sent: vi.fn(), failed: vi.fn() };
+    let f!: FileTransfers;
+    let chunks = 0;
+    // The channel closes during the drain of the LAST chunk; the drain still resolves (as
+    // PeerLink.waitForDrain does on close).
+    f = new FileTransfers(
+      {
+        sendControl: async (t) => {
+          if (t.startsWith("\u0001F|")) setTimeout(() => f.handleControl(`\u0001A|${JSON.parse(t.slice(3)).id}`), 0);
+        },
+        sendBinary: async () => {
+          if (++chunks === 2) f.close();
+        },
+      },
+      events,
+      undefined,
+      { store, peer: "p" },
+    );
+    const err = await f.send(new Blob([bytes(CHUNK_BYTES + 10) as BlobPart]), "x").catch((e: unknown) => e);
+    expect((err as FileTransferError).paused).toBe(true);
+    expect(events.sent).not.toHaveBeenCalled();
+    const parked = store.take("p").out[0];
+    expect(parked.next).toBe(1);
+    expect(parked.key.some((b) => b !== 0)).toBe(true);
+  });
+
+  it("expire() releases entries past their time without another connection", () => {
+    let now = 0;
+    const store = new FileResumeStore(() => now);
+    const key = new Uint8Array(32).fill(9);
+    const meta = { id: "AAAAAAAAAAA", name: "x", size: 1, mime: DOWNLOAD_MIME, sha256: "" };
+    store.park("p", [{ meta, rawId: new Uint8Array(8), key, blob: new Blob(["x"]), next: 0 }], []);
+    now = RESUME_TTL_MS;
+    store.expire();
+    expect(key[0]).toBe(9);
+    now = RESUME_TTL_MS + 1;
+    store.expire();
+    expect(key.every((b) => b === 0)).toBe(true);
+    expect(store.take("p")).toEqual({ out: [], inc: [] });
   });
 });
