@@ -29,6 +29,9 @@ import { panicWipe } from "./security/panic";
 import { purgeExpired } from "./history/messageStore";
 import { SWEEP_MS } from "./history/disappearing";
 import { parkedFiles } from "./p2p/fileTransfer";
+import { listContacts } from "./contacts/contacts";
+import { RV_EVENT, configuredRelays, rendezvousEnabled } from "./rendezvous/settings";
+import type { Rendezvous } from "./rendezvous/rendezvous";
 import { installNotifier, notifyIncoming, previewText } from "./notify/notifier";
 import "./App.css";
 
@@ -41,7 +44,7 @@ type AppState =
 type Screen =
   | { k: "identity" }
   | { k: "contacts" }
-  | { k: "connect"; expected?: Contact; forGroup?: boolean; forIntro?: boolean }
+  | { k: "connect"; expected?: Contact; forGroup?: boolean; forIntro?: boolean; rvOffer?: string }
   | { k: "group" }
   | { k: "intro"; mode: IntroduceMode }
   | { k: "transfer" }
@@ -87,6 +90,11 @@ function App() {
   const introRef = useRef<IntroHub | null>(null);
   const introWatch = useRef<{ hub: IntroHub; off: () => void } | null>(null);
   const [introPending, setIntroPending] = useState(0);
+  // Н2: rendezvous through public Nostr relays (opt-in), running while unlocked.
+  const [rvOn, setRvOn] = useState(() => rendezvousEnabled());
+  const [rv, setRv] = useState<Rendezvous | null>(null);
+  /** A known contact's device is looking for this one. */
+  const [rvIncoming, setRvIncoming] = useState<{ contact: Contact; offer: string } | null>(null);
   // New device without an identity: receiving one from another device (src/transfer).
   const [receiving, setReceiving] = useState(false);
   /** The introductions screen to return to after a connect for the hub. */
@@ -217,6 +225,53 @@ function App() {
     setLock(loadLockSettings());
     setState({ kind: "no-identity" });
   }
+
+  useEffect(() => {
+    const reload = () => setRvOn(rendezvousEnabled());
+    window.addEventListener(RV_EVENT, reload);
+    return () => window.removeEventListener(RV_EVENT, reload);
+  }, []);
+
+  // Н2: listen for known contacts on their rotating topics while unlocked and turned on. The
+  // relay code loads only then (dynamic import), so nobody else pays for it.
+  useEffect(() => {
+    if (state.kind !== "unlocked" || !rvOn) return;
+    let alive = true;
+    let service: Rendezvous | null = null;
+    let refresh: ReturnType<typeof setInterval> | undefined;
+    const keyPair = state.identity.keyPair;
+    const did = state.identity.did;
+    void Promise.all([import("./rendezvous/rendezvous"), import("./rendezvous/relayPool")]).then(([{ Rendezvous }, { RelayPool }]) => {
+      if (!alive) return;
+      service = new Rendezvous({
+        myDid: did,
+        mySecretKey: keyPair.secretKey,
+        pool: new RelayPool(configuredRelays()),
+        contacts: () => listContacts().catch(() => []),
+        onOffer: (contact, offer) => {
+          void getContact(contact.did).then((full) => {
+            if (!alive || !full) return;
+            setRvIncoming({ contact: full, offer });
+            notifyIncoming(
+              { chatId: `rv:${full.did}`, known: full.verified, title: full.name, preview: tRef.current("Търси те през интернет"), hidden: tRef.current("Ново съобщение") },
+              false,
+            );
+          });
+        },
+      });
+      void service.refresh();
+      // New or deleted contacts are picked up within a minute.
+      refresh = setInterval(() => void service?.refresh(), 60_000);
+      setRv(service);
+    });
+    return () => {
+      alive = false;
+      clearInterval(refresh);
+      service?.stop();
+      setRv(null);
+      setRvIncoming(null);
+    };
+  }, [state, rvOn]);
 
   // Disappearing messages: expired rows (and their files) leave the device, also while locked.
   // Paused file transfers past their 30 minutes are forgotten here too.
@@ -422,6 +477,27 @@ function App() {
         </nav>
       }
     >
+      {rvIncoming && screen.k !== "connect" && (
+        <section className="screen rv-banner" role="alertdialog" aria-label={t("Търси те през интернет")}>
+          <p>
+            <strong>{rvIncoming.contact.name}</strong> {t("те търси през интернет.")}
+          </p>
+          <div className="call-actions">
+            <button
+              onClick={() => {
+                const { contact, offer } = rvIncoming;
+                setRvIncoming(null);
+                setScreen({ k: "connect", expected: contact, rvOffer: offer });
+              }}
+            >
+              {t("Свържи се")}
+            </button>
+            <button className="secondary" onClick={() => setRvIncoming(null)}>
+              {t("Не сега")}
+            </button>
+          </div>
+        </section>
+      )}
       {screen.k === "identity" && (
         <ShowQrScreen identity={identity} onMove={() => setScreen({ k: "transfer" })} onPanic={panic} />
       )}
@@ -462,9 +538,11 @@ function App() {
       )}
       {screen.k === "connect" && (
         <ConnectScreen
-          key={screen.expected?.did ?? "new"}
+          key={`${screen.expected?.did ?? "new"}${screen.rvOffer ? ":rv" : ""}`}
           identity={identity}
           expected={screen.expected}
+          rendezvous={screen.forGroup || screen.forIntro ? null : rv}
+          rvOffer={screen.rvOffer}
           onConnected={onConnected}
           onCancel={() =>
             setScreen(
