@@ -11,6 +11,7 @@
  */
 import { publicKeyToDidKey } from "../identity/didKey";
 import type { PeerLink } from "./peer";
+import { CAPABILITIES, PROTOCOL_VERSION, readPeerProtocol, type PeerProtocol } from "./protocol";
 
 export class HandshakeError extends Error {
   constructor(message: string) {
@@ -22,13 +23,16 @@ export class HandshakeError extends Error {
 interface HelloMessage {
   t: "hello";
   did: string;
+  /** Protocol version and capabilities (protocol.ts). Absent from pv 1 clients. */
+  pv?: number;
+  caps?: string[];
 }
 
-function parseHello(text: string): HelloMessage | null {
+function parseHello(text: string): { did: string; peer: PeerProtocol } | null {
   try {
-    const msg = JSON.parse(text) as Partial<HelloMessage>;
+    const msg = JSON.parse(text) as Record<string, unknown>;
     if (msg && msg.t === "hello" && typeof msg.did === "string") {
-      return { t: "hello", did: msg.did };
+      return { did: msg.did, peer: readPeerProtocol(msg) };
     }
   } catch {
     /* not JSON: ignore */
@@ -36,12 +40,17 @@ function parseHello(text: string): HelloMessage | null {
   return null;
 }
 
+/** A link that remembers what the other side said it supports (PeerLink has this field). */
+interface WithPeerProtocol {
+  peerProtocol?: PeerProtocol;
+}
+
 /**
  * Resolves with the verified peer did once the peer's hello matches
  * `expectedPeerPublicKey`. Rejects on mismatch, timeout, or channel failure.
  */
 export async function completeHandshake(
-  link: Pick<PeerLink, "onMessage" | "waitForOpen" | "send">,
+  link: Pick<PeerLink, "onMessage" | "waitForOpen" | "send"> & WithPeerProtocol,
   myDid: string,
   expectedPeerPublicKey: Uint8Array,
   timeoutMs?: number,
@@ -57,6 +66,7 @@ export async function completeHandshake(
         reject(new HandshakeError("Peer identity does not match the scanned invitation."));
         return;
       }
+      link.peerProtocol = hello.peer;
       resolve(hello.did);
     });
   });
@@ -64,6 +74,6 @@ export async function completeHandshake(
   peerHello.catch(() => undefined);
 
   await link.waitForOpen(timeoutMs);
-  link.send(JSON.stringify({ t: "hello", did: myDid } satisfies HelloMessage));
+  link.send(JSON.stringify({ t: "hello", did: myDid, pv: PROTOCOL_VERSION, caps: [...CAPABILITIES] } satisfies HelloMessage));
   return peerHello;
 }
