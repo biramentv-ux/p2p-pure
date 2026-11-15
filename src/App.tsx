@@ -23,6 +23,12 @@ import { TransferReceiveScreen, TransferSendScreen } from "./ui/screens/Transfer
 import { UnlockScreen } from "./ui/screens/UnlockScreen";
 import { LanguageSwitch } from "./ui/components/LanguageSwitch";
 import { useAutoLock } from "./ui/useAutoLock";
+import { LOCK_EVENT, loadLockSettings } from "./ui/lockSettings";
+import { PanicWipe } from "./ui/components/SecuritySettings";
+import { panicWipe } from "./security/panic";
+import { purgeExpired } from "./history/messageStore";
+import { SWEEP_MS } from "./history/disappearing";
+import { parkedFiles } from "./p2p/fileTransfer";
 import { installNotifier, notifyIncoming, previewText } from "./notify/notifier";
 import "./App.css";
 
@@ -159,20 +165,55 @@ function App() {
   useEffect(() => {
     screenRef.current = screen;
   }, [screen]);
-  useAutoLock(state.kind === "unlocked", () => {
+  const [lock, setLock] = useState(() => loadLockSettings());
+  useEffect(() => {
+    const reload = () => setLock(loadLockSettings());
+    window.addEventListener(LOCK_EVENT, reload);
+    return () => window.removeEventListener(LOCK_EVENT, reload);
+  }, []);
+
+  /** Closes every link and forgets every key in memory (lock and panic wipe). */
+  function dropEverything() {
     const current = screenRef.current;
     if (current.k === "chat") current.link.close();
     closeIntro();
-    groupRef.current?.closeAll();
+    const group = groupRef.current;
     groupRef.current = null;
     watchGroup(null);
     lockContacts();
     deactivateTurn();
+    parkedFiles.clear();
     setScreen({ k: "identity" });
-    getUnlockMethod()
-      .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
-      .catch(() => setState({ kind: "no-identity" }));
-  });
+    return group;
+  }
+
+  useAutoLock(
+    state.kind === "unlocked",
+    () => {
+      dropEverything()?.closeAll();
+      getUnlockMethod()
+        .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
+        .catch(() => setState({ kind: "no-identity" }));
+    },
+    lock.minutes * 60 * 1000,
+    lock.onHide,
+  );
+
+  /** Panic wipe (Н7): from the settings, or from the unlock screen without unlocking. */
+  async function panic() {
+    const group = dropEverything();
+    await panicWipe([group]);
+    setLock(loadLockSettings());
+    setState({ kind: "no-identity" });
+  }
+
+  // Disappearing messages: expired rows (and their files) leave the device, also while locked.
+  useEffect(() => {
+    const sweep = () => void purgeExpired().catch(() => undefined);
+    sweep();
+    const timer = setInterval(sweep, SWEEP_MS);
+    return () => clearInterval(timer);
+  }, []);
 
   // The contact book is encrypted with a key derived from the history key, so it is opened
   // (and pre-v5 plaintext contacts migrated) before any screen can read it. If the migration
@@ -243,10 +284,15 @@ function App() {
   if (state.kind === "locked") {
     return (
       <Frame>
-        <UnlockScreen
-          method={state.method}
-          onUnlocked={enter}
-        />
+        <div className="unlock-stack">
+          <UnlockScreen
+            method={state.method}
+            onUnlocked={enter}
+          />
+          <div className="screen panic-locked">
+            <PanicWipe onPanic={panic} />
+          </div>
+        </div>
       </Frame>
     );
   }
@@ -356,7 +402,9 @@ function App() {
         </nav>
       }
     >
-      {screen.k === "identity" && <ShowQrScreen identity={identity} onMove={() => setScreen({ k: "transfer" })} />}
+      {screen.k === "identity" && (
+        <ShowQrScreen identity={identity} onMove={() => setScreen({ k: "transfer" })} onPanic={panic} />
+      )}
       {screen.k === "transfer" && (
         <TransferSendScreen
           identity={identity}
@@ -371,6 +419,7 @@ function App() {
           onMoved={() => {
             // The device was wiped: drop everything in memory and return to the first-run screen.
             lockContacts();
+            parkedFiles.clear();
             setScreen({ k: "identity" });
             setState({ kind: "no-identity" });
           }}

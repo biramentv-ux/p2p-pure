@@ -48,7 +48,9 @@
 | 📡 | **Bluetooth** *(ново)* | В приложението за Android и iOS: поканата минава по BLE между два телефона наблизо ([docs/BLUETOOTH.md](docs/BLUETOOTH.md)). |
 | 🔢 | **12 думи за проверка** | Двамата виждат едни и същи 12 думи (3 групи по 4), изчислени от публичните X25519 ключове (v3, 132 бита). Ако съвпадат, никой не стои по средата. |
 | 💬 | **Шифровани чатове** | Double Ratchet. Историята и контактите се пазят в IndexedDB, шифровани с AES-GCM. |
-| 📎 | **Файлове до 100 MB** *(ново)* | Всякакви файлове и видео, директно между устройствата. Получателят приема или отказва; файлове до 25 MB остават шифровани в историята. |
+| 📎 | **Файлове до 100 MB** *(обновено)* | Всякакви файлове и видео, директно между устройствата. Получателят приема или отказва; файлове до 25 MB остават шифровани в историята. Ако връзката прекъсне, файлът продължава от същото място при следващото свързване (до 30 минути). |
+| ⏱️ | **Изчезващи съобщения** *(ново)* | Таймер за всеки чат: 5 минути, 1 час, 1 ден или 1 седмица. Еднакъв е и за двамата; съобщенията и запазените файлове се трият и от двете устройства ([docs/SECURITY-DEVICE.md](docs/SECURITY-DEVICE.md)). |
+| 🔒 | **Заключване и бутон за паника** *(ново)* | Заключване след 1–30 минути или когато приложението е във фона. „Изтрий всичко от това устройство“ работи и от заключения екран ([docs/SECURITY-DEVICE.md](docs/SECURITY-DEVICE.md)). |
 | 🖼️ | **Снимки, локация, изтриване** | Изтриване на чата и при двамата. Локацията се праща само при твое натискане. |
 | 📞 | **Аудио и видео разговори** | По същата директна връзка, медията е DTLS-SRTP. |
 | 👥 | **Групи до 9 души** *(обновено)* | Админ, име и снимка на групата. Файлове, снимки, видео до 50 MB и GIF от GIPHY. Новият член не вижда старата история; махането става и когато махнатият е офлайн. Всичко се пази шифровано. |
@@ -324,7 +326,7 @@ docs/               ръководства: начини за свързване
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
 | `npm run test:demo` | Демо стая през локален relay (8 проверки) |
 | `npm run test:pages` | Билдът за GitHub Pages под подпът `/p2p-pure/` (6 проверки) |
-| `npm run test:files` | Файлове между двама: GIF, 100 MB байт по байт, лимит, отказ, HTML като изтегляне (14 проверки) |
+| `npm run test:files` | Файлове между двама: GIF, 100 MB байт по байт, продължаване след прекъсване, лимит, отказ, HTML като изтегляне |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) на всички екрани, на двата езика |
 | `npm run test:call` | Аудио и видео разговор |
 | `npm run test:extension-browser` | Разширението в Chromium |
@@ -387,7 +389,9 @@ docs/               ръководства: начини за свързване
 | 📡 | **Bluetooth** *(new)* | In the Android and iOS app: the invitation travels over BLE between two phones nearby ([docs/BLUETOOTH.md](docs/BLUETOOTH.md)). |
 | 🔢 | **12 words to verify** | Both sides see the same 12 words (3 groups of 4), computed from both public X25519 keys (v3, 132 bits). If they match, nobody sits in between. |
 | 💬 | **Encrypted chats** | Double Ratchet. History and contacts are kept in IndexedDB, encrypted with AES-GCM. |
-| 📎 | **Files up to 100 MB** *(new)* | Any file or video, straight between devices. The recipient accepts or declines; files up to 25 MB stay encrypted in the history. |
+| 📎 | **Files up to 100 MB** *(updated)* | Any file or video, straight between devices. The recipient accepts or declines; files up to 25 MB stay encrypted in the history. If the link drops, the file continues from the same place on the next connection (within 30 minutes). |
+| ⏱️ | **Disappearing messages** *(new)* | A timer for each chat: 5 minutes, 1 hour, 1 day or 1 week. It is the same for both people; messages and kept files are deleted from both devices ([docs/SECURITY-DEVICE.md](docs/SECURITY-DEVICE.md)). |
+| 🔒 | **Lock and panic button** *(new)* | Locks after 1–30 minutes, or when the app is in the background. “Delete everything from this device” also works from the lock screen ([docs/SECURITY-DEVICE.md](docs/SECURITY-DEVICE.md)). |
 | 🖼️ | **Photos, location, deletion** | Delete a chat on both sides. Location is sent only when you tap to send it. |
 | 📞 | **Audio and video calls** | Over the same direct connection; media is DTLS-SRTP. |
 | 👥 | **Groups of up to 9** *(updated)* | Admin, group name and photo. Files, photos, videos up to 50 MB and GIFs from GIPHY. A new member does not see the old history; removal works while the removed member is offline. Everything is stored encrypted. |
@@ -663,7 +667,7 @@ docs/               guides: ways to connect, Windows, Linux, demo signalling, Bl
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
 | `npm run test:demo` | Demo room through a local relay (8 checks) |
 | `npm run test:pages` | The GitHub Pages build under the `/p2p-pure/` sub-path (6 checks) |
-| `npm run test:files` | Files between two people: GIF, 100 MB byte for byte, limit, decline, HTML as a download (14 checks) |
+| `npm run test:files` | Files between two people: GIF, 100 MB byte for byte, resume after a drop, limit, decline, HTML as a download |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) on every screen, in both languages |
 | `npm run test:call` | Audio and video call |
 | `npm run test:extension-browser` | The extension in Chromium |

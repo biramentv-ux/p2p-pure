@@ -7,7 +7,7 @@ import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { asBufferSource } from "../identity/bufferUtils";
 import type { UnlockedIdentity } from "../identity/types";
-import { STORE_MESSAGES, withStore } from "../db/database";
+import { STORE_FILES, STORE_MESSAGES, openDatabase, withStore } from "../db/database";
 import { base64UrlToBytes, bytesToBase64Url } from "../p2p/encoding";
 
 const HISTORY_INFO = new TextEncoder().encode("p2p-messenger/history-key/v1");
@@ -40,6 +40,8 @@ export interface ChatMessage {
   location?: LocationFix;
   direction: Direction;
   timestamp: number;
+  /** Disappearing message (disappearing.ts): deleted from the device after this time. */
+  expiresAt?: number;
 }
 
 const IMAGE_MARK = "\u0001I|";
@@ -120,6 +122,10 @@ interface StoredMessage {
   timestamp: number;
   iv: string;
   ct: string;
+  /** In the clear so the sweep can delete it while the app is locked. Part of the AAD. */
+  expiresAt?: number;
+  /** The kept file of an expiring message (a random id), so the sweep can delete it too. */
+  fileId?: string;
 }
 
 /** Derives the history encryption key from the identity seed. */
@@ -131,8 +137,14 @@ async function importKey(raw: Uint8Array, usage: KeyUsage): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", asBufferSource(raw), "AES-GCM", false, [usage]);
 }
 
-function aadFor(peerDid: string, direction: Direction, timestamp: number): Uint8Array {
-  return new TextEncoder().encode(`${peerDid}|${direction}|${timestamp}`);
+function aadFor(peerDid: string, direction: Direction, timestamp: number, expiresAt?: number): Uint8Array {
+  // Rows without a timer keep the old AAD, so earlier history still opens.
+  const tail = expiresAt === undefined ? "" : `|exp:${expiresAt}`;
+  return new TextEncoder().encode(`${peerDid}|${direction}|${timestamp}${tail}`);
+}
+
+function validExpiry(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : undefined;
 }
 
 export async function appendMessage(
@@ -140,6 +152,7 @@ export async function appendMessage(
   peerDid: string,
   message: ChatMessage,
 ): Promise<void> {
+  const expiresAt = validExpiry(message.expiresAt);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await importKey(historyKey, "encrypt");
   const ct = new Uint8Array(
@@ -147,7 +160,7 @@ export async function appendMessage(
       {
         name: "AES-GCM",
         iv: asBufferSource(iv),
-        additionalData: asBufferSource(aadFor(peerDid, message.direction, message.timestamp)),
+        additionalData: asBufferSource(aadFor(peerDid, message.direction, message.timestamp, expiresAt)),
       },
       key,
       asBufferSource(new TextEncoder().encode(toPayload(message))),
@@ -161,24 +174,27 @@ export async function appendMessage(
     timestamp: message.timestamp,
     iv: bytesToBase64Url(iv),
     ct: bytesToBase64Url(ct),
+    ...(expiresAt !== undefined ? { expiresAt, ...(message.file ? { fileId: message.file.id } : {}) } : {}),
   };
   await withStore(STORE_MESSAGES, "readwrite", (s) => {
     s.put(record);
   });
 }
 
-export async function loadHistory(historyKey: Uint8Array, peerDid: string): Promise<ChatMessage[]> {
+export async function loadHistory(historyKey: Uint8Array, peerDid: string, now = Date.now()): Promise<ChatMessage[]> {
   const rows = await withStore<StoredMessage[]>(STORE_MESSAGES, "readonly", (s) =>
     s.index("byPeer").getAll(IDBKeyRange.only(peerDid)),
   );
   const key = await importKey(historyKey, "decrypt");
   const out: ChatMessage[] = [];
   for (const row of rows ?? []) {
+    const expiresAt = validExpiry(row.expiresAt);
+    if (expiresAt !== undefined && expiresAt <= now) continue; // the sweep deletes it
     const pt = await crypto.subtle.decrypt(
       {
         name: "AES-GCM",
         iv: asBufferSource(base64UrlToBytes(row.iv)),
-        additionalData: asBufferSource(aadFor(row.peerDid, row.direction, row.timestamp)),
+        additionalData: asBufferSource(aadFor(row.peerDid, row.direction, row.timestamp, expiresAt)),
       },
       key,
       asBufferSource(base64UrlToBytes(row.ct)),
@@ -187,9 +203,44 @@ export async function loadHistory(historyKey: Uint8Array, peerDid: string): Prom
       ...fromPayload(new TextDecoder().decode(pt)),
       direction: row.direction,
       timestamp: row.timestamp,
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
     });
   }
   return out.sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/**
+ * Deletes every expired message, of every chat, and the kept files that belong to them, in one
+ * transaction. Needs no key, so it also runs while the app is locked. Returns how many
+ * messages were deleted.
+ */
+export async function purgeExpired(now = Date.now()): Promise<number> {
+  const db = await openDatabase();
+  try {
+    return await new Promise<number>((resolve, reject) => {
+      let removed = 0;
+      const tx = db.transaction([STORE_MESSAGES, STORE_FILES], "readwrite");
+      const files = tx.objectStore(STORE_FILES);
+      const req = tx.objectStore(STORE_MESSAGES).openCursor();
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (!cursor) return;
+        const row = cursor.value as StoredMessage;
+        const expiresAt = validExpiry(row.expiresAt);
+        if (expiresAt !== undefined && expiresAt <= now) {
+          if (typeof row.fileId === "string") files.delete(row.fileId);
+          cursor.delete();
+          removed++;
+        }
+        cursor.continue();
+      };
+      tx.oncomplete = () => resolve(removed);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 /** Deletes every stored message with this contact. Returns how many were removed. */

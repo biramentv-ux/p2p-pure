@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { notifyIncoming, previewText } from "../../notify/notifier";
-import type { Contact } from "../../contacts/contacts";
+import { getContact, saveContact, type Contact } from "../../contacts/contacts";
+import { DISAPPEAR_OPTIONS, disappearLabel, expiryFor, validDisappearMs } from "../../history/disappearing";
 import {
   appendMessage,
   deleteHistory,
@@ -10,7 +11,7 @@ import {
   type FileCard,
 } from "../../history/messageStore";
 import { canStore, deleteFilesFor, loadFile, saveFile } from "../../history/fileStore";
-import { FileTransfers, MAX_FILE_BYTES, type FileMeta } from "../../p2p/fileTransfer";
+import { FileTransferError, FileTransfers, MAX_FILE_BYTES, PAUSED_REASON, parkedFiles, type FileMeta } from "../../p2p/fileTransfer";
 import { FileBubble, TransferList, type ActiveTransfer } from "../components/FileBubble";
 import { PastePreview } from "../components/PastePreview";
 import { usePasteImage } from "../pasteImage";
@@ -58,6 +59,24 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [connected, setConnected] = useState(link.isOpen());
+  // Disappearing messages: the same value on both sides (control message "timer").
+  const [timerMs, setTimerMs] = useState(() => validDisappearMs(contact.disappearMs) ?? 0);
+  const timerRef = useRef(timerMs);
+  /** Adds the expiry of the chat's timer to a message about to be written. */
+  function withTimer(msg: ChatMessage): ChatMessage {
+    const expiresAt = expiryFor(msg.timestamp, timerRef.current);
+    return expiresAt === undefined ? msg : { ...msg, expiresAt };
+  }
+  /** Stores the timer on the contact (sealed contact book) and shows it. */
+  async function applyTimer(ms: number) {
+    timerRef.current = ms;
+    setTimerMs(ms);
+    const fresh = (await getContact(contact.did).catch(() => null)) ?? contact;
+    const next: Contact = { ...fresh };
+    if (ms) next.disappearMs = ms;
+    else delete next.disappearMs;
+    await saveContact(next).catch(() => undefined);
+  }
   const [transfer, setTransfer] = useState<{ label: string; done: number; total: number } | null>(null);
   const receiverRef = useRef(new PhotoReceiver());
   const [call, setCall] = useState<CallSnapshot | null>(null);
@@ -197,17 +216,36 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         },
         progress: (id, done) =>
           alive && setActive((prev) => prev.map((a) => (a.id === id ? { ...a, phase: "moving", done } : a))),
+        paused: (m, done, direction) => {
+          if (!alive) return;
+          upsertActive({ id: m.id, name: m.name, size: m.size, direction, phase: "paused", done });
+        },
+        resumed: (m, done, direction) => {
+          if (!alive) return;
+          upsertActive({ id: m.id, name: m.name, size: m.size, direction, phase: direction === "in" ? "moving" : "waiting", done });
+        },
         received: (meta, blob) => {
           void (async () => {
             const card = await keepFile(meta, blob);
-            const msg: ChatMessage = { text: "", file: card, direction: "in", timestamp: Date.now() };
+            const msg: ChatMessage = withTimer({ text: "", file: card, direction: "in", timestamp: Date.now() });
             await appendMessage(historyKey, contact.did, msg);
             if (!alive) return;
             dropActive(meta.id);
             setMessages((prev) => [...prev, msg]);
           })();
         },
-        sent: () => undefined,
+        // The history entry for a sent file is written here, also for one that resumed on this
+        // link after an earlier link dropped (that chat screen is gone).
+        sent: (meta, blob) => {
+          void (async () => {
+            const card = await keepFile(meta, new Blob([blob], { type: meta.mime }));
+            const msg: ChatMessage = withTimer({ text: "", file: card, direction: "out", timestamp: Date.now() });
+            await appendMessage(historyKey, contact.did, msg);
+            if (!alive) return;
+            dropActive(meta.id);
+            setMessages((prev) => [...prev, msg]);
+          })();
+        },
         failed: (id, reason) => {
           if (!alive) return;
           dropActive(id);
@@ -215,8 +253,13 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         },
       },
       MAX_FILE_BYTES,
+      { store: parkedFiles, peer: contact.did },
     );
     filesRef.current = files;
+    // Files the last link with this contact left half-way continue here.
+    void files.resume();
+    // A dropped link parks transfers in progress at once, so the list says "paused".
+    const offClose = link.onClose(() => files.close());
     const urls = urlsRef.current;
     const offBinary = link.onBinary((bytes) => {
       files.handleBinary(bytes);
@@ -240,8 +283,23 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
               if (alive) onSuiteMessage(control);
               return;
             }
+            if (control.t === "timer") {
+              await applyTimer(control.ms);
+              if (alive) {
+                setNotice(
+                  control.ms
+                    ? tRef.current("{name} включи изчезващи съобщения: {time}.", {
+                        name: contact.name,
+                        time: tRef.current(disappearLabel(control.ms)),
+                      })
+                    : tRef.current("{name} изключи изчезващите съобщения.", { name: contact.name }),
+                );
+              }
+              return;
+            }
             if (control.t === "wipe") {
               receiverRef.current.discardInProgress();
+              parkedFiles.drop(contact.did);
               await deleteHistory(contact.did);
               await deleteFilesFor(contact.did);
               if (alive) {
@@ -251,7 +309,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
               }
               return;
             }
-            const located: ChatMessage = { text: "", location: control.fix, direction: "in", timestamp: Date.now() };
+            const located: ChatMessage = withTimer({ text: "", location: control.fix, direction: "in", timestamp: Date.now() });
             await appendMessage(historyKey, contact.did, located);
             if (alive) setMessages((prev) => [...prev, located]);
             alertIncoming(tRef.current("Местоположение"));
@@ -271,10 +329,11 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             }
             return;
           }
-          const msg: ChatMessage =
+          const msg: ChatMessage = withTimer(
             result.kind === "photo"
               ? { text: "", image: result.dataUrl, direction: "in", timestamp: Date.now() }
-              : { text: result.text, direction: "in", timestamp: Date.now() };
+              : { text: result.text, direction: "in", timestamp: Date.now() },
+          );
           await appendMessage(historyKey, contact.did, msg);
           if (alive) {
             setTransfer(null);
@@ -287,11 +346,18 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       });
     });
 
-    const timer = setInterval(() => alive && setConnected(link.isOpen()), 1000);
+    const timer = setInterval(() => {
+      if (!alive) return;
+      setConnected(link.isOpen());
+      // Expired messages leave the screen; App.tsx deletes them from the device.
+      const now = Date.now();
+      setMessages((prev) => (prev.some((m) => m.expiresAt !== undefined && m.expiresAt <= now) ? prev.filter((m) => m.expiresAt === undefined || m.expiresAt > now) : prev));
+    }, 1000);
     return () => {
       alive = false;
       off();
       offBinary();
+      offClose();
       files.close();
       filesRef.current = null;
       for (const url of urls.values()) URL.revokeObjectURL(url);
@@ -314,7 +380,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       try {
         const wire = await session.seal(text);
         link.send(wire);
-        const msg: ChatMessage = { text, direction: "out", timestamp: Date.now() };
+        const msg: ChatMessage = withTimer({ text, direction: "out", timestamp: Date.now() });
         await appendMessage(historyKey, contact.did, msg);
         setMessages((prev) => [...prev, msg]);
       } catch (err) {
@@ -357,7 +423,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         void enqueue(async () => {
           try {
             link.send(await session.seal(encodeControl({ t: "loc", fix })));
-            const msg: ChatMessage = { text: "", location: fix, direction: "out", timestamp: Date.now() };
+            const msg: ChatMessage = withTimer({ text: "", location: fix, direction: "out", timestamp: Date.now() });
             await appendMessage(historyKey, contact.did, msg);
             setMessages((prev) => [...prev, msg]);
           } catch (err) {
@@ -395,6 +461,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       }
       receiverRef.current.discardInProgress();
       for (const a of active) void filesRef.current?.cancel(a.id);
+      parkedFiles.drop(contact.did);
       await deleteHistory(contact.did);
       await deleteFilesFor(contact.did);
       setMessages([]);
@@ -403,6 +470,26 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         delivered
           ? t("Чатът е изтрит и за двамата.")
           : t("Чатът е изтрит тук. Другият човек не беше на линия, затова няма да се изтрие при него."),
+      );
+    });
+  }
+
+  /** Turns the chat's timer on, changes or turns it off for both people. Needs the link. */
+  function onChooseTimer(ms: number) {
+    if (ms === timerRef.current) return;
+    setNotice(null);
+    void enqueue(async () => {
+      try {
+        link.send(await session.seal(encodeControl({ t: "timer", ms })));
+      } catch {
+        setNotice(t("Връзката е прекъсната. Опитайте отново, когато се свържете."));
+        return;
+      }
+      await applyTimer(ms);
+      setNotice(
+        ms
+          ? t("Изчезващи съобщения: {time}. Важи за новите съобщения и при двама ви.", { time: t(disappearLabel(ms)) })
+          : t("Изчезващите съобщения са изключени."),
       );
     });
   }
@@ -418,16 +505,12 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     }
     setPreparing(file.name);
     try {
-      const sending = files.send(file, file.name);
       // The offer is out once the file is hashed; from then on the list shows its progress.
-      const meta = await sending.finally(() => setPreparing(null));
-      const card = await keepFile(meta, new Blob([file], { type: meta.mime }));
-      const msg: ChatMessage = { text: "", file: card, direction: "out", timestamp: Date.now() };
-      await appendMessage(historyKey, contact.did, msg);
-      dropActive(meta.id);
-      setMessages((prev) => [...prev, msg]);
+      // The "sent" event writes the history entry.
+      await files.send(file, file.name).finally(() => setPreparing(null));
     } catch (err) {
-      setNotice(t(err instanceof Error ? err.message : "Файлът не беше изпратен."));
+      if (err instanceof FileTransferError && err.paused) setNotice(t(PAUSED_REASON));
+      else setNotice(t(err instanceof Error ? err.message : "Файлът не беше изпратен."));
     }
   }
 
@@ -447,7 +530,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             await link.waitForDrain();
           }
           const url = `data:${mime};base64,${btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""))}`;
-          const msg: ChatMessage = { text: "", image: url, direction: "out", timestamp: Date.now() };
+          const msg: ChatMessage = withTimer({ text: "", image: url, direction: "out", timestamp: Date.now() });
           await appendMessage(historyKey, contact.did, msg);
           setMessages((prev) => [...prev, msg]);
         } finally {
@@ -499,6 +582,12 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
           <span className={connected ? "status on" : "status off"}>
             {connected ? t(" · свързан") : t(" · връзката е прекъсната")}
           </span>
+          {timerMs > 0 && (
+            <span className="status timer" title={t("Изчезващи съобщения")}>
+              {" · ⏱ "}
+              {t(disappearLabel(timerMs))}
+            </span>
+          )}
         </div>
         <button
           className="secondary"
@@ -513,6 +602,21 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
       {showCrypto && (
         <section id="crypto-panel" className="call-panel" aria-label={t("Криптографски настройки")}>
+          <label className="timer-row">
+            <strong>{t("Изчезващи съобщения")}:</strong>{" "}
+            <select value={timerMs} disabled={!connected} onChange={(e) => onChooseTimer(Number(e.target.value))}>
+              {DISAPPEAR_OPTIONS.map((ms) => (
+                <option key={ms} value={ms}>
+                  {t(disappearLabel(ms))}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p>
+            {t(
+              "Новите съобщения се изтриват от двете устройства след избраното време. Другият човек пак може да ги снима или копира, преди да изчезнат.",
+            )}
+          </p>
           <p>
             <strong>{t("Текущ метод")}:</strong> {suiteLabel(suiteView.active)}
           </p>
@@ -623,6 +727,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         onAccept={(id) => void filesRef.current?.accept(id)}
         onCancel={(id) => {
           dropActive(id);
+          parkedFiles.dropTransfer(contact.did, id);
           void filesRef.current?.cancel(id);
         }}
       />
