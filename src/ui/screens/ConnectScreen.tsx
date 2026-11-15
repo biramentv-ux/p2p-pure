@@ -33,6 +33,7 @@ import { CompactAnswerError, decodeCompactAnswer, encodeCompactAnswer } from "..
 import { SoundPairingPanel } from "../components/SoundPairingPanel";
 import { LightPairingPanel } from "../components/LightPairingPanel";
 import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
+import type { Rendezvous } from "../../rendezvous/rendezvous";
 
 export interface ConnectedResult {
   contact: Contact;
@@ -46,6 +47,10 @@ interface ConnectScreenProps {
   expected?: Contact;
   onConnected: (result: ConnectedResult) => void;
   onCancel: () => void;
+  /** Н2: the running rendezvous (Nostr), when the person turned it on. */
+  rendezvous?: Rendezvous | null;
+  /** Н2: the expected contact's offer, found through the rendezvous: answer it at once. */
+  rvOffer?: string;
 }
 
 /** Responder waits longer: the initiator has to scan the answer first. */
@@ -136,7 +141,7 @@ function HexFallback({ hex }: { hex: string }) {
   );
 }
 
-export function ConnectScreen({ identity, expected, onConnected, onCancel }: ConnectScreenProps) {
+export function ConnectScreen({ identity, expected, onConnected, onCancel, rendezvous, rvOffer }: ConnectScreenProps) {
   const { t } = useI18n();
   const [view, setView] = useState<View>({ k: "choose" });
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +177,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   const [compactKey, setCompactKey] = useState(0);
   // Bluetooth responder: the panel waits for the answer invitation to send back.
   const bleAnswerRef = useRef<{ resolve: (answer: string) => void; reject: (err: unknown) => void } | null>(null);
+  // Н2: stops publishing our offer or answer through the rendezvous; set while one runs.
+  const rvStopRef = useRef<(() => void) | null>(null);
+  /** Н2 responder: the answer goes back through the rendezvous. */
+  const rvAnswerRef = useRef(false);
   useEffect(
     () => () => {
       wsRef.current?.disconnect();
@@ -222,6 +231,9 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
   }, []);
 
   function clearAll() {
+    rvStopRef.current?.();
+    rvStopRef.current = null;
+    rvAnswerRef.current = false;
     bleAnswerRef.current?.reject(new Error("cancelled"));
     bleAnswerRef.current = null;
     wsRef.current?.disconnect();
@@ -287,6 +299,9 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     session: SecureSession,
     peerPublicKey: Uint8Array,
   ) {
+    // Connected: nothing more to publish through the rendezvous.
+    rvStopRef.current?.();
+    rvStopRef.current = null;
     if (expected) {
       if (!bytesEqual(peerPublicKey, expected.publicKey)) {
         throw new Error("Другият човек не е същият контакт. Връзката е прекратена.");
@@ -330,6 +345,62 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       fail(err);
     }
   }
+
+  /* ---------- Н2: through the rendezvous (Nostr), for a known contact ---------- */
+
+  /** Publishes our offer under the pair's topic until the contact's device answers. */
+  async function startRvCall() {
+    const rv = rendezvous;
+    if (!rv || !expected) return;
+    setError(null);
+    setView({ k: "busy", label: t("Подготвям покана…") });
+    try {
+      const { link, sdp } = await PeerLink.createOffer();
+      linkRef.current = link;
+      mySdpRef.current = sdp;
+      const eph = createEphemeralKeyPair();
+      ephemeralRef.current = eph;
+      const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
+      offerRef.current = offer;
+      const payload = await encodeInvitation(offer);
+      setView({ k: "busy", label: t("Търся {name} през интернет… Приложението трябва да е отворено и при него.", { name: expected.name }), cancellable: true });
+      rvStopRef.current = rv.call(
+        { did: expected.did, publicKey: expected.publicKey, name: expected.name },
+        payload,
+        // An answer to an earlier offer (a previous attempt) is ignored, not fatal.
+        (answer) =>
+          void parseScannedInvitation(answer)
+            .then(({ invitation }) => {
+              const mine = offerRef.current;
+              if (mine && invitation.answersNonce && bytesEqual(invitation.answersNonce, mine.nonce)) void onAnswerScanned(answer);
+            })
+            .catch(() => undefined),
+        // They were looking for us too and their offer won: answer it instead of ours.
+        (theirOffer) => {
+          clearAll();
+          startRvAnswer(theirOffer);
+        },
+      );
+    } catch (err) {
+      fail(err);
+    }
+  }
+
+  /** Answers the contact's offer that came through the rendezvous. */
+  function startRvAnswer(offer: string) {
+    rvAnswerRef.current = true;
+    void onOfferScanned(offer);
+  }
+
+  // Opened from the "X is looking for you" banner: answer straight away.
+  const rvStarted = useRef(false);
+  useEffect(() => {
+    if (!rvOffer || !rendezvous || !expected || rvStarted.current) return;
+    rvStarted.current = true;
+    startRvAnswer(rvOffer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rvOffer, rendezvous, expected]);
+  useEffect(() => () => rvStopRef.current?.(), []);
 
   /** The pending offer of this initiator, or an error when there is none. */
   function activeOffer(): { link: PeerLink; offer: Invitation; eph: EphemeralKeyPair } {
@@ -509,6 +580,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
     try {
       const { invitation: offer } = await parseScannedInvitation(text);
       assertKind(offer, "offer");
+      // Through the rendezvous only the expected contact may be answered.
+      if (rvAnswerRef.current && (!expected || !bytesEqual(offer.publicKey, expected.publicKey))) {
+        throw new Error("Другият човек не е същият контакт. Връзката е прекратена.");
+      }
       // Over Bluetooth the panel stays on screen until it has sent the answer back.
       const ble = bleAnswerRef.current;
       if (!ble) setView({ k: "busy", label: t("Подготвям отговор…") });
@@ -524,7 +599,10 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
       // Start waiting before the answer leaves, so the handshake can't be missed.
       const handshake = completeHandshake(link, identity.did, offer.publicKey, RESPONDER_TIMEOUT_MS);
       const demo = wsRef.current;
-      if (ble) {
+      if (rvAnswerRef.current && rendezvous && expected) {
+        rvStopRef.current = rendezvous.answer({ did: expected.did, publicKey: expected.publicKey, name: expected.name }, payload);
+        setView({ k: "busy", label: t("Свързвам…") });
+      } else if (ble) {
         bleAnswerRef.current = null;
         ble.resolve(payload);
       } else if (demo) {
@@ -767,7 +845,12 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel }: Con
           )}
         </p>
         {error && <p role="alert">{error}</p>}
-        <button onClick={startAsInitiator}>{t("Покажи моята покана")}</button>
+        {expected && rendezvous && (
+          <button onClick={() => void startRvCall()}>{t("Намери {name} през интернет", { name: expected.name })}</button>
+        )}
+        <button className={expected && rendezvous ? "secondary" : ""} onClick={startAsInitiator}>
+          {t("Покажи моята покана")}
+        </button>
         <button className="secondary" onClick={startAsResponder}>
           {t("Сканирай чужда покана")}
         </button>

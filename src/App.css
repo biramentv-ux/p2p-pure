@@ -1184,3 +1184,19 @@
 .call-quality .bars i.on { background: currentColor; }
 .call-quality.q-good { color: var(--ember); }
 .call-quality.q-poor { color: var(--danger); }
+
+/* ---------- rendezvous banner (Н2) ---------- */
+
+.rv-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom, 0px) + 1rem);
+  transform: translateX(-50%);
+  width: min(440px, calc(100% - 2rem));
+  z-index: 40;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--ember);
+  border-radius: 14px;
+  background: var(--ink-1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}

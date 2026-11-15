@@ -50,3 +50,13 @@ describe("protocol documentation (Н10)", () => {
     }
   });
 });
+
+describe("the Н10 documents reach the public repository", () => {
+  it("public-docs.yml copies the protocol, the threat model and device protection", () => {
+    const wf = read(".github/workflows/public-docs.yml");
+    for (const f of ["PROTOCOL.md", "THREAT_MODEL.md", "SECURITY-DEVICE.md"]) {
+      expect(wf).toContain(`- docs/${f}`);
+      expect(wf).toContain(`src/docs/${f}`);
+    }
+  });
+});

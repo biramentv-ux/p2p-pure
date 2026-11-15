@@ -4,6 +4,7 @@ import { useI18n } from "../../i18n";
 import { TurnSettings } from "../components/TurnSettings";
 import { NotificationSettings } from "../components/NotificationSettings";
 import { SecuritySettings } from "../components/SecuritySettings";
+import { RendezvousSettings } from "../components/RendezvousSettings";
 
 interface ShowQrScreenProps {
   identity: UnlockedIdentity;
@@ -30,6 +31,7 @@ export function ShowQrScreen({ identity, onMove, onPanic }: ShowQrScreenProps) {
       )}
       <NotificationSettings />
       <TurnSettings identity={identity} />
+      <RendezvousSettings />
       {onPanic && <SecuritySettings onPanic={onPanic} />}
     </div>
   );
