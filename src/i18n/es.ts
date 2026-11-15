@@ -2,7 +2,12 @@
  * Spanish package. Keys are the exact Bulgarian source strings used in the code (same keys as en.ts).
  * Placeholders ({name}, {n}, ...) must appear in both the key and the value; tests/i18n/i18n.test.ts enforces this.
  */
+import { PROTECT_ES } from "./protect";
+import { CONNECT_ES } from "./connectCalls";
+
 export const ES_DICTIONARY: Record<string, string> = {
+  ...PROTECT_ES,
+  ...CONNECT_ES,
   "Премести на ново устройство": "Pasar a un dispositivo nuevo",
   "Имам друго устройство": "Tengo otro dispositivo",
   "Премести идентичността на ново устройство": "Pasa tu identidad a un dispositivo nuevo",

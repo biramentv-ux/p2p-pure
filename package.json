@@ -18,6 +18,7 @@
     "test:e2e": "node tests/e2e/run.mjs",
     "test:all": "vitest run && node tests/e2e/run.mjs && node tests/e2e/ui.mjs",
     "test:ui": "node tests/e2e/ui.mjs",
+    "test:rv": "node tests/e2e/rendezvous.mjs",
     "cap:sync": "vite build && npx cap sync",
     "cap:open:android": "npx cap open android",
     "cap:open:ios": "npx cap open ios",

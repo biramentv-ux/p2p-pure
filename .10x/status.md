@@ -1,3 +1,5 @@
 # Status
-- sbom-dispatch-without-tag: Implementation + verification done (vitest tests/release 37/37). Чака merge.
-- release-0.8.1: версия 0.8.1 (само CI промени от 0.8.0), за първо изцяло ръчно издание по ADR-001.
+- sbom-dispatch-without-tag: done (PR #85).
+- release-0.8.1: done.
+- n5-n7: PR #95, чака сливане.
+- n2-n6-n10: Implementation + Verification complete. PR над #95.

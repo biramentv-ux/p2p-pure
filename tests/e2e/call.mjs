@@ -26,6 +26,9 @@ const browser = await chromium.launch({
     "--disable-features=WebRtcHideLocalIpsWithMdns",
     "--use-fake-device-for-media-stream",
     "--use-fake-ui-for-media-stream",
+    // getDisplayMedia picks the screen without a dialog (screen sharing check).
+    "--auto-select-desktop-capture-source=Entire screen",
+    "--auto-accept-this-tab-capture",
   ],
 });
 
@@ -198,6 +201,24 @@ try {
   if (!videoA) console.log("  diag bob:", JSON.stringify(await pcState(bob.page)));
   check("Alice receives Bob's video", videoA);
   check("Bob receives Alice's video", await remoteMediaFlowing(bob.page, "video"));
+
+  // Н6: the link quality shows during the call (getStats every 2 s).
+  await alice.page.locator(".call-quality").waitFor({ timeout: 15_000 });
+  const qual = await alice.page.locator(".call-quality").innerText();
+  check("the call shows the link quality", /връзка/.test(qual), qual);
+
+  // Н6: share the screen instead of the camera, then stop; the call stays up.
+  const share = alice.page.getByRole("button", { name: "Сподели екрана" });
+  if (await share.count()) {
+    await share.click();
+    await alice.page.getByText("Споделяш екрана си.").waitFor({ timeout: 15_000 });
+    check("screen sharing replaces the camera", true);
+    await alice.page.getByRole("button", { name: "Спри споделянето" }).click();
+    await alice.page.getByText("Споделяш екрана си.").waitFor({ state: "detached", timeout: 15_000 });
+    check("stopping the share goes back to the camera, call still active", (await alice.page.getByText("В разговор").count()) > 0);
+  } else {
+    check("screen sharing button present on desktop Chromium", false);
+  }
 
   // Mute on Alice's side: her local microphone track is disabled.
   await alice.page.getByRole("button", { name: "Заглуши" }).click();

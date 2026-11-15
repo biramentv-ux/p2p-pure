@@ -11,6 +11,8 @@
  *      offer:   \u0001F|{"id","name","size","mime","sha256","key","n"}
  *      accept:  \u0001A|<id>
  *      cancel:  \u0001X|<id>        (decline by the receiver, or abort by either side)
+ *      resume:  \u0001R|{"id","next"} (receiver, on a new link: send again from chunk `next`)
+ *      waiting: \u0001W|<id>        (sender, on a new link: "I still have this file")
  *
  *    The offer carries a fresh random AES-256-GCM key for this one file. Only the peer that
  *    holds the session can read it, so a group member who joins later never gets it.
@@ -23,6 +25,16 @@
  *    13-byte header is the associated data, so a chunk cannot be moved to another file or
  *    position. The receiver takes chunks strictly in order, checks every length, and at the
  *    end compares the SHA-256 of the whole file with the one in the offer.
+ *
+ * Resume: when the link drops in the middle of an accepted file, both sides keep the transfer
+ * in memory (FileResumeStore, per contact, for RESUME_TTL_MS). On the next link with the same
+ * contact the receiver asks for the rest with "R" (and again when the sender's "W" arrives:
+ * whichever side opens the chat first may miss the other's first frame, so both speak); the
+ * sender streams from that chunk on, ignoring a repeated "R", with
+ * the same per-file key. Sending a chunk again gives the same IV, the same plaintext and the
+ * same associated data, so the ciphertext is byte-for-byte the same: no nonce is reused for
+ * different data. Nothing of a parked transfer is written to disk, and locking the app
+ * forgets every parked transfer (clear()).
  *
  * Crypto is WebCrypto AES-GCM and @noble/hashes SHA-256: no custom primitives.
  */
@@ -40,6 +52,12 @@ export const MAX_GROUP_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_STORED_FILE_BYTES = 25 * 1024 * 1024;
 /** An offer that nobody answers is withdrawn after this long. */
 export const OFFER_TIMEOUT_MS = 10 * 60 * 1000;
+/** An interrupted transfer waits this long for the next link with the same contact. */
+export const RESUME_TTL_MS = 30 * 60 * 1000;
+/** On a new link, the sender waits this long for the receiver to ask for the rest. */
+export const RESUME_WAIT_MS = 2 * 60 * 1000;
+/** Shown when a dropped link pauses a transfer (the UI translates it). */
+export const PAUSED_REASON = "Връзката прекъсна. Файлът ще продължи при следващото свързване.";
 
 const CHUNK_MAGIC = 0xf1;
 const HEADER_BYTES = 13;
@@ -65,9 +83,12 @@ export interface FileMeta {
 }
 
 export class FileTransferError extends Error {
-  constructor(message: string) {
+  /** True when the transfer is only paused: it continues on the next link. */
+  readonly paused: boolean;
+  constructor(message: string, paused = false) {
     super(message);
     this.name = "FileTransferError";
+    this.paused = paused;
   }
 }
 
@@ -142,7 +163,7 @@ export async function hashBlob(blob: Blob): Promise<string> {
 
 /** Is this decrypted plaintext a file control frame? */
 export function isFileFrame(plaintext: string): boolean {
-  return plaintext.startsWith(FRAME_MARK + "F|") || plaintext.startsWith(FRAME_MARK + "A|") || plaintext.startsWith(FRAME_MARK + "X|");
+  return ["F|", "A|", "X|", "R|", "W|"].some((p) => plaintext.startsWith(FRAME_MARK + p));
 }
 
 /** Is this binary message a file chunk? */
@@ -169,8 +190,12 @@ export interface FileEvents {
   progress(id: string, done: number, total: number, direction: "in" | "out"): void;
   /** A received file passed every check. */
   received(meta: FileMeta, blob: Blob): void;
-  /** Our file reached the other side completely. */
-  sent(meta: FileMeta): void;
+  /** Our file reached the other side completely (also one that resumed on a later link). */
+  sent(meta: FileMeta, blob: Blob): void;
+  /** The link dropped; the transfer waits for the next link with this contact (optional). */
+  paused?(meta: FileMeta, done: number, direction: "in" | "out"): void;
+  /** A paused transfer is back on this link (optional). */
+  resumed?(meta: FileMeta, done: number, direction: "in" | "out"): void;
   /** A transfer ended without a file: declined, cancelled, too big, damaged, closed. */
   failed(id: string, reason: string, direction: "in" | "out"): void;
 }
@@ -183,6 +208,126 @@ interface Outgoing {
   resolveAccept: (ok: boolean) => void;
   cancelled: boolean;
   timer: ReturnType<typeof setTimeout>;
+  /** Accepted by the receiver: from then on a dropped link parks it instead of failing it. */
+  streaming: boolean;
+  /** Next chunk to send. */
+  next: number;
+}
+
+/** The part of a sending transfer that survives a dropped link. */
+interface ParkedOut {
+  meta: FileMeta;
+  rawId: Uint8Array;
+  key: Uint8Array;
+  blob: Blob;
+  next: number;
+}
+
+/** The part of a receiving transfer that survives a dropped link. */
+interface ParkedIn {
+  meta: FileMeta;
+  rawId: Uint8Array;
+  key: Uint8Array;
+  total: number;
+  next: number;
+  parts: Uint8Array[];
+  hash: ReturnType<typeof sha256.create>;
+}
+
+interface ParkedEntry {
+  out: ParkedOut[];
+  inc: ParkedIn[];
+  at: number;
+}
+
+/**
+ * Interrupted transfers, in memory only, per contact (its did). A FileTransfers on a link
+ * parks into it on close() and takes from it on resume(). Entries older than RESUME_TTL_MS are
+ * dropped, and clear() (on lock or wipe) forgets everything and zeroes the keys.
+ */
+export class FileResumeStore {
+  private readonly byPeer = new Map<string, ParkedEntry>();
+  private readonly now: () => number;
+
+  constructor(now: () => number = Date.now) {
+    this.now = now;
+  }
+
+  park(peer: string, out: ParkedOut[], inc: ParkedIn[]): void {
+    this.expire();
+    if (out.length === 0 && inc.length === 0) return;
+    const e = this.byPeer.get(peer) ?? { out: [], inc: [], at: 0 };
+    e.out.push(...out);
+    e.inc.push(...inc);
+    e.at = this.now();
+    this.byPeer.set(peer, e);
+  }
+
+  take(peer: string): { out: ParkedOut[]; inc: ParkedIn[] } {
+    const e = this.byPeer.get(peer);
+    this.byPeer.delete(peer);
+    if (!e) return { out: [], inc: [] };
+    if (this.now() - e.at > RESUME_TTL_MS) {
+      forget(e);
+      return { out: [], inc: [] };
+    }
+    return { out: e.out, inc: e.inc };
+  }
+
+  /** Forgets every entry older than RESUME_TTL_MS and zeroes its keys (run periodically). */
+  expire(): void {
+    const now = this.now();
+    for (const [peer, e] of [...this.byPeer]) {
+      if (now - e.at <= RESUME_TTL_MS) continue;
+      this.byPeer.delete(peer);
+      forget(e);
+    }
+  }
+
+  /** How many transfers wait for this contact. */
+  count(peer: string): number {
+    const e = this.byPeer.get(peer);
+    return e && this.now() - e.at <= RESUME_TTL_MS ? e.out.length + e.inc.length : 0;
+  }
+
+  /** Forgets one contact's parked transfers (its chat was wiped). */
+  drop(peer: string): void {
+    const e = this.byPeer.get(peer);
+    this.byPeer.delete(peer);
+    if (e) forget(e);
+  }
+
+  /** Forgets one parked transfer (the person pressed "Stop" on a paused file). */
+  dropTransfer(peer: string, id: string): void {
+    const e = this.byPeer.get(peer);
+    if (!e) return;
+    forget({ out: e.out.filter((o) => o.meta.id === id), inc: e.inc.filter((i) => i.meta.id === id), at: 0 });
+    e.out = e.out.filter((o) => o.meta.id !== id);
+    e.inc = e.inc.filter((i) => i.meta.id !== id);
+    if (e.out.length + e.inc.length === 0) this.byPeer.delete(peer);
+  }
+
+  clear(): void {
+    for (const e of this.byPeer.values()) forget(e);
+    this.byPeer.clear();
+  }
+}
+
+function forget(e: ParkedEntry): void {
+  for (const o of e.out) o.key.fill(0);
+  for (const i of e.inc) {
+    i.key.fill(0);
+    i.parts = [];
+  }
+}
+
+/** The app's store: one per page, emptied on lock (App.tsx). */
+export const parkedFiles = new FileResumeStore();
+
+export interface ResumeOptions {
+  store: FileResumeStore;
+  /** The contact's did: transfers park and resume per contact. */
+  peer: string;
 }
 
 interface Incoming {
@@ -197,6 +342,8 @@ interface Incoming {
   cryptoKey: Promise<CryptoKey> | null;
   /** Chunks are decrypted one after another, in arrival order. */
   queue: Promise<void>;
+  /** Taken from the resume store: a "W" from the sender may ask for the rest again. */
+  resumed?: boolean;
 }
 
 /**
@@ -209,12 +356,17 @@ export class FileTransfers {
   private readonly transport: FileTransport;
   private readonly events: FileEvents;
   private readonly maxBytes: number;
+  private readonly resumeOpts: ResumeOptions | null;
+  /** Taken from the store on resume(): waiting for the receiver's "R". */
+  private readonly waiting = new Map<string, ParkedOut & { timer: ReturnType<typeof setTimeout> }>();
   private closed = false;
 
-  constructor(transport: FileTransport, events: FileEvents, maxBytes = MAX_FILE_BYTES) {
+  /** Without `resume`, a dropped link fails every transfer (groups). */
+  constructor(transport: FileTransport, events: FileEvents, maxBytes = MAX_FILE_BYTES, resume?: ResumeOptions) {
     this.transport = transport;
     this.events = events;
     this.maxBytes = maxBytes;
+    this.resumeOpts = resume ?? null;
   }
 
   get limit(): number {
@@ -241,7 +393,7 @@ export class FileTransfers {
     const key = crypto.getRandomValues(new Uint8Array(32));
     const accepted = new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => this.abortOut(id, "Никой не прие файла навреме."), OFFER_TIMEOUT_MS);
-      this.out.set(id, { meta, rawId: raw, key, blob, resolveAccept: resolve, cancelled: false, timer });
+      this.out.set(id, { meta, rawId: raw, key, blob, resolveAccept: resolve, cancelled: false, timer, streaming: false, next: 0 });
     });
     const offer = { ...meta, key: bytesToBase64Url(key), n: chunkCount(blob.size) };
     await this.transport.sendControl(`${FRAME_MARK}F|${JSON.stringify(offer)}`);
@@ -249,6 +401,53 @@ export class FileTransfers {
     if (!(await accepted)) throw new FileTransferError("Файлът не беше приет.");
     await this.stream(id);
     return meta;
+  }
+
+  /**
+   * Call once the new link is up: picks up the transfers that the last link with this contact
+   * left unfinished. The receiver asks for the rest; the sender waits for that request.
+   */
+  async resume(): Promise<void> {
+    if (!this.resumeOpts || this.closed) return;
+    const { out, inc } = this.resumeOpts.store.take(this.resumeOpts.peer);
+    for (const o of out) {
+      const timer = setTimeout(() => {
+        const w = this.waiting.get(o.meta.id);
+        if (!w) return;
+        this.waiting.delete(o.meta.id);
+        w.key.fill(0);
+        this.events.failed(o.meta.id, "Получателят не продължи файла.", "out");
+      }, RESUME_WAIT_MS);
+      this.waiting.set(o.meta.id, { ...o, timer });
+      this.events.resumed?.(o.meta, Math.min(o.meta.size, o.next * CHUNK_BYTES), "out");
+      try {
+        await this.transport.sendControl(`${FRAME_MARK}W|${o.meta.id}`);
+      } catch {
+        // The new link is already gone: close() parks it again.
+      }
+    }
+    for (const p of inc) {
+      this.inc.set(p.meta.id, {
+        ...p,
+        accepted: true,
+        cryptoKey: importKey(p.key, "decrypt"),
+        queue: Promise.resolve(),
+        resumed: true,
+      });
+      this.events.resumed?.(p.meta, Math.min(p.meta.size, p.next * CHUNK_BYTES), "in");
+      await this.askRest(p.meta.id);
+    }
+  }
+
+  /** Receiver: asks the sender for the chunks from `next` on. */
+  private async askRest(id: string): Promise<void> {
+    const t = this.inc.get(id);
+    if (!t || this.closed) return;
+    try {
+      await this.transport.sendControl(`${FRAME_MARK}R|${JSON.stringify({ id, next: t.next })}`);
+    } catch {
+      // The new link is already gone: close() parks it again.
+    }
   }
 
   /** Receiver: accepts an offered file; the chunks start to arrive. */
@@ -263,9 +462,10 @@ export class FileTransfers {
 
   /** Receiver: declines an offer. Sender or receiver: stops a transfer in progress. */
   async cancel(id: string): Promise<void> {
-    const known = this.inc.has(id) || this.out.has(id);
-    if (this.inc.delete(id)) this.events.failed(id, "Отказано.", "in");
+    const known = this.inc.has(id) || this.out.has(id) || this.waiting.has(id);
+    if (this.inc.has(id)) this.failIn(id, "Отказано.");
     if (this.out.has(id)) this.abortOut(id, "Отказано.");
+    this.dropWaiting(id, "Отказано.");
     if (known && !this.closed) await this.transport.sendControl(`${FRAME_MARK}X|${id}`);
   }
 
@@ -277,6 +477,8 @@ export class FileTransfers {
     if (type === "F") this.onOffer(body);
     else if (type === "A") this.onAccept(body);
     else if (type === "X") this.onCancel(body);
+    else if (type === "R") this.onResume(body);
+    else if (type === "W") this.onPaused(body);
     return true;
   }
 
@@ -295,12 +497,41 @@ export class FileTransfers {
     return true;
   }
 
-  /** The link went away: every transfer on it ends. */
+  /**
+   * The link went away. With resume options, accepted transfers are parked for the next link
+   * with this contact; offers nobody accepted yet end, as without them.
+   */
   close(): void {
     if (this.closed) return;
     this.closed = true;
+    const parkOut: ParkedOut[] = [];
+    const parkIn: ParkedIn[] = [];
+    if (this.resumeOpts) {
+      for (const [id, t] of [...this.out]) {
+        if (!t.streaming || t.cancelled) continue;
+        this.out.delete(id);
+        t.cancelled = true; // the running stream() loop stops at its next chunk
+        clearTimeout(t.timer);
+        parkOut.push({ meta: t.meta, rawId: t.rawId, key: t.key, blob: t.blob, next: t.next });
+        this.events.paused?.(t.meta, Math.min(t.meta.size, t.next * CHUNK_BYTES), "out");
+      }
+      for (const [id, w] of [...this.waiting]) {
+        this.waiting.delete(id);
+        clearTimeout(w.timer);
+        parkOut.push({ meta: w.meta, rawId: w.rawId, key: w.key, blob: w.blob, next: w.next });
+        this.events.paused?.(w.meta, Math.min(w.meta.size, w.next * CHUNK_BYTES), "out");
+      }
+      for (const [id, t] of [...this.inc]) {
+        if (!t.accepted) continue;
+        this.inc.delete(id);
+        parkIn.push({ meta: t.meta, rawId: t.rawId, key: t.key, total: t.total, next: t.next, parts: t.parts, hash: t.hash });
+        this.events.paused?.(t.meta, Math.min(t.meta.size, t.next * CHUNK_BYTES), "in");
+      }
+      this.resumeOpts.store.park(this.resumeOpts.peer, parkOut, parkIn);
+    }
     for (const id of [...this.out.keys()]) this.abortOut(id, "Връзката прекъсна.");
     for (const id of [...this.inc.keys()]) this.failIn(id, "Връзката прекъсна.");
+    for (const id of [...this.waiting.keys()]) this.dropWaiting(id, "Връзката прекъсна.");
   }
 
   // ------------------------------------------------------------------------------ sending
@@ -308,10 +539,11 @@ export class FileTransfers {
   private async stream(id: string): Promise<void> {
     const t = this.out.get(id);
     if (!t) throw new FileTransferError("Изпращането е спряно.");
+    t.streaming = true;
     const key = await importKey(t.key, "encrypt");
     const total = chunkCount(t.meta.size);
-    for (let i = 0; i < total; i++) {
-      if (t.cancelled || this.closed) throw new FileTransferError("Изпращането е спряно.");
+    for (let i = t.next; i < total; i++) {
+      if (t.cancelled || this.closed) throw this.stopped(t);
       const plain = new Uint8Array(await t.blob.slice(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES).arrayBuffer());
       const h = header(t.rawId, i);
       const ct = new Uint8Array(
@@ -324,13 +556,88 @@ export class FileTransfers {
       const msg = new Uint8Array(HEADER_BYTES + ct.length);
       msg.set(h, 0);
       msg.set(ct, HEADER_BYTES);
-      await this.transport.sendBinary(msg);
+      try {
+        await this.transport.sendBinary(msg);
+      } catch (err) {
+        // The link is gone. With resume options the owner's close() parks this transfer.
+        if (this.resumeOpts) throw new FileTransferError(PAUSED_REASON, true);
+        throw err;
+      }
+      // The link may have closed while this chunk drained (waitForDrain resolves on close):
+      // then close() has parked this transfer with its key, which must stay intact for the
+      // next link. Count the chunk only while this transfer is still ours.
+      if (t.cancelled || this.closed || this.out.get(id) !== t) throw this.stopped(t);
+      t.next = i + 1;
       this.events.progress(id, Math.min(t.meta.size, (i + 1) * CHUNK_BYTES), t.meta.size, "out");
     }
     clearTimeout(t.timer);
     this.out.delete(id);
     t.key.fill(0);
-    this.events.sent(t.meta);
+    this.events.sent(t.meta, t.blob);
+  }
+
+  /** Why a stream loop stopped: paused (parked by close()) or really stopped. */
+  private stopped(t: Outgoing): FileTransferError {
+    const parked = this.resumeOpts !== null && t.streaming && !this.out.has(t.meta.id);
+    return parked ? new FileTransferError(PAUSED_REASON, true) : new FileTransferError("Изпращането е спряно.");
+  }
+
+  /** Sender, on a new link: the receiver asks for the rest of a parked file. */
+  private onResume(json: string): void {
+    let o: Record<string, unknown>;
+    try {
+      o = JSON.parse(json) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    const { id, next } = o;
+    if (typeof id !== "string" || !ID_RE.test(id)) return;
+    // A repeated request (the receiver also answers our "W"): the file is already streaming.
+    if (this.out.has(id)) return;
+    const w = this.waiting.get(id);
+    if (!w) {
+      // Nothing to continue (the app restarted, or the offer is gone): end it on their side.
+      if (!this.closed) void Promise.resolve(this.transport.sendControl(`${FRAME_MARK}X|${id}`)).catch(() => undefined);
+      return;
+    }
+    const total = chunkCount(w.meta.size);
+    if (typeof next !== "number" || !Number.isInteger(next) || next < 0 || next >= total) return;
+    this.waiting.delete(id);
+    clearTimeout(w.timer);
+    const timer = setTimeout(() => undefined, 0);
+    this.out.set(id, {
+      meta: w.meta,
+      rawId: w.rawId,
+      key: w.key,
+      blob: w.blob,
+      resolveAccept: () => undefined,
+      cancelled: false,
+      timer,
+      streaming: true,
+      next,
+    });
+    this.stream(id).catch((err: unknown) => {
+      if (err instanceof FileTransferError && err.paused) return;
+      this.abortOut(id, err instanceof Error ? err.message : "Изпращането е спряно.");
+    });
+  }
+
+  /**
+   * Receiver: the sender still has a paused file; ask for the rest. An unknown id is ignored
+   * (this side may not have resumed yet); the sender gives up after RESUME_WAIT_MS.
+   */
+  private onPaused(id: string): void {
+    if (!ID_RE.test(id)) return;
+    if (this.inc.get(id)?.resumed) void this.askRest(id);
+  }
+
+  private dropWaiting(id: string, reason: string): void {
+    const w = this.waiting.get(id);
+    if (!w) return;
+    this.waiting.delete(id);
+    clearTimeout(w.timer);
+    w.key.fill(0);
+    this.events.failed(id, reason, "out");
   }
 
   private onAccept(id: string): void {
@@ -404,6 +711,7 @@ export class FileTransfers {
   private onCancel(id: string): void {
     if (this.inc.has(id)) this.failIn(id, "Изпращачът спря файла.");
     if (this.out.has(id)) this.abortOut(id, "Получателят отказа файла.");
+    this.dropWaiting(id, "Получателят отказа файла.");
   }
 
   private async onChunk(t: Incoming, bytes: Uint8Array): Promise<void> {
@@ -426,6 +734,9 @@ export class FileTransfers {
     } catch {
       throw new FileTransferError("Част от файла не мина проверката.");
     }
+    // The link may have closed while this chunk was decrypting: then the transfer is parked
+    // with the state from before this chunk, and the chunk is asked for again on resume.
+    if (this.inc.get(t.meta.id) !== t) return;
     t.parts.push(plain);
     t.hash.update(plain);
     t.next++;

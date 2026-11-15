@@ -2,7 +2,12 @@
  * Russian package. Keys are the exact Bulgarian source strings used in the code (same keys as en.ts).
  * Placeholders ({name}, {n}, ...) must appear in both the key and the value; tests/i18n/i18n.test.ts enforces this.
  */
+import { PROTECT_RU } from "./protect";
+import { CONNECT_RU } from "./connectCalls";
+
 export const RU_DICTIONARY: Record<string, string> = {
+  ...PROTECT_RU,
+  ...CONNECT_RU,
   "Премести на ново устройство": "Перенести на новое устройство",
   "Имам друго устройство": "У меня есть другое устройство",
   "Премести идентичността на ново устройство": "Перенеси свою идентичность на новое устройство",

@@ -21,6 +21,7 @@
 import { asBufferSource } from "../identity/bufferUtils";
 import { STORE_CONTACTS, STORE_CONTACTS_SEALED, openDatabase, withStore } from "../db/database";
 import { base64UrlToBytes, bytesToBase64Url } from "../p2p/encoding";
+import { validDisappearMs } from "../history/disappearing";
 
 export interface Contact {
   did: string;
@@ -31,6 +32,10 @@ export interface Contact {
   addedAt: number;
   /** Set when a mutual contact introduced this person (M8): who vouched for the key. */
   introducedBy?: IntroducedBy;
+  /** Disappearing messages for this chat, in ms (history/disappearing.ts). Absent = off. */
+  disappearMs?: number;
+  /** When that timer was last set (by either person): the later setting wins on both sides. */
+  disappearAt?: number;
 }
 
 export interface IntroducedBy {
@@ -117,6 +122,8 @@ function toJson(c: Contact): string {
     verifiedAt: c.verifiedAt,
     addedAt: c.addedAt,
     ...(c.introducedBy ? { ib: { did: c.introducedBy.did, name: c.introducedBy.name } } : {}),
+    ...(c.disappearMs ? { dm: c.disappearMs } : {}),
+    ...(c.disappearAt ? { dmAt: c.disappearAt } : {}),
   });
 }
 
@@ -133,6 +140,9 @@ function fromJson(text: string): Contact | null {
       addedAt: o.addedAt,
     };
     if (typeof o.verifiedAt === "number") c.verifiedAt = o.verifiedAt;
+    const dm = validDisappearMs(o.dm);
+    if (dm) c.disappearMs = dm;
+    if (typeof o.dmAt === "number" && Number.isSafeInteger(o.dmAt) && o.dmAt > 0) c.disappearAt = o.dmAt;
     const ib = o.ib as Record<string, unknown> | undefined;
     if (ib && typeof ib === "object" && typeof ib.did === "string" && typeof ib.name === "string") {
       c.introducedBy = { did: ib.did, name: ib.name };
