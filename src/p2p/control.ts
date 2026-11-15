@@ -2,6 +2,7 @@
  * Control messages carried inside the encrypted chat channel:
  *  - loc:  a location the sender chose to share
  *  - wipe: "delete this chat on both sides"
+ *  - timer: disappearing messages for this chat (ms, one of DISAPPEAR_OPTIONS; 0 = off)
  *  - suite: agreement on the cipher suite (see suiteNegotiation.ts)
  *  - intro-*: introduction through a mutual contact (src/intro, docs/INTRODUCTIONS.md)
  *
@@ -11,13 +12,14 @@
 import { FRAME_MARK } from "./photo";
 import { validLocation, type LocationFix } from "../history/messageStore";
 import { validSuiteMessage, type SuiteMessage } from "./suiteNegotiation";
+import { validDisappearMs } from "../history/disappearing";
 import { introToJson, isIntroType, validIntroMessage, type IntroMessage } from "../intro/introMessages";
 
 export type { IntroMessage } from "../intro/introMessages";
 
 export const CONTROL_MARK = `${FRAME_MARK}K|`;
 
-export type ControlMessage = { t: "loc"; fix: LocationFix } | { t: "wipe" } | SuiteMessage;
+export type ControlMessage = { t: "loc"; fix: LocationFix } | { t: "wipe" } | { t: "timer"; ms: number } | SuiteMessage;
 
 /** Everything that can be encoded on the control channel, introductions included. */
 export type AnyControlMessage = ControlMessage | IntroMessage;
@@ -36,6 +38,9 @@ export function encodeControl(message: AnyControlMessage): string {
   }
   if (message.t === "loc") {
     return CONTROL_MARK + JSON.stringify({ t: "loc", lat: message.fix.lat, lng: message.fix.lng, accuracy: message.fix.accuracy });
+  }
+  if (message.t === "timer") {
+    return CONTROL_MARK + JSON.stringify({ t: "timer", ms: message.ms });
   }
   return CONTROL_MARK + JSON.stringify({ t: "wipe" });
 }
@@ -70,6 +75,10 @@ export function decodeControl(plaintext: string): ControlMessage | null {
   const o = parseControl(plaintext);
   if (!o) return null;
   if (o.t === "wipe") return { t: "wipe" };
+  if (o.t === "timer") {
+    const ms = validDisappearMs(o.ms);
+    return ms === null ? null : { t: "timer", ms };
+  }
   if (o.t === "suite") return validSuiteMessage(o);
   if (o.t === "loc") {
     const fix = validLocation({

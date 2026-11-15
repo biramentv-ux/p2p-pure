@@ -1110,3 +1110,47 @@
 .notify-settings .sound-row label.confirm-row:has(input:checked) { border-color: var(--ember); }
 .notify-settings .sound-row button { flex: 0 0 2.8rem; margin: 0; padding: 0; }
 .notify-settings input[type="range"] { width: 100%; }
+
+/* ---------- device protection (Н7) ---------- */
+
+.screen button.danger {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.screen button.danger:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+.panic-button {
+  margin-top: 0.75rem;
+}
+
+/* The unlock form with the panic button under it, one column. */
+.unlock-stack {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.panic-locked .panic-button {
+  align-self: flex-start;
+}
+
+.panic-confirm {
+  border-color: var(--danger);
+}
+
+.status.timer {
+  color: var(--text);
+}
+
+.timer-row {
+  flex-direction: row !important;
+  align-items: center;
+  flex-wrap: wrap;
+}

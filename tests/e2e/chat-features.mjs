@@ -145,6 +145,35 @@ try {
   console.log(`  diag bob: alerts=${JSON.stringify(denied)} locations=${bobCount} tail="${bobNow}"`);
   check("without permission the person is told and nothing is shared", denied.length > 0 && bobCount === 1, denied);
 
+  // ---- Disappearing messages (Н7): Alice turns the timer on, both sides get it ----
+  await alice.page.getByRole("button", { name: "Криптография" }).click();
+  await alice.page.locator(".timer-row select").selectOption(String(5 * 60 * 1000));
+  await alice.page.locator(".status.timer").waitFor({ timeout: 15_000 });
+  await bob.page.getByText("Алиса включи изчезващи съобщения: 5 минути.").waitFor({ timeout: 30_000 });
+  check("the timer reaches Bob with a notice", (await bob.page.locator(".status.timer").innerText()).includes("5 минути"));
+  await alice.page.locator(".composer input").fill("изчезва след 5 минути");
+  await alice.page.getByRole("button", { name: "Изпрати" }).click();
+  await bob.page.locator(".messages .msg.in").filter({ hasText: "изчезва след 5 минути" }).waitFor({ timeout: 30_000 });
+  const expiries = async (page) =>
+    page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const req = indexedDB.open("p2p-messenger");
+          req.onsuccess = () => {
+            const all = req.result.transaction("messages").objectStore("messages").getAll();
+            all.onsuccess = () => resolve(all.result.map((r) => (r.expiresAt ? r.expiresAt - r.timestamp : 0)));
+          };
+        }),
+    );
+  const bobExp = await expiries(bob.page);
+  const aliceExp = await expiries(alice.page);
+  check("the new message expires in 5 minutes on both devices", bobExp.at(-1) === 300_000 && aliceExp.at(-1) === 300_000, `${aliceExp.at(-1)} / ${bobExp.at(-1)}`);
+  check("older messages keep no expiry", bobExp.slice(0, -1).every((v) => v === 0));
+  await alice.page.locator(".timer-row select").selectOption("0");
+  await bob.page.getByText("Алиса изключи изчезващите съобщения.").waitFor({ timeout: 30_000 });
+  check("turning it off reaches Bob too", (await bob.page.locator(".status.timer").count()) === 0);
+  await alice.page.getByRole("button", { name: "Криптография" }).click();
+
   // ---- Delete chat for both sides ----
   await alice.page.getByRole("button", { name: "Изтрий чата за двамата" }).click();
   await alice.page.getByRole("button", { name: "Не" }).click();
@@ -162,6 +191,35 @@ try {
   await bob.page.getByRole("button", { name: "Изпрати" }).click();
   await alice.page.locator(".messages .msg.in").filter({ hasText: "нов след изтриването" }).waitFor({ timeout: 30_000 });
   check("messages work again after the wipe", true);
+
+  // ---- Panic wipe (Н7): Bob empties his device from the settings ----
+  await bob.page.getByRole("button", { name: "Назад" }).click().catch(() => undefined);
+  await bob.page.getByRole("button", { name: "Идентичност" }).click();
+  await bob.page.getByText("Защита на устройството").click();
+  await bob.page.getByRole("button", { name: "Изтрий всичко от това устройство" }).click();
+  await bob.page.getByRole("button", { name: "Да, изтрий всичко" }).click();
+  await bob.page.getByRole("button", { name: "Създай идентичност" }).waitFor({ timeout: 30_000 });
+  const leftover = await bob.page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const req = indexedDB.open("p2p-messenger");
+        req.onsuccess = () => {
+          const db = req.result;
+          const names = Array.from(db.objectStoreNames);
+          const tx = db.transaction(names);
+          let total = 0;
+          let left = names.length;
+          for (const n of names) {
+            const c = tx.objectStore(n).count();
+            c.onsuccess = () => {
+              total += c.result;
+              if (--left === 0) resolve(total);
+            };
+          }
+        };
+      }),
+  );
+  check("panic wipe leaves no rows and returns to the first screen", leftover === 0, `rows=${leftover}`);
 
   check("no page errors (alice)", alice.errors.length === 0, alice.errors.join(" | "));
   check("no page errors (bob)", bob.errors.length === 0, bob.errors.join(" | "));

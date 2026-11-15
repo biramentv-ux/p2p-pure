@@ -5,10 +5,12 @@
  */
 import { EN_TRANSFER } from "./enTransfer";
 import { EN_PAIRING } from "./enPairing";
+import { PROTECT_EN } from "./protect";
 
 export const EN_DICTIONARY: Record<string, string> = {
   ...EN_TRANSFER,
   ...EN_PAIRING,
+  ...PROTECT_EN,
   // App shell and tabs
   "Език": "Language",
   "Зареждане…": "Loading…",
