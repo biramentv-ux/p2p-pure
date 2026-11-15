@@ -3,7 +3,13 @@ import { CallController, type CallDeps, type CallSnapshot } from "../../src/call
 import type { CallSignal } from "../../src/call/signal";
 
 /** Minimal stand-in for RTCPeerConnection: records what the controller does with it. */
-class FakePeer {
+class FakePeer extends EventTarget {
+  iceConnectionState = "new";
+  restarts = 0;
+  restartIce() {
+    this.restarts++;
+    this.onnegotiationneeded?.();
+  }
   signalingState: "stable" | "have-local-offer" | "have-remote-offer" = "stable";
   connectionState = "new";
   localDescription: { sdp: string; type: string } | null = null;
@@ -13,9 +19,13 @@ class FakePeer {
   remoteSet: Array<{ type: string; sdp: string }> = [];
   onnegotiationneeded: (() => void) | null = null;
   ontrack: ((ev: { track: MediaStreamTrack; streams: MediaStream[] }) => void) | null = null;
-  onconnectionstatechange: (() => void) | null = null;
   localCount = 0;
-  constructor(readonly log: string[] = []) {}
+  constructor(readonly log: string[] = []) {
+    super();
+  }
+  fire(type: string) {
+    this.dispatchEvent(new Event(type));
+  }
 
   addTrack(track: MediaStreamTrack) {
     this.log.push("track");
@@ -274,7 +284,7 @@ describe("active phase", () => {
     pc.ontrack?.({ track: remoteTrack(), streams: [] });
     expect(ctl.state.phase).toBe("connecting");
     pc.connectionState = "connected";
-    pc.onconnectionstatechange?.();
+    pc.fire("connectionstatechange");
     expect(ctl.state.phase).toBe("active");
   });
 
@@ -283,7 +293,7 @@ describe("active phase", () => {
     await ctl.startCall("audio");
     await ctl.handle({ t: "accept" });
     pc.connectionState = "connected";
-    pc.onconnectionstatechange?.();
+    pc.fire("connectionstatechange");
     expect(ctl.state.phase).toBe("connecting");
   });
 });

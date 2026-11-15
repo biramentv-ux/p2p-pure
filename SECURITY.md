@@ -125,4 +125,18 @@ Off by default. The app ships no TURN server and no credentials. A person can en
 
 ## Reporting
 
-Report vulnerabilities privately to the repository owner (GitHub Security Advisories).
+Please report vulnerabilities **privately**, not in a public issue:
+
+- GitHub private vulnerability reporting on the public releases repository:
+  <https://github.com/biramentv-ux/p2p-pure-releases/security/advisories/new>
+
+What to expect:
+
+- **Acknowledgement** within 7 days.
+- **A fix or a mitigation plan** within 30 days for high and critical issues.
+- **Coordinated disclosure** after a fix is released, or after **90 days**, whichever comes first. We will agree a later date with you if a fix needs it.
+- **Credit** in the release notes, if you want it.
+- **No legal action** against good-faith research that respects users' privacy: do not access other people's data, and do not degrade the service.
+
+Machine-readable contact: `/.well-known/security.txt` (RFC 9116) on dyrakarmy.online.
+Protocol and threat model: [docs/PROTOCOL.md](docs/PROTOCOL.md), [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).

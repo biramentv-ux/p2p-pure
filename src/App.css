@@ -1154,3 +1154,49 @@
   align-items: center;
   flex-wrap: wrap;
 }
+
+/* ---------- call quality (Н6) ---------- */
+
+.call-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85em;
+  color: var(--text);
+}
+
+.call-quality .bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 0.9em;
+}
+
+.call-quality .bars i {
+  width: 3px;
+  background: var(--ember-line);
+  border-radius: 1px;
+}
+
+.call-quality .bars i:nth-child(1) { height: 40%; }
+.call-quality .bars i:nth-child(2) { height: 70%; }
+.call-quality .bars i:nth-child(3) { height: 100%; }
+.call-quality .bars i.on { background: currentColor; }
+.call-quality.q-good { color: var(--ember); }
+.call-quality.q-poor { color: var(--danger); }
+
+/* ---------- rendezvous banner (Н2) ---------- */
+
+.rv-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom, 0px) + 1rem);
+  transform: translateX(-50%);
+  width: min(440px, calc(100% - 2rem));
+  z-index: 40;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--ember);
+  border-radius: 14px;
+  background: var(--ink-1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}

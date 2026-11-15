@@ -10,6 +10,7 @@
  * the person configured their own in Settings (src/p2p/turnConfig.ts); the app ships none.
  */
 import { STUN_SERVERS, buildRtcConfiguration, getActiveTurn } from "./turnConfig";
+import type { PeerProtocol } from "./protocol";
 
 export const ICE_SERVERS: RTCIceServer[] = STUN_SERVERS;
 /** Pause sending while this many bytes wait in the browser's buffer (photos are many frames). */
@@ -40,6 +41,8 @@ export class PeerLink {
   private resolveOpen!: () => void;
   private rejectOpen!: (err: Error) => void;
   private closed = false;
+  /** What the other side said in its hello (session.ts); null until the handshake is done. */
+  peerProtocol?: PeerProtocol;
   /** Notified once when the link stops working after (or before) it opened. */
   private closeHandlers = new Set<(reason: string) => void>();
   private closeReason: string | null = null;

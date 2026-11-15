@@ -260,6 +260,11 @@ export class SecureSession {
     this.recvDirection = s.recvDirection;
   }
 
+  /** True on the side that made the WebRTC offer. Fixed for the session: used as a tie-break. */
+  get isInitiator(): boolean {
+    return this.sendDirection === 0x49;
+  }
+
   /** The suite used for the next messages this side sends. */
   get activeSuite(): CipherSuite {
     return this.sendSuite;

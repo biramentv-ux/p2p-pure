@@ -15,6 +15,12 @@
  * without a browser.
  */
 import type { CallKind, CallSignal } from "./signal";
+import { STATS_MS, VIDEO_STEPS, nextVideoStep, rateQuality, summarizeStats, type CallStats, type Quality, type StatsSample } from "./quality";
+
+/** Wait this long in ICE "disconnected" before restarting ICE (it often recovers alone). */
+export const DISCONNECTED_GRACE_MS = 2000;
+/** At most one ICE restart in this window. */
+export const RESTART_MIN_GAP_MS = 5000;
 
 export const RING_TIMEOUT_MS = 45_000;
 
@@ -29,6 +35,15 @@ export interface CallSnapshot {
   cameraOff: boolean;
   /** Shown to the person; null when nothing is wrong. */
   error: string | null;
+  /** Link quality during an active call (quality.ts). */
+  quality: Quality;
+  stats: CallStats | null;
+  /** Which camera sends video. */
+  facing: "user" | "environment";
+  /** The screen is being shared instead of the camera. */
+  sharing: boolean;
+  /** The network changed and the connection is being moved (ICE restart). */
+  reconnecting: boolean;
 }
 
 export interface CallDeps {
@@ -39,6 +54,18 @@ export interface CallDeps {
   send: (signal: CallSignal) => Promise<void>;
   onChange: (snapshot: CallSnapshot) => void;
   ringTimeoutMs?: number;
+  /** A new camera track for the other camera (Н6). Without it, the camera cannot be switched. */
+  acquireVideo?: (facing: "user" | "environment") => Promise<MediaStreamTrack>;
+  /** A screen track (getDisplayMedia). Without it, the screen cannot be shared. */
+  acquireScreen?: () => Promise<MediaStreamTrack>;
+  /**
+   * Politeness for an ICE restart outside a call (perfect negotiation needs exactly one
+   * polite side). The chat passes "responder of the session" (fixed for both sides).
+   */
+  polite?: boolean;
+  /** Fires "online" or "change" when the device's network changes (window, navigator.connection). */
+  network?: EventTarget[];
+  now?: () => number;
 }
 
 const EMPTY: CallSnapshot = {
@@ -49,6 +76,11 @@ const EMPTY: CallSnapshot = {
   muted: false,
   cameraOff: false,
   error: null,
+  quality: "unknown",
+  stats: null,
+  facing: "user",
+  sharing: false,
+  reconnecting: false,
 };
 
 export class CallController {
@@ -65,18 +97,43 @@ export class CallController {
   private remoteStream: MediaStream | null = null;
   private disposed = false;
   private readonly deps: CallDeps;
+  // Quality (Н6)
+  private statsTimer: ReturnType<typeof setInterval> | undefined;
+  private lastSample: StatsSample | null = null;
+  private videoStep = 0;
+  private goodSince: number | null = null;
+  // Screen sharing: the camera track waits here while the screen is sent.
+  private cameraTrack: MediaStreamTrack | null = null;
+  private screenTrack: MediaStreamTrack | null = null;
+  // Handover (ICE restart)
+  private disconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private lastRestart = -Infinity;
+  private restarting = false;
 
   /** Handlers are kept so dispose() only clears the ones it installed. */
   private readonly onNegotiation = () => void this.negotiate();
   private readonly onTrack = (ev: RTCTrackEvent) => this.handleTrack(ev);
   private readonly onConnection = () => this.handleConnectionState();
+  private readonly onIce = () => this.handleIceState();
+  private readonly onNetwork = () => this.restartIce("network");
 
   constructor(deps: CallDeps) {
     this.deps = deps;
     const pc = deps.pc;
     pc.onnegotiationneeded = this.onNegotiation;
     pc.ontrack = this.onTrack;
-    pc.onconnectionstatechange = this.onConnection;
+    // Listeners, not on* properties: PeerLink owns pc.onconnectionstatechange (it reports a
+    // dead link), and overwriting it here would hide that.
+    pc.addEventListener("connectionstatechange", this.onConnection);
+    pc.addEventListener("iceconnectionstatechange", this.onIce);
+    for (const target of deps.network ?? []) {
+      target.addEventListener("online", this.onNetwork);
+      target.addEventListener("change", this.onNetwork);
+    }
+  }
+
+  private now(): number {
+    return (this.deps.now ?? Date.now)();
   }
 
   private handleTrack(ev: RTCTrackEvent): void {
@@ -99,13 +156,198 @@ export class CallController {
     if (this.deps.pc.connectionState !== "connected") return;
     if (!this.remoteStream || this.remoteStream.getTracks().length === 0) return;
     this.patch({ phase: "active" });
+    this.startStats();
   }
 
   private handleConnectionState(): void {
     if (this.disposed) return;
     const state = this.deps.pc.connectionState;
-    if (state === "connected") this.maybeActive();
-    if (state === "failed") this.fail("Връзката за разговора не можа да се установи.");
+    if (state === "connected") {
+      this.maybeActive();
+      if (this.snap.reconnecting) this.patch({ reconnecting: false, error: null });
+    }
+    if (state === "failed") {
+      // One ICE restart first: a network change can look like a failure.
+      if (this.restartIce("failed")) return;
+      if (this.snap.phase !== "idle" && this.snap.phase !== "ended") this.fail("Връзката за разговора не можа да се установи.");
+    }
+  }
+
+  /* ---------- handover (Н6): keep the link across a network change ---------- */
+
+  private handleIceState(): void {
+    if (this.disposed) return;
+    const ice = this.deps.pc.iceConnectionState;
+    clearTimeout(this.disconnectTimer);
+    if (ice === "disconnected") {
+      this.disconnectTimer = setTimeout(() => {
+        if (this.deps.pc.iceConnectionState === "disconnected") this.restartIce("disconnected");
+      }, DISCONNECTED_GRACE_MS);
+    } else if (ice === "connected" || ice === "completed") {
+      this.restarting = false;
+      if (this.snap.reconnecting) this.patch({ reconnecting: false });
+    }
+  }
+
+  /**
+   * Restarts ICE: new candidates from the network the device has now, offered over the
+   * encrypted chat channel. Works while the old path still carries that offer (a handover);
+   * when the old path is already gone, the offer cannot leave and the chat must reconnect.
+   * Returns false when it did nothing (too soon after the last one, or closed).
+   */
+  restartIce(_why: "network" | "disconnected" | "failed"): boolean {
+    const pc = this.deps.pc;
+    if (this.disposed || pc.connectionState === "closed" || typeof pc.restartIce !== "function") return false;
+    const now = this.now();
+    if (now - this.lastRestart < RESTART_MIN_GAP_MS) return false;
+    this.lastRestart = now;
+    this.restarting = true;
+    this.negotiationEnabled = true;
+    // Outside a call nobody has set politeness yet; the chat's fixed role decides.
+    if (this.snap.phase === "idle" || this.snap.phase === "ended") this.polite = this.deps.polite ?? false;
+    if (this.snap.phase === "active" || this.snap.phase === "connecting") this.patch({ reconnecting: true });
+    pc.restartIce();
+    return true;
+  }
+
+  /* ---------- quality (Н6) ---------- */
+
+  private startStats(): void {
+    if (this.statsTimer !== undefined || typeof this.deps.pc.getStats !== "function") return;
+    this.lastSample = null;
+    this.videoStep = 0;
+    this.goodSince = null;
+    this.statsTimer = setInterval(() => void this.sampleStats(), STATS_MS);
+  }
+
+  private stopStats(): void {
+    clearInterval(this.statsTimer);
+    this.statsTimer = undefined;
+    this.lastSample = null;
+  }
+
+  /** One stats round: rate the link and move the outgoing video one step if needed. */
+  async sampleStats(): Promise<void> {
+    if (this.disposed || this.snap.phase !== "active") return;
+    let report: RTCStatsReport;
+    try {
+      report = await this.deps.pc.getStats();
+    } catch {
+      return;
+    }
+    const now = this.now();
+    const { stats, sample } = summarizeStats(report.values() as Iterable<{ type: string }>, this.lastSample, now);
+    this.lastSample = sample;
+    const quality = rateQuality(stats);
+    if (quality === "good") this.goodSince ??= now;
+    else this.goodSince = null;
+    this.patch({ stats, quality });
+    if (this.snap.kind !== "video") return;
+    const next = nextVideoStep(this.videoStep, quality, this.goodSince === null ? 0 : now - this.goodSince);
+    if (next === this.videoStep) return;
+    const stepUp = next < this.videoStep;
+    this.videoStep = next;
+    // After a step up, the next one waits a full good period again.
+    if (stepUp) this.goodSince = now;
+    await this.applyVideoStep();
+  }
+
+  private videoSender(): RTCRtpSender | null {
+    return this.deps.pc.getSenders().find((s) => s.track?.kind === "video") ?? null;
+  }
+
+  private async applyVideoStep(): Promise<void> {
+    const sender = this.videoSender();
+    if (!sender || typeof sender.getParameters !== "function") return;
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    const step = VIDEO_STEPS[this.videoStep];
+    params.encodings[0].maxBitrate = step.maxBitrate;
+    // A shared screen keeps its resolution (text must stay readable); only the bitrate drops.
+    params.encodings[0].scaleResolutionDownBy = this.snap.sharing ? 1 : step.scaleResolutionDownBy;
+    try {
+      await sender.setParameters(params);
+    } catch {
+      /* some browsers refuse while negotiating; the next round tries again */
+    }
+  }
+
+  /** The step the outgoing video is at (0 = best). For tests and the screen. */
+  get videoQualityStep(): number {
+    return this.videoStep;
+  }
+
+  /* ---------- camera and screen (Н6) ---------- */
+
+  /** True when the other camera can be used: a video call, a camera source, not sharing. */
+  get canSwitchCamera(): boolean {
+    return !!this.deps.acquireVideo && this.snap.kind === "video" && !this.snap.sharing && this.snap.phase === "active";
+  }
+
+  get canShareScreen(): boolean {
+    return !!this.deps.acquireScreen && this.snap.kind === "video" && this.snap.phase === "active";
+  }
+
+  /** Front ↔ back camera, without renegotiation (replaceTrack). */
+  async switchCamera(): Promise<void> {
+    if (!this.canSwitchCamera || !this.deps.acquireVideo) return;
+    const sender = this.videoSender();
+    const local = this.snap.local;
+    const old = local?.getVideoTracks()[0];
+    if (!sender || !local || !old) return;
+    const facing = this.snap.facing === "user" ? "environment" : "user";
+    let track: MediaStreamTrack;
+    try {
+      track = await this.deps.acquireVideo(facing);
+    } catch (err) {
+      this.patch({ error: mediaMessage(err) });
+      return;
+    }
+    track.enabled = !this.snap.cameraOff;
+    await sender.replaceTrack(track);
+    local.removeTrack(old);
+    local.addTrack(track);
+    old.stop();
+    this.patch({ facing, local, error: null });
+    await this.applyVideoStep();
+  }
+
+  /** Starts or stops sharing the screen instead of the camera. */
+  async toggleScreenShare(): Promise<void> {
+    if (this.snap.sharing) {
+      await this.stopScreenShare();
+      return;
+    }
+    if (!this.canShareScreen || !this.deps.acquireScreen) return;
+    const sender = this.videoSender();
+    if (!sender) return;
+    let screen: MediaStreamTrack;
+    try {
+      screen = await this.deps.acquireScreen();
+    } catch {
+      return; // the person closed the picker
+    }
+    this.cameraTrack = sender.track;
+    this.screenTrack = screen;
+    // The browser's own "Stop sharing" button ends the track: go back to the camera.
+    screen.onended = () => void this.stopScreenShare();
+    await sender.replaceTrack(screen);
+    this.patch({ sharing: true });
+    await this.applyVideoStep();
+  }
+
+  private async stopScreenShare(): Promise<void> {
+    const screen = this.screenTrack;
+    const camera = this.cameraTrack;
+    this.screenTrack = null;
+    this.cameraTrack = null;
+    if (!screen) return;
+    screen.onended = null;
+    screen.stop();
+    const sender = this.deps.pc.getSenders().find((s) => s.track === screen);
+    if (sender && camera && camera.readyState !== "ended") await sender.replaceTrack(camera);
+    this.patch({ sharing: false });
+    await this.applyVideoStep();
   }
 
   get state(): CallSnapshot {
@@ -220,11 +462,19 @@ export class CallController {
     if (this.disposed) return;
     clearTimeout(this.ringTimer);
     this.disposed = true;
+    this.stopStats();
+    clearTimeout(this.disconnectTimer);
+    this.screenTrack?.stop();
     stopAll(this.snap.local);
     const pc = this.deps.pc;
     if (pc.onnegotiationneeded === this.onNegotiation) pc.onnegotiationneeded = null;
     if (pc.ontrack === this.onTrack) pc.ontrack = null;
-    if (pc.onconnectionstatechange === this.onConnection) pc.onconnectionstatechange = null;
+    pc.removeEventListener("connectionstatechange", this.onConnection);
+    pc.removeEventListener("iceconnectionstatechange", this.onIce);
+    for (const target of this.deps.network ?? []) {
+      target.removeEventListener("online", this.onNetwork);
+      target.removeEventListener("change", this.onNetwork);
+    }
   }
 
   /* ---------- internals ---------- */
@@ -246,6 +496,9 @@ export class CallController {
       const desc = pc.localDescription;
       if (desc) await this.deps.send({ t: "sdp", type: "offer", sdp: desc.sdp });
     } catch (err) {
+      // An ICE restart offer that cannot leave (the old path is already gone) is not a call
+      // failure: the person sees "reconnecting" and the chat's link reports the drop.
+      if (this.restarting) return;
       this.fail(err instanceof Error ? err.message : "Неуспешно договаряне на разговора.");
     } finally {
       this.makingOffer = false;
@@ -290,6 +543,13 @@ export class CallController {
 
   /** Releases devices and tracks, removes our senders, and sets the new phase. */
   private endLocal(next: Partial<CallSnapshot> & { phase: CallPhase }): void {
+    this.stopStats();
+    if (this.screenTrack) {
+      this.screenTrack.onended = null;
+      this.screenTrack.stop();
+    }
+    this.screenTrack = null;
+    this.cameraTrack = null;
     stopAll(this.snap.local);
     const pc = this.deps.pc;
     for (const sender of pc.getSenders()) {
