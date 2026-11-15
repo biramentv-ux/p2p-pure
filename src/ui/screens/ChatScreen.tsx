@@ -181,6 +181,11 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       }
     });
 
+    // A peer from before protocol version 2 (Н10): say what will not work with it.
+    if (link.peerProtocol && link.peerProtocol.pv < 2) {
+      setNotice(tRef.current("Другият човек е със стара версия: прекъснатите файлове няма да продължат и изчезващите съобщения няма да работят при него."));
+    }
+
     const controller = new CallController({
       pc: link.pc,
       acquire: acquireMedia,
