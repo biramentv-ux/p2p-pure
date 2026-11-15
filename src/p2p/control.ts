@@ -19,7 +19,7 @@ export type { IntroMessage } from "../intro/introMessages";
 
 export const CONTROL_MARK = `${FRAME_MARK}K|`;
 
-export type ControlMessage = { t: "loc"; fix: LocationFix } | { t: "wipe" } | { t: "timer"; ms: number } | SuiteMessage;
+export type ControlMessage = { t: "loc"; fix: LocationFix } | { t: "wipe" } | { t: "timer"; ms: number; at: number } | SuiteMessage;
 
 /** Everything that can be encoded on the control channel, introductions included. */
 export type AnyControlMessage = ControlMessage | IntroMessage;
@@ -40,7 +40,7 @@ export function encodeControl(message: AnyControlMessage): string {
     return CONTROL_MARK + JSON.stringify({ t: "loc", lat: message.fix.lat, lng: message.fix.lng, accuracy: message.fix.accuracy });
   }
   if (message.t === "timer") {
-    return CONTROL_MARK + JSON.stringify({ t: "timer", ms: message.ms });
+    return CONTROL_MARK + JSON.stringify({ t: "timer", ms: message.ms, at: message.at });
   }
   return CONTROL_MARK + JSON.stringify({ t: "wipe" });
 }
@@ -77,7 +77,8 @@ export function decodeControl(plaintext: string): ControlMessage | null {
   if (o.t === "wipe") return { t: "wipe" };
   if (o.t === "timer") {
     const ms = validDisappearMs(o.ms);
-    return ms === null ? null : { t: "timer", ms };
+    const at = typeof o.at === "number" && Number.isSafeInteger(o.at) && o.at >= 0 ? o.at : null;
+    return ms === null || at === null ? null : { t: "timer", ms, at };
   }
   if (o.t === "suite") return validSuiteMessage(o);
   if (o.t === "loc") {

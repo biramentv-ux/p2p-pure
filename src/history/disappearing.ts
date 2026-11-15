@@ -1,6 +1,7 @@
 /**
- * Disappearing messages (Н7): a timer per chat. Both people see the same value, because a
- * change is sent as a control message ({t:"timer", ms}) and can only be made while connected.
+ * Disappearing messages (Н7): a timer per chat. Both people see the same value: a change is
+ * sent as a control message ({t:"timer", ms, at}), each chat screen also sends its current
+ * setting when it opens, and newerTimer() picks the same winner on both sides.
  * Every message written while the timer is on gets `expiresAt` = time written + timer, on both
  * sides. purgeExpired() (messageStore.ts) deletes the expired rows and their kept files; the
  * app runs it at start and every SWEEP_MS, and the open chat also drops them from the screen.
@@ -42,4 +43,22 @@ export function disappearLabel(ms: number): string {
     default:
       return "Изключено";
   }
+}
+
+/** A timer setting: the value and when it was chosen (ms since epoch, 0 = never set). */
+export interface TimerSetting {
+  ms: number;
+  at: number;
+}
+
+/**
+ * Which of two settings stands. Both devices run this on the same two settings, so they end
+ * on the same value even when both people change the timer at the same moment, and when
+ * they reconnect after changing it while apart: the later choice wins; on an exact tie the
+ * shorter timer wins (an "off" counts as the longest), the safer of the two.
+ */
+export function newerTimer(a: TimerSetting, b: TimerSetting): TimerSetting {
+  if (a.at !== b.at) return a.at > b.at ? a : b;
+  const rank = (ms: number) => (ms === 0 ? Number.POSITIVE_INFINITY : ms);
+  return rank(a.ms) <= rank(b.ms) ? a : b;
 }

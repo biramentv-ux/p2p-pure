@@ -413,3 +413,48 @@ describe("file frames do not collide with other frames", () => {
     for (const mark of ["F|", "A|", "X|", "R|", "W|"]) expect(isFileFrame(`\u0001${mark}x`), mark).toBe(true);
   });
 });
+
+describe("file transfer resume: review fixes", () => {
+  it("a link that closes while the last chunk drains parks the file with its key intact", async () => {
+    const store = new FileResumeStore();
+    const events = { offered: vi.fn(), progress: vi.fn(), received: vi.fn(), sent: vi.fn(), failed: vi.fn() };
+    let f!: FileTransfers;
+    let chunks = 0;
+    // The channel closes during the drain of the LAST chunk; the drain still resolves (as
+    // PeerLink.waitForDrain does on close).
+    f = new FileTransfers(
+      {
+        sendControl: async (t) => {
+          if (t.startsWith("\u0001F|")) setTimeout(() => f.handleControl(`\u0001A|${JSON.parse(t.slice(3)).id}`), 0);
+        },
+        sendBinary: async () => {
+          if (++chunks === 2) f.close();
+        },
+      },
+      events,
+      undefined,
+      { store, peer: "p" },
+    );
+    const err = await f.send(new Blob([bytes(CHUNK_BYTES + 10) as BlobPart]), "x").catch((e: unknown) => e);
+    expect((err as FileTransferError).paused).toBe(true);
+    expect(events.sent).not.toHaveBeenCalled();
+    const parked = store.take("p").out[0];
+    expect(parked.next).toBe(1);
+    expect(parked.key.some((b) => b !== 0)).toBe(true);
+  });
+
+  it("expire() releases entries past their time without another connection", () => {
+    let now = 0;
+    const store = new FileResumeStore(() => now);
+    const key = new Uint8Array(32).fill(9);
+    const meta = { id: "AAAAAAAAAAA", name: "x", size: 1, mime: DOWNLOAD_MIME, sha256: "" };
+    store.park("p", [{ meta, rawId: new Uint8Array(8), key, blob: new Blob(["x"]), next: 0 }], []);
+    now = RESUME_TTL_MS;
+    store.expire();
+    expect(key[0]).toBe(9);
+    now = RESUME_TTL_MS + 1;
+    store.expire();
+    expect(key.every((b) => b === 0)).toBe(true);
+    expect(store.take("p")).toEqual({ out: [], inc: [] });
+  });
+});

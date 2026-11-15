@@ -76,6 +76,9 @@ function App() {
   // The group lives across screens. It is closed only when the device locks, and it is
   // saved encrypted, so it comes back after unlock.
   const groupRef = useRef<GroupSession | null>(null);
+  /** The group restore that runs after unlock, until it settles (the panic wipe waits for it). */
+  const restoreRef = useRef<Promise<GroupSession | null> | null>(null);
+  const wipingRef = useRef(false);
   // Sounds and notifications for the group: it runs behind every screen, so it is watched here.
   const groupWatch = useRef<{ group: GroupSession; off: () => void } | null>(null);
   const [, setGroupRestored] = useState(0);
@@ -201,15 +204,27 @@ function App() {
 
   /** Panic wipe (Н7): from the settings, or from the unlock screen without unlocking. */
   async function panic() {
-    const group = dropEverything();
-    await panicWipe([group]);
+    wipingRef.current = true;
+    try {
+      const group = dropEverything();
+      // A group still being restored after unlock would save its secrets back after the wipe:
+      // wait for it, and stop and drain it together with the others.
+      const restoring = await (restoreRef.current ?? Promise.resolve(null)).catch(() => null);
+      await panicWipe([group, restoring]);
+    } finally {
+      wipingRef.current = false;
+    }
     setLock(loadLockSettings());
     setState({ kind: "no-identity" });
   }
 
   // Disappearing messages: expired rows (and their files) leave the device, also while locked.
+  // Paused file transfers past their 30 minutes are forgotten here too.
   useEffect(() => {
-    const sweep = () => void purgeExpired().catch(() => undefined);
+    const sweep = () => {
+      parkedFiles.expire();
+      void purgeExpired().catch(() => undefined);
+    };
     sweep();
     const timer = setInterval(sweep, SWEEP_MS);
     return () => clearInterval(timer);
@@ -236,10 +251,15 @@ function App() {
     if (state.kind !== "unlocked" || !historyKey) return;
     let alive = true;
     const keys = state.identity.keyPair;
-    GroupSession.restore(keys, historyKey, { linkFactory: webrtcLinks, findContact: getContact })
+    const restoring = GroupSession.restore(keys, historyKey, { linkFactory: webrtcLinks, findContact: getContact });
+    restoreRef.current = restoring;
+    restoring
       .then((restored) => {
+        if (restoreRef.current === restoring) restoreRef.current = null;
         const current = groupRef.current;
         if (!restored) return;
+        // A panic wipe is running: it stops and drains this session itself (panic()).
+        if (wipingRef.current) return;
         if (!alive || (current && (current.snapshot.state !== null || current.snapshot.linked.length > 0))) {
           restored.closeAll();
           return;

@@ -7,6 +7,7 @@
  * The bundle is padded to a multiple of 1 KiB before encryption so the size does not reveal
  * the exact number of contacts.
  */
+import { validDisappearMs } from "../history/disappearing";
 import { publicKeyToDidKey } from "../identity/didKey";
 import { base64UrlToBytes, bytesToBase64Url } from "../p2p/encoding";
 import type { Contact } from "../contacts/contacts";
@@ -45,6 +46,7 @@ export function encodeBundle(bundle: TransferBundle): Uint8Array {
       verified: c.verified,
       verifiedAt: c.verifiedAt,
       addedAt: c.addedAt,
+      ...(c.disappearMs ? { dm: c.disappearMs, dmAt: c.disappearAt } : {}),
     })),
   });
   const body = new TextEncoder().encode(json);
@@ -82,7 +84,7 @@ export function decodeBundle(padded: Uint8Array): TransferBundle {
   const contacts: Contact[] = [];
   for (const raw of o.contacts as Record<string, unknown>[]) {
     if (!raw || typeof raw !== "object") bad();
-    const { did, pk, name, verified, verifiedAt, addedAt } = raw;
+    const { did, pk, name, verified, verifiedAt, addedAt, dm, dmAt } = raw;
     if (typeof did !== "string" || typeof pk !== "string" || typeof name !== "string") bad();
     if (typeof verified !== "boolean" || typeof addedAt !== "number" || !Number.isFinite(addedAt)) bad();
     if (verifiedAt !== undefined && (typeof verifiedAt !== "number" || !Number.isFinite(verifiedAt))) bad();
@@ -98,6 +100,12 @@ export function decodeBundle(padded: Uint8Array): TransferBundle {
     seen.add(did);
     const c: Contact = { did, publicKey, name, verified, addedAt };
     if (typeof verifiedAt === "number") c.verifiedAt = verifiedAt;
+    // Disappearing messages move with the contact (an unknown value is dropped, not fatal).
+    const timer = validDisappearMs(dm);
+    if (timer) {
+      c.disappearMs = timer;
+      if (typeof dmAt === "number" && Number.isSafeInteger(dmAt) && dmAt > 0) c.disappearAt = dmAt;
+    }
     contacts.push(c);
   }
   return { seed, contacts };
