@@ -1,3 +1,3 @@
 # Handoff
-ADR-001. След merge: следващото издание може да се пусне ръчно — Windows desktop, Linux desktop и
-Release SBOM с един и същ таг (напр. desktop-v0.8.1) от `main`, без таг в p2p-pure.
+Spec: `.10x/specs/2026-11-15-n2-n6-n10-design.md`. ADR-002 (hello pv/caps), ADR-003 (calls), ADR-004 (Nostr rendezvous).
+Ред: Н10 (малко, дава caps), Н6, Н2. Клонът е над PR #95.
