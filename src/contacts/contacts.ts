@@ -34,6 +34,8 @@ export interface Contact {
   introducedBy?: IntroducedBy;
   /** Disappearing messages for this chat, in ms (history/disappearing.ts). Absent = off. */
   disappearMs?: number;
+  /** When that timer was last set (by either person): the later setting wins on both sides. */
+  disappearAt?: number;
 }
 
 export interface IntroducedBy {
@@ -121,6 +123,7 @@ function toJson(c: Contact): string {
     addedAt: c.addedAt,
     ...(c.introducedBy ? { ib: { did: c.introducedBy.did, name: c.introducedBy.name } } : {}),
     ...(c.disappearMs ? { dm: c.disappearMs } : {}),
+    ...(c.disappearAt ? { dmAt: c.disappearAt } : {}),
   });
 }
 
@@ -139,6 +142,7 @@ function fromJson(text: string): Contact | null {
     if (typeof o.verifiedAt === "number") c.verifiedAt = o.verifiedAt;
     const dm = validDisappearMs(o.dm);
     if (dm) c.disappearMs = dm;
+    if (typeof o.dmAt === "number" && Number.isSafeInteger(o.dmAt) && o.dmAt > 0) c.disappearAt = o.dmAt;
     const ib = o.ib as Record<string, unknown> | undefined;
     if (ib && typeof ib === "object" && typeof ib.did === "string" && typeof ib.name === "string") {
       c.introducedBy = { did: ib.did, name: ib.name };

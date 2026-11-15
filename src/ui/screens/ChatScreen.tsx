@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { notifyIncoming, previewText } from "../../notify/notifier";
 import { getContact, saveContact, type Contact } from "../../contacts/contacts";
-import { DISAPPEAR_OPTIONS, disappearLabel, expiryFor, validDisappearMs } from "../../history/disappearing";
+import { DISAPPEAR_OPTIONS, disappearLabel, expiryFor, newerTimer, validDisappearMs, type TimerSetting } from "../../history/disappearing";
 import {
   appendMessage,
   deleteHistory,
@@ -56,25 +56,36 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     tRef.current = t;
   });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [connected, setConnected] = useState(link.isOpen());
-  // Disappearing messages: the same value on both sides (control message "timer").
+  // Disappearing messages: the same value on both sides. A change is a control message
+  // ("timer"), each side also sends its setting when the chat opens, and newerTimer() picks
+  // the same winner on both devices (history/disappearing.ts).
   const [timerMs, setTimerMs] = useState(() => validDisappearMs(contact.disappearMs) ?? 0);
-  const timerRef = useRef(timerMs);
+  const timerRef = useRef<TimerSetting>({
+    ms: validDisappearMs(contact.disappearMs) ?? 0,
+    at: contact.disappearAt ?? 0,
+  });
   /** Adds the expiry of the chat's timer to a message about to be written. */
   function withTimer(msg: ChatMessage): ChatMessage {
-    const expiresAt = expiryFor(msg.timestamp, timerRef.current);
+    const expiresAt = expiryFor(msg.timestamp, timerRef.current.ms);
     return expiresAt === undefined ? msg : { ...msg, expiresAt };
   }
   /** Stores the timer on the contact (sealed contact book) and shows it. */
-  async function applyTimer(ms: number) {
-    timerRef.current = ms;
-    setTimerMs(ms);
+  async function applyTimer(setting: TimerSetting) {
+    timerRef.current = setting;
+    setTimerMs(setting.ms);
     const fresh = (await getContact(contact.did).catch(() => null)) ?? contact;
     const next: Contact = { ...fresh };
-    if (ms) next.disappearMs = ms;
+    if (setting.ms) next.disappearMs = setting.ms;
     else delete next.disappearMs;
+    if (setting.at) next.disappearAt = setting.at;
+    else delete next.disappearAt;
     await saveContact(next).catch(() => undefined);
   }
   const [transfer, setTransfer] = useState<{ label: string; done: number; total: number } | null>(null);
@@ -284,8 +295,11 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
               return;
             }
             if (control.t === "timer") {
-              await applyTimer(control.ms);
-              if (alive) {
+              const mine = timerRef.current;
+              const winner = newerTimer(mine, { ms: control.ms, at: control.at });
+              if (winner.ms === mine.ms && winner.at === mine.at) return; // ours stands
+              await applyTimer(winner);
+              if (alive && winner.ms !== mine.ms) {
                 setNotice(
                   control.ms
                     ? tRef.current("{name} включи изчезващи съобщения: {time}.", {
@@ -346,12 +360,33 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       });
     });
 
+    // Both sides send their timer setting when the chat opens, so settings changed while
+    // apart (or on a moved device) converge; the receiver keeps whichever newerTimer() picks.
+    void enqueue(async () => {
+      try {
+        link.send(await session.seal(encodeControl({ t: "timer", ...timerRef.current })));
+      } catch {
+        /* not connected: the next chat sends it */
+      }
+    });
+
     const timer = setInterval(() => {
       if (!alive) return;
       setConnected(link.isOpen());
-      // Expired messages leave the screen; App.tsx deletes them from the device.
+      // Expired messages leave the screen, and the decrypted copy of an expired file is
+      // released; App.tsx deletes the rows and kept files from the device.
       const now = Date.now();
-      setMessages((prev) => (prev.some((m) => m.expiresAt !== undefined && m.expiresAt <= now) ? prev.filter((m) => m.expiresAt === undefined || m.expiresAt > now) : prev));
+      const expired = messagesRef.current.filter((m) => m.expiresAt !== undefined && m.expiresAt <= now);
+      if (expired.length === 0) return;
+      for (const m of expired) {
+        const id = m.file?.id;
+        const url = id ? urlsRef.current.get(id) : undefined;
+        if (id && url) {
+          URL.revokeObjectURL(url);
+          urlsRef.current.delete(id);
+        }
+      }
+      setMessages((prev) => prev.filter((m) => m.expiresAt === undefined || m.expiresAt > now));
     }, 1000);
     return () => {
       alive = false;
@@ -476,16 +511,17 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
   /** Turns the chat's timer on, changes or turns it off for both people. Needs the link. */
   function onChooseTimer(ms: number) {
-    if (ms === timerRef.current) return;
+    if (ms === timerRef.current.ms) return;
     setNotice(null);
     void enqueue(async () => {
+      const setting: TimerSetting = { ms, at: Math.max(Date.now(), timerRef.current.at + 1) };
       try {
-        link.send(await session.seal(encodeControl({ t: "timer", ms })));
+        link.send(await session.seal(encodeControl({ t: "timer", ...setting })));
       } catch {
         setNotice(t("Връзката е прекъсната. Опитайте отново, когато се свържете."));
         return;
       }
-      await applyTimer(ms);
+      await applyTimer(setting);
       setNotice(
         ms
           ? t("Изчезващи съобщения: {time}. Важи за новите съобщения и при двама ви.", { time: t(disappearLabel(ms)) })

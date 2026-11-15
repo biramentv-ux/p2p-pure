@@ -5,7 +5,9 @@ import { generateMnemonic12, mnemonicToSeed } from "../../src/identity/mnemonic"
 import { publicKeyToDidKey } from "../../src/identity/didKey";
 import { appendMessage, deriveHistoryKey, loadHistory, purgeExpired } from "../../src/history/messageStore";
 import { loadFile, saveFile } from "../../src/history/fileStore";
-import { DAY, DISAPPEAR_OPTIONS, HOUR, disappearLabel, expiryFor, validDisappearMs } from "../../src/history/disappearing";
+import { DAY, DISAPPEAR_OPTIONS, HOUR, MINUTE, disappearLabel, expiryFor, newerTimer, validDisappearMs } from "../../src/history/disappearing";
+import { decodeBundle, encodeBundle } from "../../src/transfer/bundle";
+import { deriveIdentityKeyPair as kp } from "../../src/identity/keypair";
 import { CONTROL_MARK, decodeControl, encodeControl } from "../../src/p2p/control";
 import { STORE_MESSAGES, withStore } from "../../src/db/database";
 import { getContact, lockContacts, saveContact, unlockContacts } from "../../src/contacts/contacts";
@@ -36,10 +38,35 @@ describe("disappearing timer values", () => {
   });
 
   it("the control message round-trips and rejects other values", () => {
-    expect(decodeControl(encodeControl({ t: "timer", ms: HOUR }))).toEqual({ t: "timer", ms: HOUR });
-    expect(decodeControl(encodeControl({ t: "timer", ms: 0 }))).toEqual({ t: "timer", ms: 0 });
-    expect(decodeControl(CONTROL_MARK + JSON.stringify({ t: "timer", ms: 1 }))).toBeNull();
-    expect(decodeControl(CONTROL_MARK + JSON.stringify({ t: "timer" }))).toBeNull();
+    expect(decodeControl(encodeControl({ t: "timer", ms: HOUR, at: 5 }))).toEqual({ t: "timer", ms: HOUR, at: 5 });
+    expect(decodeControl(encodeControl({ t: "timer", ms: 0, at: 0 }))).toEqual({ t: "timer", ms: 0, at: 0 });
+    expect(decodeControl(CONTROL_MARK + JSON.stringify({ t: "timer", ms: 1, at: 1 }))).toBeNull();
+    expect(decodeControl(CONTROL_MARK + JSON.stringify({ t: "timer", ms: HOUR }))).toBeNull();
+    expect(decodeControl(CONTROL_MARK + JSON.stringify({ t: "timer", ms: HOUR, at: -1 }))).toBeNull();
+  });
+
+  it("two devices pick the same winner, whatever order the settings arrive in", () => {
+    const cases = [
+      [{ ms: HOUR, at: 10 }, { ms: DAY, at: 11 }],
+      [{ ms: HOUR, at: 10 }, { ms: 5 * MINUTE, at: 10 }],
+      [{ ms: 0, at: 10 }, { ms: DAY, at: 10 }],
+      [{ ms: 0, at: 0 }, { ms: 0, at: 0 }],
+    ];
+    for (const [a, b] of cases) expect(newerTimer(a, b)).toEqual(newerTimer(b, a));
+    expect(newerTimer({ ms: HOUR, at: 10 }, { ms: DAY, at: 11 })).toEqual({ ms: DAY, at: 11 });
+    expect(newerTimer({ ms: HOUR, at: 10 }, { ms: 5 * MINUTE, at: 10 }).ms).toBe(5 * MINUTE);
+    expect(newerTimer({ ms: 0, at: 10 }, { ms: DAY, at: 10 }).ms).toBe(DAY);
+  });
+
+  it("moving to a new device keeps the timer of every contact", () => {
+    const pair = kp(mnemonicToSeed(generateMnemonic12()));
+    const did = publicKeyToDidKey(pair.publicKey);
+    const seed = new Uint8Array(64).fill(1);
+    const out = decodeBundle(
+      encodeBundle({ seed, contacts: [{ did, publicKey: pair.publicKey, name: "А", verified: true, addedAt: 1, disappearMs: HOUR, disappearAt: 42 }] }),
+    );
+    expect(out.contacts[0].disappearMs).toBe(HOUR);
+    expect(out.contacts[0].disappearAt).toBe(42);
   });
 });
 

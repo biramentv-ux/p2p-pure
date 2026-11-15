@@ -254,6 +254,7 @@ export class FileResumeStore {
   }
 
   park(peer: string, out: ParkedOut[], inc: ParkedIn[]): void {
+    this.expire();
     if (out.length === 0 && inc.length === 0) return;
     const e = this.byPeer.get(peer) ?? { out: [], inc: [], at: 0 };
     e.out.push(...out);
@@ -271,6 +272,16 @@ export class FileResumeStore {
       return { out: [], inc: [] };
     }
     return { out: e.out, inc: e.inc };
+  }
+
+  /** Forgets every entry older than RESUME_TTL_MS and zeroes its keys (run periodically). */
+  expire(): void {
+    const now = this.now();
+    for (const [peer, e] of [...this.byPeer]) {
+      if (now - e.at <= RESUME_TTL_MS) continue;
+      this.byPeer.delete(peer);
+      forget(e);
+    }
   }
 
   /** How many transfers wait for this contact. */
@@ -552,6 +563,10 @@ export class FileTransfers {
         if (this.resumeOpts) throw new FileTransferError(PAUSED_REASON, true);
         throw err;
       }
+      // The link may have closed while this chunk drained (waitForDrain resolves on close):
+      // then close() has parked this transfer with its key, which must stay intact for the
+      // next link. Count the chunk only while this transfer is still ours.
+      if (t.cancelled || this.closed || this.out.get(id) !== t) throw this.stopped(t);
       t.next = i + 1;
       this.events.progress(id, Math.min(t.meta.size, (i + 1) * CHUNK_BYTES), t.meta.size, "out");
     }
