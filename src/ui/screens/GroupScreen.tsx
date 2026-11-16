@@ -13,6 +13,7 @@ import { formatSafetyCode, safetyWords } from "../../p2p/safety";
 import { identityX25519Public } from "../../identity/x25519";
 import { useI18n } from "../../i18n";
 import { prepareImage } from "../image";
+import { DISAPPEAR_OPTIONS, disappearLabel } from "../../history/disappearing";
 
 /** The group photo is a small avatar: it is sent to every member. */
 const GROUP_PHOTO_SIDE = 512;
@@ -155,7 +156,15 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
       // Hashing ends quickly; from then on the transfer list shows each member.
       setTimeout(() => setSending(null), 1500);
       const r = await sent;
-      if (r.delivered < r.offered) {
+      if (r.paused > 0) {
+        setError(
+          t("Файлът стигна до {done} от {all} участници. При {paused} ще продължи при следващото свързване.", {
+            done: r.delivered,
+            all: r.offered,
+            paused: r.paused,
+          }),
+        );
+      } else if (r.delivered < r.offered) {
         setError(t("Файлът стигна до {done} от {all} участници.", { done: r.delivered, all: r.offered }));
       }
     } catch (err) {
@@ -208,7 +217,16 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
       {view.notices.length > 0 && (
         <ul className="chat-notice" aria-live="polite">
           {view.notices.map((n, i) => (
-            <li key={i}>{t(n.text, n.vars)}</li>
+            <li key={i}>
+              {t(
+                n.text,
+                n.vars && n.translate
+                  ? Object.fromEntries(
+                      Object.entries(n.vars).map(([k, v]) => [k, n.translate!.includes(k) && typeof v === "string" ? t(v) : v]),
+                    )
+                  : n.vars,
+              )}
+            </li>
           ))}
         </ul>
       )}
@@ -364,6 +382,25 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
         <>
           <h2>{t("Съобщения")}</h2>
           <p className="group-history-note">{t("Всеки вижда съобщенията и файловете от момента, в който е влязъл в групата.")}</p>
+          <label className="timer-row">
+            <strong>{t("Изчезващи съобщения")}:</strong>{" "}
+            <select
+              value={view.timerMs}
+              disabled={busy || others.length === 0}
+              onChange={(e) => {
+                const ms = Number(e.target.value);
+                void run(async () => {
+                  await group.setTimer(ms);
+                });
+              }}
+            >
+              {DISAPPEAR_OPTIONS.map((ms) => (
+                <option key={ms} value={ms}>
+                  {t(disappearLabel(ms))}
+                </option>
+              ))}
+            </select>
+          </label>
           <ul
             ref={logRef}
             className="group-log"
@@ -374,6 +411,11 @@ export function GroupScreen({ session, onCreate, onLink, onLeave }: GroupScreenP
             {view.messages.map((m) => (
               <li key={m.id}>
                 <strong>{m.mine ? t("Вие") : (members.find((x) => x.did === m.from)?.name ?? t("Участник"))}:</strong>{" "}
+                {m.expiresAt !== undefined && (
+                  <span className="status timer" title={t("Изчезващо съобщение")} aria-label={t("Изчезващо съобщение")}>
+                    ⏱{" "}
+                  </span>
+                )}
                 {m.file ? (
                   <FileBubble card={m.file} url={view.fileUrls[m.file.id]} load={() => group.loadFile(m.file!.id)} />
                 ) : (

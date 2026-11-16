@@ -297,6 +297,16 @@ export class FileResumeStore {
     if (e) forget(e);
   }
 
+  /** The contacts with parked transfers whose key starts with `prefix`. */
+  peers(prefix = ""): string[] {
+    return [...this.byPeer.keys()].filter((p) => p.startsWith(prefix));
+  }
+
+  /** Forgets every contact whose key starts with `prefix` (a group this device left). */
+  dropPrefix(prefix: string): void {
+    for (const peer of [...this.byPeer.keys()]) if (peer.startsWith(prefix)) this.drop(peer);
+  }
+
   /** Forgets one parked transfer (the person pressed "Stop" on a paused file). */
   dropTransfer(peer: string, id: string): void {
     const e = this.byPeer.get(peer);
@@ -326,8 +336,11 @@ export const parkedFiles = new FileResumeStore();
 
 export interface ResumeOptions {
   store: FileResumeStore;
-  /** The contact's did: transfers park and resume per contact. */
-  peer: string;
+  /**
+   * The contact's did: transfers park and resume per contact. A function is asked each time
+   * (a group link made before joining has no group yet); null means "no resume right now".
+   */
+  peer: string | (() => string | null);
 }
 
 interface Incoming {
@@ -373,6 +386,14 @@ export class FileTransfers {
     return this.maxBytes;
   }
 
+  /** Where this link parks and resumes, or null when it does not. */
+  private resumeTarget(): { store: FileResumeStore; peer: string } | null {
+    const o = this.resumeOpts;
+    if (!o) return null;
+    const peer = typeof o.peer === "function" ? o.peer() : o.peer;
+    return peer === null ? null : { store: o.store, peer };
+  }
+
   /**
    * Offers a file and, once accepted, streams it. Resolves with the metadata when the last
    * chunk is sent; rejects if the other side declines, the offer times out or it is too big.
@@ -408,8 +429,9 @@ export class FileTransfers {
    * left unfinished. The receiver asks for the rest; the sender waits for that request.
    */
   async resume(): Promise<void> {
-    if (!this.resumeOpts || this.closed) return;
-    const { out, inc } = this.resumeOpts.store.take(this.resumeOpts.peer);
+    const target = this.resumeTarget();
+    if (!target || this.closed) return;
+    const { out, inc } = target.store.take(target.peer);
     // Everything taken is installed before the first await: if this link closes while a
     // frame is going out, close() parks all of it again, none is left out of both.
     for (const o of out) {
@@ -511,7 +533,8 @@ export class FileTransfers {
     this.closed = true;
     const parkOut: ParkedOut[] = [];
     const parkIn: ParkedIn[] = [];
-    if (this.resumeOpts) {
+    const target = this.resumeTarget();
+    if (target) {
       for (const [id, t] of [...this.out]) {
         if (!t.streaming || t.cancelled) continue;
         this.out.delete(id);
@@ -532,7 +555,7 @@ export class FileTransfers {
         parkIn.push({ meta: t.meta, rawId: t.rawId, key: t.key, total: t.total, next: t.next, parts: t.parts, hash: t.hash });
         this.events.paused?.(t.meta, Math.min(t.meta.size, t.next * CHUNK_BYTES), "in");
       }
-      this.resumeOpts.store.park(this.resumeOpts.peer, parkOut, parkIn);
+      target.store.park(target.peer, parkOut, parkIn);
     }
     for (const id of [...this.out.keys()]) this.abortOut(id, "Връзката прекъсна.");
     for (const id of [...this.inc.keys()]) this.failIn(id, "Връзката прекъсна.");
@@ -565,7 +588,7 @@ export class FileTransfers {
         await this.transport.sendBinary(msg);
       } catch (err) {
         // The link is gone. With resume options the owner's close() parks this transfer.
-        if (this.resumeOpts) throw new FileTransferError(PAUSED_REASON, true);
+        if (this.resumeTarget()) throw new FileTransferError(PAUSED_REASON, true);
         throw err;
       }
       // The link may have closed while this chunk drained (waitForDrain resolves on close):
@@ -583,7 +606,7 @@ export class FileTransfers {
 
   /** Why a stream loop stopped: paused (parked by close()) or really stopped. */
   private stopped(t: Outgoing): FileTransferError {
-    const parked = this.resumeOpts !== null && t.streaming && !this.out.has(t.meta.id);
+    const parked = this.resumeTarget() !== null && t.streaming && !this.out.has(t.meta.id);
     return parked ? new FileTransferError(PAUSED_REASON, true) : new FileTransferError("Изпращането е спряно.");
   }
 

@@ -1,7 +1,7 @@
 # Handoff
-n2-n6-n10 е готово (ADR-002..004, QA/security в .10x/reviews/2026-11-15-*).
+group-timer-resume is ready (ADR-005). vitest, tsc, oxlint and e2e (chat-features, files, call, ui) pass.
 
 Delivery:
-- след сливане на #95 и този PR публичните документи се синхронизират сами (`public-docs.yml`), а `/.well-known/security.txt` излиза със сайта;
-- private vulnerability reporting трябва да е включено в p2p-pure-releases (Settings → Security);
-- security.txt изтича на 2027-11-15: подновява се с изданието.
+- after merge the public docs sync on their own (`public-docs.yml`);
+- the site text about disappearing messages can say "chats and groups" at the next release;
+- `dependency-submission` fails on main too (pre-existing, not from this PR).

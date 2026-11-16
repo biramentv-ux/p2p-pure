@@ -163,7 +163,7 @@ try {
   await bob.page.locator(".safety-code").waitFor({ timeout: 60_000 });
   const codeA = await alice.page.locator(".safety-code").innerText();
   const codeB = await bob.page.locator(".safety-code").innerText();
-  check("safety code shown identically on both screens", codeA === codeB && codeA.split("·").length === 6, codeA);
+  check("safety code shown identically on both screens", codeA === codeB && codeA.split(/[·\n]/).map((w) => w.trim()).filter(Boolean).length === 12, codeA);
 
   await alice.page.getByPlaceholder("Например: Иван").fill("Боб");
   await bob.page.getByPlaceholder("Например: Иван").fill("Алиса");
