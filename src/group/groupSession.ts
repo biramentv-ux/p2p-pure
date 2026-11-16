@@ -31,7 +31,20 @@ import type { CipherSuite } from "../p2p/cipherSuite";
 import { bytesEqual } from "../p2p/invitation";
 import { bytesToBase64Url } from "../p2p/encoding";
 import { buildPhotoFrames, chunkCount, FRAME_MARK, PhotoReceiver, sanitizeText, sniffMime, toDataUrl } from "../p2p/photo";
-import { FileTransfers, isFileFrame, MAX_GROUP_FILE_BYTES, type FileMeta } from "../p2p/fileTransfer";
+import {
+  cleanFileName,
+  DOWNLOAD_MIME,
+  FileTransferError,
+  sniffInlineMime,
+  FileTransfers,
+  isFileFrame,
+  MAX_GROUP_FILE_BYTES,
+  parkedFiles,
+  type FileMeta,
+  type FileResumeStore,
+} from "../p2p/fileTransfer";
+import { disappearLabel, validDisappearMs, type TimerSetting } from "../history/disappearing";
+import { TimerSync } from "../history/timerSync";
 import { canStore, deleteFilesFor, loadFile, saveFile } from "../history/fileStore";
 import { validFileCard, type FileCard } from "../history/messageStore";
 import { GROUP_MARK, isGroupWire, type GroupWire } from "./groupChat";
@@ -62,6 +75,31 @@ const PHOTO_CHUNK = `${FRAME_MARK}D|`;
 /** A file card in the local group history. Only written by this device (received texts lose \u0001). */
 const FILE_CARD_MARK = `${FRAME_MARK}C|`;
 
+/**
+ * The group's disappearing-messages setting (Н7). Goes out as a group message (sealed with the
+ * epoch key, signed) when someone changes it, and on each new link as a pairwise frame, so a
+ * member who was offline catches up. Received texts lose \u0001, so no text can pose as one.
+ */
+const TIMER_MARK = `${FRAME_MARK}T|`;
+/** How often expired messages leave the screen. */
+const PRUNE_MS = 5 * 1000;
+
+function parseTimer(text: string): TimerSetting | null {
+  try {
+    const o = JSON.parse(text.slice(TIMER_MARK.length)) as { ms?: unknown; at?: unknown };
+    const ms = validDisappearMs(o.ms);
+    if (ms === null || typeof o.at !== "number" || !Number.isSafeInteger(o.at) || o.at <= 0) return null;
+    return { ms, at: o.at };
+  } catch {
+    return null;
+  }
+}
+
+/** Where paused transfers with one member of one group wait for the next link. */
+export function groupResumePeer(groupId: string, did: string): string {
+  return `group:${groupId}:${did}`;
+}
+
 /** Where this group's kept files live in the file store. */
 export function groupFileOwner(groupId: string): string {
   return `group:${groupId}`;
@@ -84,7 +122,8 @@ export interface GroupTransfer {
   name: string;
   size: number;
   direction: "in" | "out";
-  phase: "offer" | "waiting" | "moving";
+  /** "paused": the link dropped; the file continues on the next link with this member. */
+  phase: "offer" | "waiting" | "moving" | "paused";
   done: number;
 }
 
@@ -96,12 +135,16 @@ export interface GroupMessageView {
   file?: FileCard;
   mine: boolean;
   at: number;
+  /** Disappearing message: leaves the device at this time. */
+  expiresAt?: number;
 }
 
 /** A notice in Bulgarian source text with its placeholders, translated by the screen. */
 export interface GroupNotice {
   text: string;
   vars?: Vars;
+  /** Vars that are Bulgarian source text themselves (a timer label) and need translating. */
+  translate?: string[];
 }
 
 /** A message from another member, for sounds and notifications (App.tsx -> src/notify). */
@@ -138,6 +181,8 @@ export interface GroupView {
   transfers: GroupTransfer[];
   /** Object URLs of files sent or received in this session, by file id. */
   fileUrls: Record<string, string>;
+  /** Disappearing messages for the whole group: 0 = off. */
+  timerMs: number;
 }
 
 /** What the group needs from a link. PeerLink has all of it. */
@@ -156,6 +201,11 @@ export interface GroupSessionOptions {
   photo?: string | null;
   /** Restored history. */
   history?: GroupHistoryEntry[];
+  /** Restored disappearing-messages setting. */
+  timer?: TimerSetting | null;
+  /** Where interrupted file transfers wait for the next link (the app's store by default). */
+  resumeStore?: FileResumeStore;
+  now?: () => number;
 }
 
 interface LinkEntry {
@@ -206,6 +256,14 @@ export class GroupSession {
   private photoFrom: string | null = null;
   private photoAsked: string | null = null;
   private readonly photoSends = new Map<string, number>();
+  private readonly timer: TimerSync;
+  private readonly resumeStore: FileResumeStore;
+  private readonly now: () => number;
+  private pruner: ReturnType<typeof setInterval> | null = null;
+  /** Members this device has sent the timer to on their current link. */
+  private readonly timerSentTo = new Set<string>();
+  /** Timer frames that came before this device joined (no member list to check yet). */
+  private earlyTimers: Array<{ from: string; text: string }> = [];
 
   constructor(keys: Ed25519KeyPair, chatOrOptions: GroupChat | null | GroupSessionOptions = null) {
     const options: GroupSessionOptions =
@@ -214,14 +272,40 @@ export class GroupSession {
     this.keys = keys;
     this.historyKey = options.historyKey ?? null;
     this.findContact = options.findContact ?? null;
+    this.resumeStore = options.resumeStore ?? parkedFiles;
+    this.now = options.now ?? Date.now;
+    this.timer = new TimerSync(options.timer ?? null, {
+      persist: async () => this.persist(),
+      onChange: (setting) => {
+        this.view = { ...this.view, timerMs: setting.ms };
+        this.schedulePrune();
+        this.refresh();
+      },
+      now: this.now,
+    });
     const events: MeshEvents = {
-      // \u0001 is dropped from received text, so nobody can pose a text as a file card.
-      message: (from, text) => this.addMessage(from, sanitizeText(text), from === this.myDid),
+      message: (from, text) => {
+        if (text.startsWith(TIMER_MARK)) {
+          void this.onTimer(from, text);
+          return;
+        }
+        // \u0001 is dropped from received text, so nobody can pose a text as a file card.
+        this.addMessage(from, sanitizeText(text), from === this.myDid);
+      },
       membership: () => {
         // Someone was removed: close the direct link to them, so nothing more goes either way.
         // Invitees and introduced candidates are not members yet and keep their links.
         for (const did of [...this.links.keys()]) {
           if (!this.mesh.isKnownPeer(did) && !this.mesh.isInvitee(did)) this.drop(did);
+        }
+        // Someone just admitted gets the group's timer from every member linked to it.
+        this.syncTimer();
+        // Files paused with someone who left the group never continue, linked now or not.
+        if (this.groupId) {
+          const prefix = groupResumePeer(this.groupId, "");
+          for (const key of this.resumeStore.peers(prefix)) {
+            if (!this.mesh.isKnownPeer(key.slice(prefix.length))) this.resumeStore.drop(key);
+          }
         }
         this.refresh();
         this.maybeRequestPhoto();
@@ -240,6 +324,11 @@ export class GroupSession {
         this.refresh();
         this.persist();
         this.maybeRequestPhoto();
+        // Settings that arrived while this device was still a candidate, now checked.
+        const early = this.earlyTimers;
+        this.earlyTimers = [];
+        for (const e of early) if (this.isMember(e.from)) void this.onTimer(e.from, e.text);
+        this.syncTimer();
       },
       removed: () => this.onRemoved(),
       error: (message) => this.notice(message),
@@ -263,7 +352,9 @@ export class GroupSession {
     }
     const messages = (options.history ?? []).map((h) => {
       const file = parseCard(h.text);
-      return { id: this.nextId++, from: h.from, text: file ? "" : h.text, file, mine: h.from === this.myDid, at: h.at };
+      const m: GroupMessageView = { id: this.nextId++, from: h.from, text: file ? "" : h.text, file, mine: h.from === this.myDid, at: h.at };
+      if (h.expiresAt !== undefined) m.expiresAt = h.expiresAt;
+      return m;
     });
     this.view = {
       state: null,
@@ -281,8 +372,10 @@ export class GroupSession {
       photoProgress: null,
       transfers: [],
       fileUrls: {},
+      timerMs: this.timer.ms,
     };
     this.refresh();
+    this.schedulePrune();
   }
 
   get me(): string {
@@ -384,6 +477,14 @@ export class GroupSession {
         if (isGroupWire(plaintext)) {
           await this.mesh.handle(contact.did, plaintext);
           this.persist();
+        } else if (plaintext.startsWith(TIMER_MARK)) {
+          // Only admitted members set the timer; an introduced candidate does not (isKnownPeer
+          // is wider). Before this device joined there is no list yet: hold the frame till then.
+          if (!this.mesh.state) {
+            if (this.earlyTimers.length < 16) this.earlyTimers.push({ from: contact.did, text: plaintext });
+          } else if (this.isMember(contact.did)) {
+            await this.onTimer(contact.did, plaintext);
+          }
         } else if (isFileFrame(plaintext)) {
           entry.files?.handleControl(plaintext);
         } else if (plaintext.startsWith(PHOTO_HEADER) || plaintext.startsWith(PHOTO_CHUNK)) {
@@ -398,6 +499,11 @@ export class GroupSession {
     void this.enqueueSend(entry, async () => {
       link.send(await session.seal(LINK_PING));
     }).catch(() => undefined);
+    // A member who missed a timer change (offline, a moved device) catches up on this link.
+    this.timerSentTo.delete(contact.did);
+    this.syncTimer();
+    // Files the last link with this member left half-way continue here.
+    void entry.files?.resume();
     this.refresh();
     if (contact.did === this.view.state?.creatorDid) {
       // A new link to the admin: ask again for a photo that did not arrive on the old one.
@@ -415,6 +521,7 @@ export class GroupSession {
     entry.files?.close();
     entry.link.close();
     this.links.delete(did);
+    this.timerSentTo.delete(did);
     this.mesh.detach(did);
     if (this.photoFrom === did) this.photoFrom = null;
     this.refresh();
@@ -425,6 +532,8 @@ export class GroupSession {
     this.closed = true;
     this.linker?.close();
     for (const did of [...this.links.keys()]) this.drop(did);
+    if (this.pruner) clearInterval(this.pruner);
+    this.pruner = null;
   }
 
   /** Creator only: starts a group with this device as the admin. */
@@ -457,7 +566,7 @@ export class GroupSession {
         continue;
       }
       const history = await loadGroupHistory(historyKey, chat.snapshot.groupId);
-      const session = new GroupSession(keys, { ...options, chat, historyKey, photo: saved.photo, history });
+      const session = new GroupSession(keys, { ...options, chat, historyKey, photo: saved.photo, history, timer: saved.timer });
       // The counter moved ahead on restore: save that before anything is sent.
       session.persist();
       return session;
@@ -479,9 +588,100 @@ export class GroupSession {
   }
 
   async sendText(text: string): Promise<void> {
+    // \u0001 starts protocol frames (a timer setting); the others would drop it anyway.
+    text = sanitizeText(text);
     await this.mesh.sendMessage(text);
     this.persist(); // the send counter moved
     this.addMessage(this.myDid, text, true);
+  }
+
+  /* ---------- disappearing messages ---------- */
+
+  /** The timer for new messages of the whole group: 0 = off. */
+  get timerMs(): number {
+    return this.timer.ms;
+  }
+
+  /**
+   * Any member turns the timer on, changes or turns it off for everyone. The setting goes out
+   * first; only then does this device apply it. Returns false when nothing changed.
+   */
+  async setTimer(ms: number): Promise<boolean> {
+    if (!this.mesh.state || !this.view.joined) throw new Error("Още няма група.");
+    const changed = await this.timer.choose(ms, async (setting) => {
+      await this.mesh.sendMessage(TIMER_MARK + JSON.stringify(setting));
+      this.persist(); // the send counter moved
+    });
+    if (changed) {
+      this.notice(
+        ms ? "Изчезващи съобщения: {time}. Важи за новите съобщения на всички в групата." : "Изчезващите съобщения са изключени за групата.",
+        ms ? { time: disappearLabel(ms) } : undefined,
+        ms ? ["time"] : undefined,
+      );
+    }
+    return changed;
+  }
+
+  private isMember(did: string): boolean {
+    return this.mesh.state?.members.some((m) => m.did === did) ?? false;
+  }
+
+  /** Sends the group's timer, once per link, to every linked member that has not had it. */
+  private syncTimer(): void {
+    const setting = this.timer.current();
+    if (setting.at === 0 || !this.view.joined) return;
+    const frame = TIMER_MARK + JSON.stringify(setting);
+    for (const [did, entry] of this.links) {
+      if (this.timerSentTo.has(did) || !this.isMember(did)) continue;
+      this.timerSentTo.add(did);
+      void this.sendOn(entry, frame).catch(() => this.timerSentTo.delete(did));
+    }
+  }
+
+  private async onTimer(from: string, text: string): Promise<void> {
+    if (from === this.myDid) return;
+    const incoming = parseTimer(text);
+    if (!incoming) return;
+    const result = await this.timer.receive(incoming);
+    if (result === "kept-ours") return;
+    // A new winner: pass it on to every linked member but the sender. A member that came back
+    // may have reached only this device, and group messages are not forwarded. Members who
+    // already have it answer nothing ("kept-ours"), so this stops after one round.
+    this.timerSentTo.clear();
+    this.timerSentTo.add(from);
+    this.syncTimer();
+    if (result !== "changed-value") return;
+    const name = this.mesh.peerName(from) ?? "Участник";
+    if (incoming.ms) this.notice("{name} включи изчезващи съобщения: {time}.", { name, time: disappearLabel(incoming.ms) }, ["time"]);
+    else this.notice("{name} изключи изчезващите съобщения.", { name });
+  }
+
+  /** Runs the screen sweep only while something can expire. */
+  private schedulePrune(): void {
+    const needed = !this.closed && (this.timer.ms > 0 || this.view.messages.some((m) => m.expiresAt !== undefined));
+    if (needed && !this.pruner) this.pruner = setInterval(() => this.pruneExpired(), PRUNE_MS);
+    if (!needed && this.pruner) {
+      clearInterval(this.pruner);
+      this.pruner = null;
+    }
+  }
+
+  /** Takes expired messages off the screen and frees their files. The store sweep (purgeExpired) deletes them on disk. */
+  pruneExpired(): void {
+    const now = this.now();
+    const gone = this.view.messages.filter((m) => m.expiresAt !== undefined && m.expiresAt <= now);
+    if (gone.length === 0) return;
+    const fileUrls = { ...this.view.fileUrls };
+    for (const m of gone) {
+      const id = m.file?.id;
+      if (id && fileUrls[id]) {
+        URL.revokeObjectURL(fileUrls[id]);
+        delete fileUrls[id];
+      }
+    }
+    this.view = { ...this.view, messages: this.view.messages.filter((m) => !gone.includes(m)), fileUrls };
+    this.schedulePrune();
+    this.refresh();
   }
 
   async openSuite(suite: CipherSuite): Promise<void> {
@@ -543,7 +743,7 @@ export class GroupSession {
    * this moment can receive it: someone who joins later never gets the key. Every recipient
    * decides whether to take it. Resolves with how many members got the whole file.
    */
-  async sendFile(blob: Blob, name: string): Promise<{ delivered: number; offered: number }> {
+  async sendFile(blob: Blob, name: string): Promise<{ delivered: number; offered: number; paused: number }> {
     const state = this.mesh.state;
     if (!state || !this.view.joined) throw new Error("Още няма група.");
     if (blob.size > MAX_GROUP_FILE_BYTES) throw new Error("Файлът е твърде голям.");
@@ -553,13 +753,24 @@ export class GroupSession {
     if (targets.length === 0) throw new Error("Няма свързани участници.");
     const results = await Promise.allSettled(targets.map((e) => e.files!.send(blob, name)));
     const metas = results.filter((r): r is PromiseFulfilledResult<FileMeta> => r.status === "fulfilled").map((r) => r.value);
-    if (metas.length > 0) {
+    // Accepted, then the link dropped: the rest goes on the next link with that member.
+    const paused = results.filter((r) => r.status === "rejected" && r.reason instanceof FileTransferError && r.reason.paused).length;
+    if (metas.length > 0 || paused > 0) {
       // One card in our own history, under an id of our own (each recipient got its own id).
-      const meta = { ...metas[0], id: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(8))) };
+      const meta: FileMeta = {
+        // Nobody finished: describe the file the way FileTransfers.send() does, so the card
+        // passes validFileCard() when the history is loaded again.
+        ...(metas[0] ?? {
+          name: cleanFileName(name),
+          size: blob.size,
+          mime: sniffInlineMime(new Uint8Array(await blob.slice(0, 16).arrayBuffer())) ?? DOWNLOAD_MIME,
+        }),
+        id: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(8))),
+      } as FileMeta;
       const card = await this.keepFile(meta, new Blob([blob], { type: meta.mime }));
       this.addFileMessage(this.myDid, card, true);
     }
-    return { delivered: metas.length, offered: targets.length };
+    return { delivered: metas.length, offered: targets.length, paused };
   }
 
   /** A kept file of this group, or null. */
@@ -574,6 +785,8 @@ export class GroupSession {
 
   async cancelFile(peer: string, id: string): Promise<void> {
     this.setTransfers(this.view.transfers.filter((t) => !(t.peer === peer && t.id === id)));
+    // Also a paused one that waits for the next link with this member.
+    if (this.groupId) this.resumeStore.dropTransfer(groupResumePeer(this.groupId, peer), id);
     await this.links.get(peer)?.files?.cancel(id);
   }
 
@@ -596,11 +809,15 @@ export class GroupSession {
         outgoing: (m) => upsert({ peer, id: m.id, name: m.name, size: m.size, direction: "out", phase: "waiting", done: 0 }),
         progress: (id, done) =>
           this.setTransfers(this.view.transfers.map((x) => (x.peer === peer && x.id === id ? { ...x, phase: "moving", done } : x))),
+        paused: (m, done, direction) => upsert({ peer, id: m.id, name: m.name, size: m.size, direction, phase: "paused", done }),
+        resumed: (m, done, direction) =>
+          upsert({ peer, id: m.id, name: m.name, size: m.size, direction, phase: direction === "in" ? "moving" : "waiting", done }),
         received: (meta, blob) => {
           remove(meta.id);
           if (!isMemberNow()) return; // removed while the file was on its way
           void this.keepFile(meta, blob).then((card) => this.addFileMessage(peer, card, false));
         },
+        // Also for a file that resumed on this link: our card was written when it first went out.
         sent: (meta) => remove(meta.id),
         failed: (id, reason, direction) => {
           remove(id);
@@ -608,6 +825,10 @@ export class GroupSession {
         },
       },
       MAX_GROUP_FILE_BYTES,
+      // Asked when the link drops: a link made before joining has no group id yet, and then
+      // a dropped link fails the transfer instead.
+      // After this device was removed nothing parks: the group's keys and files are gone.
+      { store: this.resumeStore, peer: () => (this.groupId && !this.view.removed ? groupResumePeer(this.groupId, peer) : null) },
     );
   }
 
@@ -631,7 +852,9 @@ export class GroupSession {
   }
 
   private addFileMessage(from: string, card: FileCard, mine: boolean): void {
-    const message: GroupMessageView = { id: this.nextId++, from, text: "", file: card, mine, at: Date.now() };
+    const at = this.now();
+    const expiresAt = this.timer.expiryFor(at);
+    const message: GroupMessageView = { id: this.nextId++, from, text: "", file: card, mine, at, ...(expiresAt ? { expiresAt } : {}) };
     this.view = { ...this.view, messages: [...this.view.messages, message] };
     if (!mine) this.emitIncoming(from, "", card);
     const key = this.historyKey;
@@ -639,9 +862,17 @@ export class GroupSession {
     if (key && groupId) {
       const text = FILE_CARD_MARK + JSON.stringify(card);
       this.saveQueue = this.saveQueue
-        .then(() => appendGroupMessage(key, groupId, { from, text, at: message.at }))
+        .then(() =>
+          appendGroupMessage(key, groupId, {
+            from,
+            text,
+            at: message.at,
+            ...(expiresAt ? { expiresAt, ...(card.stored ? { fileId: card.id } : {}) } : {}),
+          }),
+        )
         .catch(() => this.notice("Съобщението не можа да се запази на това устройство."));
     }
+    this.schedulePrune();
     this.refresh();
   }
 
@@ -776,9 +1007,10 @@ export class GroupSession {
         const secrets = this.mesh.exportSecrets();
         if (!secrets) return;
         const photo = this.currentPhoto();
-        const fingerprint = `${JSON.stringify(secrets)}|${photo ? this.photoHash : ""}`;
+        const timer = this.timer.current();
+        const fingerprint = `${JSON.stringify(secrets)}|${photo ? this.photoHash : ""}|${timer.ms}:${timer.at}`;
         if (fingerprint === this.savedFingerprint) return;
-        await saveGroup(key, secrets, photo);
+        await saveGroup(key, secrets, photo, timer.at > 0 ? timer : null);
         this.savedFingerprint = fingerprint;
       })
       .catch(() => this.notice("Групата не можа да се запази на това устройство."));
@@ -790,6 +1022,7 @@ export class GroupSession {
     this.photoHash = null;
     this.linker?.close();
     const groupId = this.groupId;
+    if (groupId) this.resumeStore.dropPrefix(groupResumePeer(groupId, ""));
     if (this.historyKey && groupId) {
       // The keys of a group this device left must not stay on disk. The history goes with them.
       this.saveQueue = this.saveQueue
@@ -801,21 +1034,26 @@ export class GroupSession {
   }
 
   private addMessage(from: string, text: string, mine: boolean): void {
-    const message: GroupMessageView = { id: this.nextId++, from, text, mine, at: Date.now() };
+    const at = this.now();
+    const expiresAt = this.timer.expiryFor(at);
+    const message: GroupMessageView = { id: this.nextId++, from, text, mine, at, ...(expiresAt ? { expiresAt } : {}) };
     this.view = { ...this.view, messages: [...this.view.messages, message] };
     if (!mine) this.emitIncoming(from, text);
     const key = this.historyKey;
     const groupId = this.groupId;
     if (key && groupId) {
       this.saveQueue = this.saveQueue
-        .then(() => appendGroupMessage(key, groupId, { from, text, at: message.at }))
+        .then(() => appendGroupMessage(key, groupId, { from, text, at: message.at, ...(expiresAt ? { expiresAt } : {}) }))
         .catch(() => this.notice("Съобщението не можа да се запази на това устройство."));
     }
+    this.schedulePrune();
     this.refresh();
   }
 
-  private notice(text: string, vars?: Vars): void {
-    this.view = { ...this.view, notices: [...this.view.notices.slice(-4), vars ? { text, vars } : { text }] };
+  private notice(text: string, vars?: Vars, translate?: string[]): void {
+    const n: GroupNotice = vars ? { text, vars } : { text };
+    if (translate) n.translate = translate;
+    this.view = { ...this.view, notices: [...this.view.notices.slice(-4), n] };
     this.refresh();
   }
 

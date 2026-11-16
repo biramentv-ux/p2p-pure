@@ -7,7 +7,7 @@ import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { asBufferSource } from "../identity/bufferUtils";
 import type { UnlockedIdentity } from "../identity/types";
-import { STORE_FILES, STORE_MESSAGES, openDatabase, withStore } from "../db/database";
+import { STORE_FILES, STORE_GROUP_MESSAGES, STORE_MESSAGES, openDatabase, withStore } from "../db/database";
 import { base64UrlToBytes, bytesToBase64Url } from "../p2p/encoding";
 
 const HISTORY_INFO = new TextEncoder().encode("p2p-messenger/history-key/v1");
@@ -219,21 +219,24 @@ export async function purgeExpired(now = Date.now()): Promise<number> {
   try {
     return await new Promise<number>((resolve, reject) => {
       let removed = 0;
-      const tx = db.transaction([STORE_MESSAGES, STORE_FILES], "readwrite");
+      // 1:1 history and group history (groupStore.ts) carry the same two clear fields.
+      const tx = db.transaction([STORE_MESSAGES, STORE_GROUP_MESSAGES, STORE_FILES], "readwrite");
       const files = tx.objectStore(STORE_FILES);
-      const req = tx.objectStore(STORE_MESSAGES).openCursor();
-      req.onsuccess = () => {
-        const cursor = req.result;
-        if (!cursor) return;
-        const row = cursor.value as StoredMessage;
-        const expiresAt = validExpiry(row.expiresAt);
-        if (expiresAt !== undefined && expiresAt <= now) {
-          if (typeof row.fileId === "string") files.delete(row.fileId);
-          cursor.delete();
-          removed++;
-        }
-        cursor.continue();
-      };
+      for (const name of [STORE_MESSAGES, STORE_GROUP_MESSAGES]) {
+        const req = tx.objectStore(name).openCursor();
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (!cursor) return;
+          const row = cursor.value as { expiresAt?: unknown; fileId?: unknown };
+          const expiresAt = validExpiry(row.expiresAt);
+          if (expiresAt !== undefined && expiresAt <= now) {
+            if (typeof row.fileId === "string") files.delete(row.fileId);
+            cursor.delete();
+            removed++;
+          }
+          cursor.continue();
+        };
+      }
       tx.oncomplete = () => resolve(removed);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);

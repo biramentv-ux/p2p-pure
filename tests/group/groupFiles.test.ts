@@ -60,7 +60,7 @@ describe("files in a group", () => {
       expect(t.name).toBe("план.pdf");
       await m.g.acceptFile(t.peer, t.id);
     }
-    expect(await sending).toEqual({ delivered: 2, offered: 2 });
+    expect(await sending).toEqual({ delivered: 2, offered: 2, paused: 0 });
     for (const m of [admin, bob]) {
       await until(() => m.g.snapshot.messages.some((x) => x.file?.name === "план.pdf"), "file message");
       const msg = m.g.snapshot.messages.find((x) => x.file)!;
@@ -82,7 +82,7 @@ describe("files in a group", () => {
     const tb = bob.g.snapshot.transfers[0];
     await alice.g.acceptFile(ta.peer, ta.id);
     await bob.g.cancelFile(tb.peer, tb.id);
-    expect(await sending).toEqual({ delivered: 1, offered: 2 });
+    expect(await sending).toEqual({ delivered: 1, offered: 2, paused: 0 });
     await quiet();
     expect(bob.g.snapshot.messages.some((m) => m.file)).toBe(false);
     expect(alice.g.snapshot.messages.some((m) => m.file)).toBe(true);
@@ -113,7 +113,7 @@ describe("files in a group", () => {
     await until(() => alice.g.snapshot.transfers.length === 1, "alice offered");
     expect(carl.g.snapshot.transfers).toEqual([]);
     await alice.g.acceptFile(alice.g.snapshot.transfers[0].peer, alice.g.snapshot.transfers[0].id);
-    expect(await sending).toEqual({ delivered: 1, offered: 1 });
+    expect(await sending).toEqual({ delivered: 1, offered: 1, paused: 0 });
 
     link(alice, carl);
     await admin.g.invite(carl.p.did, "Карл");

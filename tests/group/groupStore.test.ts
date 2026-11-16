@@ -224,3 +224,41 @@ describe("database upgrade", () => {
     expect(old).toBeTruthy();
   });
 });
+
+describe("group disappearing messages at rest", () => {
+  it("keeps the expiry in the clear for the sweep, bound to the row by the AAD", async () => {
+    const p = person("Ани");
+    const key = keyOf(p);
+    await appendGroupMessage(key, "g-exp", { from: p.did, text: "кратко", at: 1000, expiresAt: 5000 });
+    await appendGroupMessage(key, "g-exp", { from: p.did, text: "трайно", at: 2000 });
+    expect((await loadGroupHistory(key, "g-exp", undefined, 3000)).map((h) => [h.text, h.expiresAt])).toEqual([
+      ["кратко", 5000],
+      ["трайно", undefined],
+    ]);
+    // After the expiry the row is not shown, even before the sweep deletes it.
+    expect((await loadGroupHistory(key, "g-exp", undefined, 5000)).map((h) => h.text)).toEqual(["трайно"]);
+
+    // Someone with the disk stretches the expiry: the row no longer opens.
+    await withStore(STORE_GROUP_MESSAGES, "readwrite", (s) => {
+      const req = s.openCursor();
+      req.onsuccess = () => {
+        const c = req.result;
+        if (!c) return;
+        const row = c.value as { expiresAt?: number };
+        if (row.expiresAt) c.update({ ...row, expiresAt: 9_999_999 });
+        c.continue();
+      };
+    });
+    expect((await loadGroupHistory(key, "g-exp", undefined, 3000)).map((h) => h.text)).toEqual(["трайно"]);
+  });
+
+  it("saves and loads the group's timer with the group", async () => {
+    const p = person("Ани");
+    const key = keyOf(p);
+    const chat = GroupChat.create(p.keys, "g-t", "Т", "Ани");
+    await saveGroup(key, chat.exportSecrets(), null, { ms: 3_600_000, at: 42 });
+    expect((await loadGroups(key))[0].timer).toEqual({ ms: 3_600_000, at: 42 });
+    await saveGroup(key, chat.exportSecrets(), null);
+    expect((await loadGroups(key))[0].timer).toBeNull();
+  });
+});

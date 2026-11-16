@@ -71,6 +71,7 @@
 | `\u0001K\|{json}` | контролно съобщение: `loc`, `wipe`, `timer`, `suite`, `intro-*` | `p2p/control.ts` |
 | `\u0001C\|{json}` | сигнал за разговор: `invite`, `accept`, `decline`, `end`, `sdp`, `part` | `call/signal.ts` |
 | `\u0001G\|{json}` | група: `gsnap`, `gkey`, `gmsg`, … | `group/groupChat.ts` |
+| `\u0001T\|{"ms","at"}` | таймер на групата (Н7): текст в `gmsg` или рамка по двойната връзка | `group/groupSession.ts` |
 | `\u0001F\|{offer}` / `A\|id` / `X\|id` | файл: оферта / приемане / отказ | `p2p/fileTransfer.ts` |
 | `\u0001R\|{"id","next"}` / `\u0001W\|id` | продължаване на файл (Н5) | `p2p/fileTransfer.ts` |
 

@@ -67,6 +67,12 @@ describe("disappearing timer values", () => {
     );
     expect(out.contacts[0].disappearMs).toBe(HOUR);
     expect(out.contacts[0].disappearAt).toBe(42);
+    // A timer turned OFF keeps when it was turned off, so an older "on" cannot come back.
+    const off = decodeBundle(
+      encodeBundle({ seed, contacts: [{ did, publicKey: pair.publicKey, name: "А", verified: true, addedAt: 1, disappearAt: 77 }] }),
+    );
+    expect(off.contacts[0].disappearMs).toBeUndefined();
+    expect(off.contacts[0].disappearAt).toBe(77);
   });
 });
 

@@ -119,7 +119,9 @@ export function setup(
     getBundle?: () => Promise<{ seed: Uint8Array; contacts: Contact[] }>;
   } = {},
 ) {
-  const keys = opts.keys ?? makeKeys();
+  // The keys' deadline comes from the same clock as the endpoints: with the real Date.now()
+  // a slow runner moved it past a test's "now + TTL + 1", and the expiry test flaked.
+  const keys = opts.keys ?? makeKeys({ now: opts.now?.() });
   const ch = channelPair(opts.tap);
   const contacts = opts.contacts ?? sampleContacts();
   const ownDid = opts.ownDid ?? "did:key:zOwn";

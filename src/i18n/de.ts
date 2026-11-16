@@ -3,10 +3,12 @@
  * Placeholders ({name}, {n}, ...) must appear in both the key and the value; tests/i18n/i18n.test.ts enforces this.
  */
 import { PROTECT_DE } from "./protect";
+import { GROUP_TIMER_DE } from "./groupTimer";
 import { CONNECT_DE } from "./connectCalls";
 
 export const DE_DICTIONARY: Record<string, string> = {
   ...PROTECT_DE,
+  ...GROUP_TIMER_DE,
   ...CONNECT_DE,
   "Премести на ново устройство": "Auf neues Gerät umziehen",
   "Имам друго устройство": "Ich habe ein anderes Gerät",
