@@ -380,6 +380,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
           clearAll();
           startRvAnswer(theirOffer);
         },
+        // Ten minutes without an answer: say so, close our offer, let them try again.
+        () => fail(new Error(t("Не намерих {name} през интернет. Приложението при него трябва да е отворено, с включено „Откриване през интернет“.", { name: expected.name }))),
       );
     } catch (err) {
       fail(err);

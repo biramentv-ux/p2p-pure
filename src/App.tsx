@@ -212,6 +212,7 @@ function App() {
 
   /** Panic wipe (Н7): from the settings, or from the unlock screen without unlocking. */
   async function panic() {
+    unlockGen.current++;
     wipingRef.current = true;
     try {
       const group = dropEverything();
@@ -223,6 +224,8 @@ function App() {
       wipingRef.current = false;
     }
     setLock(loadLockSettings());
+    // The wipe removed the opt-in for the relays too: the next identity starts with it off.
+    setRvOn(rendezvousEnabled());
     setState({ kind: "no-identity" });
   }
 
@@ -288,13 +291,27 @@ function App() {
   // The contact book is encrypted with a key derived from the history key, so it is opened
   // (and pre-v5 plaintext contacts migrated) before any screen can read it. If the migration
   // fails the keys are still set and the plaintext rows stay for the next unlock to retry.
-  const enter = (identity: UnlockedIdentity) => {
+  /**
+   * Each panic wipe starts a new generation. An unlock that began before it (a passkey prompt
+   * or a password derivation still running) finishes into a stale generation and is dropped:
+   * the wiped identity must not come back into memory.
+   */
+  const unlockGen = useRef(0);
+  const enterFrom = (gen: number) => (identity: UnlockedIdentity) => {
+    if (gen !== unlockGen.current) return;
     Promise.all([
       activateStoredTurn(deriveHistoryKey(identity)).catch(() => undefined),
       unlockContacts(deriveHistoryKey(identity)).catch(() => undefined),
-    ])
-      .finally(() => setState({ kind: "unlocked", identity }));
+    ]).finally(() => {
+      if (gen !== unlockGen.current) {
+        lockContacts();
+        deactivateTurn();
+        return;
+      }
+      setState({ kind: "unlocked", identity });
+    });
   };
+  const enter = enterFrom(unlockGen.current);
 
   const historyKey = useMemo(
     () => (state.kind === "unlocked" ? deriveHistoryKey(state.identity) : null),

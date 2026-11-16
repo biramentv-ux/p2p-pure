@@ -4,7 +4,7 @@ import { publicKeyToDidKey } from "../../src/identity/didKey";
 import { EPOCH_MS, epochOf, listenTopics, openFor, pairKey, sealFor, topicFor } from "../../src/rendezvous/topic";
 import { RENDEZVOUS_KIND, signEvent, verifyEvent, type NostrEvent, type NostrFilter } from "../../src/rendezvous/nostr";
 import { RelayPool, type SocketLike } from "../../src/rendezvous/relayPool";
-import { OFFER_REPEAT_MS, Rendezvous, type PoolLike } from "../../src/rendezvous/rendezvous";
+import { CALL_MAX_MS, OFFER_FRESH_MS, OFFER_REPEAT_MS, Rendezvous, type PoolLike } from "../../src/rendezvous/rendezvous";
 
 function person(n: number) {
   const kp = deriveIdentityKeyPair(new Uint8Array(64).fill(n));
@@ -142,6 +142,45 @@ describe("rendezvous between two contacts", () => {
     const smallerIsA = A.did < B.did;
     expect(theirsAtA).toEqual(smallerIsA ? [] : ["p2p1:FROMB"]);
     expect(theirsAtB).toEqual(smallerIsA ? ["p2p1:FROMA"] : []);
+  });
+
+  it("an old offer (no longer repeated) or one already answered does not stop a new search", async () => {
+    const s = setup();
+    await s.a.refresh();
+    await s.b.refresh();
+    // The smaller did searched once and stopped; the larger one searches later.
+    const [small, big, bigAsContact, smallAsContact] = A.did < B.did ? [s.a, s.b, s.bAsContact, s.aAsContact] : [s.b, s.a, s.aAsContact, s.bAsContact];
+    const stopSmall = small.call(bigAsContact, "p2p1:OLD", () => undefined, () => undefined);
+    stopSmall();
+    now += OFFER_FRESH_MS + 1;
+    const theirs: string[] = [];
+    const before = s.net.log.length;
+    big.call(smallAsContact, "p2p1:NEW", () => undefined, (inv) => theirs.push(inv));
+    await Promise.resolve();
+    expect(theirs).toEqual([]);
+    expect(s.net.log.length).toBe(before + 1); // our fresh offer went out
+
+    // An offer we answered is consumed too.
+    const s2 = setup();
+    await s2.a.refresh();
+    await s2.b.refresh();
+    const [small2, big2, bigC2, smallC2] = A.did < B.did ? [s2.a, s2.b, s2.bAsContact, s2.aAsContact] : [s2.b, s2.a, s2.aAsContact, s2.bAsContact];
+    small2.call(bigC2, "p2p1:ANSWERED", () => undefined, () => undefined)();
+    big2.answer(smallC2, "p2p1:MYANSWER")();
+    const got: string[] = [];
+    big2.call(smallC2, "p2p1:FRESH", () => undefined, (inv) => got.push(inv));
+    await Promise.resolve();
+    expect(got).toEqual([]);
+  });
+
+  it("tells the caller when the search runs out", async () => {
+    const s = setup();
+    await s.a.refresh();
+    const expired = vi.fn();
+    s.a.call(s.bAsContact, "p2p1:X", () => undefined, () => undefined, expired);
+    now += CALL_MAX_MS + 1;
+    vi.advanceTimersByTime(OFFER_REPEAT_MS);
+    expect(expired).toHaveBeenCalledTimes(1);
   });
 
   it("a stranger on the same relays cannot inject an offer", async () => {

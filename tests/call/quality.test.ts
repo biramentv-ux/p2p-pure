@@ -229,3 +229,57 @@ describe("call controller: camera, screen, quality, handover (Н6)", () => {
     expect(ctl.state.phase).toBe("active");
   });
 });
+
+describe("call controller: media opened after the call ended (Н6 review)", () => {
+  beforeEach(() => vi.stubGlobal("MediaStream", TestStream));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a screen picked after hang-up is stopped at once, not installed", async () => {
+    let release!: (t: MediaStreamTrack) => void;
+    const screen = track("video", "screen");
+    const { ctl, pc } = await activeVideoCall({ acquireScreen: () => new Promise((r) => (release = r)) });
+    const sharing = ctl.toggleScreenShare();
+    await ctl.hangup();
+    release(screen);
+    await sharing;
+    expect(screen.readyState).toBe("ended");
+    expect(ctl.state.sharing).toBe(false);
+    expect(pc.senders.some((s) => s.track === screen)).toBe(false);
+  });
+
+  it("a camera opened after the chat closed is stopped too", async () => {
+    let release!: (t: MediaStreamTrack) => void;
+    const back = track("video", "environment");
+    const { ctl } = await activeVideoCall({ acquireVideo: () => new Promise((r) => (release = r)) });
+    const switching = ctl.switchCamera();
+    ctl.dispose();
+    release(back);
+    await switching;
+    expect(back.readyState).toBe("ended");
+  });
+});
+
+describe("ICE restart waits for the new candidates (review)", () => {
+  it("sends the offer only after gathering completes (or the wait ends)", async () => {
+    const { waitForGathering, GATHER_WAIT_MS } = await import("../../src/call/callController");
+    const pc = Object.assign(new EventTarget(), { iceGatheringState: "gathering" as RTCIceGatheringState });
+    let done = false;
+    const p = waitForGathering(pc).then(() => (done = true));
+    await Promise.resolve();
+    expect(done).toBe(false);
+    pc.iceGatheringState = "complete";
+    pc.dispatchEvent(new Event("icegatheringstatechange"));
+    await p;
+    expect(done).toBe(true);
+
+    vi.useFakeTimers();
+    const slow = Object.assign(new EventTarget(), { iceGatheringState: "gathering" as RTCIceGatheringState });
+    let late = false;
+    const q = waitForGathering(slow).then(() => (late = true));
+    await vi.advanceTimersByTimeAsync(GATHER_WAIT_MS);
+    await q;
+    expect(late).toBe(true);
+    vi.useRealTimers();
+    expect(await waitForGathering({ iceGatheringState: "complete" })).toBeUndefined();
+  });
+});

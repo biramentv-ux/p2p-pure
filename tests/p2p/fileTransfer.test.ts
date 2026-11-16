@@ -458,3 +458,29 @@ describe("file transfer resume: review fixes", () => {
     expect(store.take("p")).toEqual({ out: [], inc: [] });
   });
 });
+
+describe("file transfer resume: a link that closes during resume()", () => {
+  it("parks every taken transfer again, not only those installed so far", async () => {
+    const store = new FileResumeStore();
+    const meta = (id: string) => ({ id, name: id, size: CHUNK_BYTES * 2, mime: DOWNLOAD_MIME, sha256: "" });
+    const mk = (id: string) => ({ meta: meta(id), rawId: new Uint8Array(8), key: new Uint8Array(32).fill(1), blob: new Blob([bytes(CHUNK_BYTES * 2) as BlobPart]), next: 1 });
+    store.park("p", [mk("AAAAAAAAAAA"), mk("BBBBBBBBBBB"), mk("CCCCCCCCCCC")], []);
+    let f!: FileTransfers;
+    const events = { offered: vi.fn(), progress: vi.fn(), received: vi.fn(), sent: vi.fn(), failed: vi.fn() };
+    f = new FileTransfers(
+      {
+        sendControl: async () => {
+          f.close(); // the new link drops while the first "W" is going out
+          throw new Error("closed");
+        },
+        sendBinary: async () => undefined,
+      },
+      events,
+      undefined,
+      { store, peer: "p" },
+    );
+    await f.resume();
+    expect(store.count("p")).toBe(3);
+    expect(events.failed).not.toHaveBeenCalled();
+  });
+});

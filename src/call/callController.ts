@@ -109,6 +109,8 @@ export class CallController {
   private disconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private lastRestart = -Infinity;
   private restarting = false;
+  /** Bumped when a call ends: media opened for an earlier call is stopped, not used. */
+  private callGen = 0;
 
   /** Handlers are kept so dispose() only clears the ones it installed. */
   private readonly onNegotiation = () => void this.negotiate();
@@ -296,6 +298,7 @@ export class CallController {
     const old = local?.getVideoTracks()[0];
     if (!sender || !local || !old) return;
     const facing = this.snap.facing === "user" ? "environment" : "user";
+    const gen = this.callGen;
     let track: MediaStreamTrack;
     try {
       track = await this.deps.acquireVideo(facing);
@@ -303,8 +306,18 @@ export class CallController {
       this.patch({ error: mediaMessage(err) });
       return;
     }
+    // The call may have ended (or the chat closed) while the camera was opening.
+    if (gen !== this.callGen || this.disposed || this.snap.phase !== "active" || this.snap.sharing) {
+      track.stop();
+      return;
+    }
     track.enabled = !this.snap.cameraOff;
-    await sender.replaceTrack(track);
+    try {
+      await sender.replaceTrack(track);
+    } catch {
+      track.stop();
+      return;
+    }
     local.removeTrack(old);
     local.addTrack(track);
     old.stop();
@@ -321,17 +334,34 @@ export class CallController {
     if (!this.canShareScreen || !this.deps.acquireScreen) return;
     const sender = this.videoSender();
     if (!sender) return;
+    const gen = this.callGen;
     let screen: MediaStreamTrack;
     try {
       screen = await this.deps.acquireScreen();
     } catch {
       return; // the person closed the picker
     }
-    this.cameraTrack = sender.track;
+    // The call may have ended (or the chat closed) while the picker was open: never leave a
+    // screen capture running after it.
+    if (gen !== this.callGen || this.disposed || this.snap.phase !== "active" || this.snap.sharing) {
+      screen.stop();
+      return;
+    }
+    const camera = sender.track;
+    try {
+      await sender.replaceTrack(screen);
+    } catch {
+      screen.stop();
+      return;
+    }
+    if (gen !== this.callGen || this.disposed) {
+      screen.stop();
+      return;
+    }
+    this.cameraTrack = camera;
     this.screenTrack = screen;
     // The browser's own "Stop sharing" button ends the track: go back to the camera.
     screen.onended = () => void this.stopScreenShare();
-    await sender.replaceTrack(screen);
     this.patch({ sharing: true });
     await this.applyVideoStep();
   }
@@ -462,6 +492,7 @@ export class CallController {
     if (this.disposed) return;
     clearTimeout(this.ringTimer);
     this.disposed = true;
+    this.callGen++;
     this.stopStats();
     clearTimeout(this.disconnectTimer);
     this.screenTrack?.stop();
@@ -493,6 +524,9 @@ export class CallController {
     try {
       this.makingOffer = true;
       await pc.setLocalDescription();
+      // After an ICE restart the new network's candidates are only in the description once
+      // gathering is done (there is no trickle path): wait for it, briefly.
+      await waitForGathering(pc);
       const desc = pc.localDescription;
       if (desc) await this.deps.send({ t: "sdp", type: "offer", sdp: desc.sdp });
     } catch (err) {
@@ -525,6 +559,7 @@ export class CallController {
     this.negotiationEnabled = true;
     await pc.setRemoteDescription({ type, sdp });
     await pc.setLocalDescription();
+    await waitForGathering(pc);
     const desc = pc.localDescription;
     if (desc) await this.deps.send({ t: "sdp", type: "answer", sdp: desc.sdp });
     // Caller: the callee's offer is answered, so now our own tracks can be added.
@@ -543,6 +578,7 @@ export class CallController {
 
   /** Releases devices and tracks, removes our senders, and sets the new phase. */
   private endLocal(next: Partial<CallSnapshot> & { phase: CallPhase }): void {
+    this.callGen++;
     this.stopStats();
     if (this.screenTrack) {
       this.screenTrack.onended = null;
@@ -594,4 +630,27 @@ function mediaMessage(err: unknown): string {
     return "Не намерих микрофон или камера.";
   }
   return "Не успях да включа микрофона или камерата.";
+}
+
+/** Longest wait for ICE gathering before an SDP goes out anyway (with what it has). */
+export const GATHER_WAIT_MS = 3000;
+
+/**
+ * Resolves when ICE gathering is complete, or after GATHER_WAIT_MS. A renegotiation that
+ * does not restart ICE has nothing new to gather and returns at once.
+ */
+export function waitForGathering(pc: Pick<RTCPeerConnection, "iceGatheringState"> & Partial<Pick<RTCPeerConnection, "addEventListener" | "removeEventListener">>, ms = GATHER_WAIT_MS): Promise<void> {
+  if (!pc.iceGatheringState || pc.iceGatheringState === "complete" || !pc.addEventListener) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      pc.removeEventListener?.("icegatheringstatechange", check);
+      resolve();
+    };
+    const check = () => {
+      if (pc.iceGatheringState === "complete") done();
+    };
+    const timer = setTimeout(done, ms);
+    pc.addEventListener!("icegatheringstatechange", check);
+  });
 }

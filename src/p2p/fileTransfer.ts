@@ -410,6 +410,8 @@ export class FileTransfers {
   async resume(): Promise<void> {
     if (!this.resumeOpts || this.closed) return;
     const { out, inc } = this.resumeOpts.store.take(this.resumeOpts.peer);
+    // Everything taken is installed before the first await: if this link closes while a
+    // frame is going out, close() parks all of it again, none is left out of both.
     for (const o of out) {
       const timer = setTimeout(() => {
         const w = this.waiting.get(o.meta.id);
@@ -420,11 +422,6 @@ export class FileTransfers {
       }, RESUME_WAIT_MS);
       this.waiting.set(o.meta.id, { ...o, timer });
       this.events.resumed?.(o.meta, Math.min(o.meta.size, o.next * CHUNK_BYTES), "out");
-      try {
-        await this.transport.sendControl(`${FRAME_MARK}W|${o.meta.id}`);
-      } catch {
-        // The new link is already gone: close() parks it again.
-      }
     }
     for (const p of inc) {
       this.inc.set(p.meta.id, {
@@ -435,8 +432,16 @@ export class FileTransfers {
         resumed: true,
       });
       this.events.resumed?.(p.meta, Math.min(p.meta.size, p.next * CHUNK_BYTES), "in");
-      await this.askRest(p.meta.id);
     }
+    for (const o of out) {
+      if (this.closed) return;
+      try {
+        await this.transport.sendControl(`${FRAME_MARK}W|${o.meta.id}`);
+      } catch {
+        // The new link is already gone: close() has parked it again.
+      }
+    }
+    for (const p of inc) await this.askRest(p.meta.id);
   }
 
   /** Receiver: asks the sender for the chunks from `next` on. */

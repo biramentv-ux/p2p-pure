@@ -19,6 +19,8 @@ export const OFFER_REPEAT_MS = 30_000;
 export const CALL_MAX_MS = 10 * 60_000;
 export const ANSWER_REPEAT_MS = 10_000;
 export const ANSWER_MAX_MS = 60_000;
+/** An offer seen this recently is from a contact still looking (they repeat every 30 s). */
+export const OFFER_FRESH_MS = OFFER_REPEAT_MS * 2 + 5_000;
 /** How long back a subscription asks for (relays may still hold a recent ephemeral event). */
 const SINCE_S = 60;
 const MAX_INVITE_CHARS = 20_000;
@@ -75,7 +77,11 @@ export class Rendezvous {
   private topicIndex = new Map<string, string>();
   private readonly calls = new Map<string, Call>();
   private readonly seen = new Set<string>();
-  /** The last offer each contact sent us: a call we start later may have to answer it. */
+  /**
+   * The last offer each contact sent us and when we last saw it. A contact who is still
+   * looking republishes every OFFER_REPEAT_MS, so only an offer seen that recently counts as
+   * a search still going on; one we answered is removed.
+   */
   private readonly lastOffer = new Map<string, { inv: string; at: number }>();
   private epochTimer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
@@ -129,7 +135,13 @@ export class Rendezvous {
   }
 
   /** Looks for a contact: publishes our offer until an answer comes, CALL_MAX_MS passes or stop(). */
-  call(contact: RvContact, offerInvitation: string, onAnswer: (inv: string) => void, onTheirOffer: (inv: string) => void): () => void {
+  call(
+    contact: RvContact,
+    offerInvitation: string,
+    onAnswer: (inv: string) => void,
+    onTheirOffer: (inv: string) => void,
+    onExpired: () => void = () => undefined,
+  ): () => void {
     this.calls.get(contact.did)?.stop();
     if (!this.keys.has(contact.did)) {
       this.keys.set(contact.did, { contact, key: pairKey(this.o.mySecretKey, this.o.myDid, contact.publicKey, contact.did) });
@@ -137,7 +149,11 @@ export class Rendezvous {
     }
     const started = this.now();
     const send = () => {
-      if (this.now() - started > CALL_MAX_MS) return stop();
+      if (this.now() - started > CALL_MAX_MS) {
+        stop();
+        onExpired();
+        return;
+      }
       this.publish(contact.did, "offer", offerInvitation);
     };
     const timer = setInterval(send, OFFER_REPEAT_MS);
@@ -149,7 +165,8 @@ export class Rendezvous {
     this.calls.set(contact.did, call);
     // They were already looking for us: if their offer wins the tie-break, answer it instead.
     const theirs = this.lastOffer.get(contact.did);
-    if (theirs && this.now() - theirs.at < CALL_MAX_MS && this.o.myDid > contact.did) {
+    if (theirs && this.now() - theirs.at < OFFER_FRESH_MS && this.o.myDid > contact.did) {
+      this.lastOffer.delete(contact.did);
       clearInterval(timer);
       this.calls.delete(contact.did);
       queueMicrotask(() => onTheirOffer(theirs.inv));
@@ -161,6 +178,8 @@ export class Rendezvous {
 
   /** Sends our answer to a contact's offer, a few times (their listener may be reconnecting). */
   answer(contact: RvContact, answerInvitation: string): () => void {
+    // That offer is answered: it is no longer a search going on.
+    this.lastOffer.delete(contact.did);
     const started = this.now();
     const send = () => {
       if (this.now() - started > ANSWER_MAX_MS) return clearInterval(timer);
@@ -182,13 +201,14 @@ export class Rendezvous {
     // Our own events come back on the same topic; anything else that opens is from the contact
     // (only the two of us hold the key), but its invitation is still checked like a QR's.
     if (!p || p.f === this.o.myDid || p.f !== did) return;
+    // Every sighting refreshes "they are still looking", also the repeats dropped below.
+    if (p.k === "offer") this.lastOffer.set(did, { inv: p.inv, at: this.now() });
     // The same offer is republished every 30 s: hand it on once.
     const mark = `${p.k}:${p.inv}`;
     if (this.seen.has(mark)) return;
     this.seen.add(mark);
     if (this.seen.size > MAX_SEEN) this.seen.delete(this.seen.values().next().value as string);
     const call = this.calls.get(did);
-    if (p.k === "offer") this.lastOffer.set(did, { inv: p.inv, at: this.now() });
     if (p.k === "answer") {
       call?.onAnswer(p.inv);
       return;

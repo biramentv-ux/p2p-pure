@@ -92,6 +92,16 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const receiverRef = useRef(new PhotoReceiver());
   const [call, setCall] = useState<CallSnapshot | null>(null);
   const [cameras, setCameras] = useState(false);
+  // Camera permission is granted when a call starts: count the cameras again then.
+  const callActive = call?.phase === "active";
+  useEffect(() => {
+    if (!callActive) return;
+    let alive = true;
+    void hasSeveralCameras().then((several) => alive && setCameras(several));
+    return () => {
+      alive = false;
+    };
+  }, [callActive]);
   const callRef = useRef<CallController | null>(null);
   const assemblerRef = useRef(new SignalAssembler());
   const [locating, setLocating] = useState(false);
@@ -171,6 +181,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
   useEffect(() => {
     let alive = true;
+    let offDevices = () => undefined as void;
     // Queued like every other operation: a wipe that arrives while the history is still
     // decrypting must run after the load, or the old list would come back on screen.
     void enqueue(async () => {
@@ -201,7 +212,12 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       polite: !session.isInitiator,
       network: networkTargets(),
     });
-    void hasSeveralCameras().then((several) => alive && setCameras(several));
+    // Before camera permission some browsers list only one camera; the list is read again
+    // when a call starts and whenever devices change.
+    const recount = () => void hasSeveralCameras().then((several) => alive && setCameras(several));
+    recount();
+    navigator.mediaDevices?.addEventListener?.("devicechange", recount);
+    offDevices = () => navigator.mediaDevices?.removeEventListener?.("devicechange", recount);
     callRef.current = controller;
     setCall(controller.state);
 
@@ -405,6 +421,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       off();
       offBinary();
       offClose();
+      offDevices();
       files.close();
       filesRef.current = null;
       for (const url of urls.values()) URL.revokeObjectURL(url);

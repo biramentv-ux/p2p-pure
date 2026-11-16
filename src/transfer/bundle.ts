@@ -46,7 +46,9 @@ export function encodeBundle(bundle: TransferBundle): Uint8Array {
       verified: c.verified,
       verifiedAt: c.verifiedAt,
       addedAt: c.addedAt,
-      ...(c.disappearMs ? { dm: c.disappearMs, dmAt: c.disappearAt } : {}),
+      ...(c.disappearMs ? { dm: c.disappearMs } : {}),
+      // Also for a timer turned off: when it was turned off decides against an older "on".
+      ...(c.disappearAt ? { dmAt: c.disappearAt } : {}),
     })),
   });
   const body = new TextEncoder().encode(json);
@@ -102,10 +104,8 @@ export function decodeBundle(padded: Uint8Array): TransferBundle {
     if (typeof verifiedAt === "number") c.verifiedAt = verifiedAt;
     // Disappearing messages move with the contact (an unknown value is dropped, not fatal).
     const timer = validDisappearMs(dm);
-    if (timer) {
-      c.disappearMs = timer;
-      if (typeof dmAt === "number" && Number.isSafeInteger(dmAt) && dmAt > 0) c.disappearAt = dmAt;
-    }
+    if (timer) c.disappearMs = timer;
+    if (typeof dmAt === "number" && Number.isSafeInteger(dmAt) && dmAt > 0) c.disappearAt = dmAt;
     contacts.push(c);
   }
   return { seed, contacts };

@@ -139,3 +139,50 @@ describe("panic wipe", () => {
     expect(store.count("p")).toBe(0);
   });
 });
+
+describe("lock when the page was suspended", () => {
+  let root: Root | null = null;
+  let hidden = false;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => (hidden ? "hidden" : "visible") });
+  });
+  afterEach(() => {
+    if (root) act(() => root!.unmount());
+    root = null;
+    hidden = false;
+    vi.useRealTimers();
+  });
+  function mount(onHide: boolean, onIdle: () => void, timeout = 60 * 60 * 1000) {
+    function Probe() {
+      useAutoLock(true, onIdle, timeout, onHide);
+      return null;
+    }
+    root = createRoot(document.createElement("div"));
+    act(() => root!.render(createElement(Probe)));
+  }
+  const setHidden = (v: boolean) =>
+    act(() => {
+      hidden = v;
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+  it("locks on return when the background time passed but the timer never ran", () => {
+    const onIdle = vi.fn();
+    mount(true, onIdle);
+    setHidden(true);
+    // The phone froze the page: the clock moves, no timer fires.
+    vi.setSystemTime(Date.now() + HIDE_GRACE_MS + 5000);
+    setHidden(false);
+    expect(onIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it("locks on return when the inactivity time passed while suspended (lock on hide off)", () => {
+    const onIdle = vi.fn();
+    mount(false, onIdle, 60_000);
+    setHidden(true);
+    vi.setSystemTime(Date.now() + 61_000);
+    setHidden(false);
+    expect(onIdle).toHaveBeenCalledTimes(1);
+  });
+});
