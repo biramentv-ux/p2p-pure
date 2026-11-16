@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { notifyIncoming, previewText } from "../../notify/notifier";
-import { getContact, saveContact, type Contact } from "../../contacts/contacts";
-import { DISAPPEAR_OPTIONS, disappearLabel, expiryFor, newerTimer, validDisappearMs, type TimerSetting } from "../../history/disappearing";
+import type { Contact } from "../../contacts/contacts";
+import { DISAPPEAR_OPTIONS, disappearLabel } from "../../history/disappearing";
+import { useDisappearingTimer } from "../useDisappearingTimer";
+import { useChatFiles } from "../useChatFiles";
 import {
   appendMessage,
   deleteHistory,
   loadHistory,
   validLocation,
   type ChatMessage,
-  type FileCard,
 } from "../../history/messageStore";
-import { canStore, deleteFilesFor, loadFile, saveFile } from "../../history/fileStore";
-import { FileTransferError, FileTransfers, MAX_FILE_BYTES, PAUSED_REASON, parkedFiles, type FileMeta } from "../../p2p/fileTransfer";
-import { FileBubble, TransferList, type ActiveTransfer } from "../components/FileBubble";
+import { deleteFilesFor, loadFile } from "../../history/fileStore";
+import { MAX_FILE_BYTES } from "../../p2p/fileTransfer";
+import { FileBubble, TransferList } from "../components/FileBubble";
 import { PastePreview } from "../components/PastePreview";
 import { usePasteImage } from "../pasteImage";
 import { decodeControl, encodeControl, isControlMessage, type ControlMessage } from "../../p2p/control";
@@ -20,9 +21,8 @@ import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
 import { buildPhotoFrames, PhotoReceiver, sanitizeText, sniffMime } from "../../p2p/photo";
 import { prepareImage } from "../image";
-import { CallController, type CallSnapshot } from "../../call/callController";
-import { encodeSignal, isCallSignal, SignalAssembler } from "../../call/signal";
-import { acquireCamera, acquireMedia, acquireScreen, hasSeveralCameras, networkTargets } from "../../call/media";
+import { isCallSignal } from "../../call/signal";
+import { useChatCall } from "../useChatCall";
 import { CallPanel } from "../components/CallPanel";
 import { LanguageSwitch } from "../components/LanguageSwitch";
 import { useI18n } from "../../i18n";
@@ -63,47 +63,10 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [connected, setConnected] = useState(link.isOpen());
-  // Disappearing messages: the same value on both sides. A change is a control message
-  // ("timer"), each side also sends its setting when the chat opens, and newerTimer() picks
-  // the same winner on both devices (history/disappearing.ts).
-  const [timerMs, setTimerMs] = useState(() => validDisappearMs(contact.disappearMs) ?? 0);
-  const timerRef = useRef<TimerSetting>({
-    ms: validDisappearMs(contact.disappearMs) ?? 0,
-    at: contact.disappearAt ?? 0,
-  });
-  /** Adds the expiry of the chat's timer to a message about to be written. */
-  function withTimer(msg: ChatMessage): ChatMessage {
-    const expiresAt = expiryFor(msg.timestamp, timerRef.current.ms);
-    return expiresAt === undefined ? msg : { ...msg, expiresAt };
-  }
-  /** Stores the timer on the contact (sealed contact book) and shows it. */
-  async function applyTimer(setting: TimerSetting) {
-    timerRef.current = setting;
-    setTimerMs(setting.ms);
-    const fresh = (await getContact(contact.did).catch(() => null)) ?? contact;
-    const next: Contact = { ...fresh };
-    if (setting.ms) next.disappearMs = setting.ms;
-    else delete next.disappearMs;
-    if (setting.at) next.disappearAt = setting.at;
-    else delete next.disappearAt;
-    await saveContact(next).catch(() => undefined);
-  }
+  // Disappearing messages (Н7): the same value on both sides (history/timerSync.ts).
+  const { timerMs, sync: timer, withTimer } = useDisappearingTimer(contact);
   const [transfer, setTransfer] = useState<{ label: string; done: number; total: number } | null>(null);
   const receiverRef = useRef(new PhotoReceiver());
-  const [call, setCall] = useState<CallSnapshot | null>(null);
-  const [cameras, setCameras] = useState(false);
-  // Camera permission is granted when a call starts: count the cameras again then.
-  const callActive = call?.phase === "active";
-  useEffect(() => {
-    if (!callActive) return;
-    let alive = true;
-    void hasSeveralCameras().then((several) => alive && setCameras(several));
-    return () => {
-      alive = false;
-    };
-  }, [callActive]);
-  const callRef = useRef<CallController | null>(null);
-  const assemblerRef = useRef(new SignalAssembler());
   const [locating, setLocating] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
   // Cipher-suite agreement. The ref is read by the receive loop; the state drives the panel.
@@ -113,34 +76,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   const cameraInput = useRef<HTMLInputElement>(null);
   const galleryInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  // Files: transfers on this link, the ones in progress, and object URLs made in this session.
-  const filesRef = useRef<FileTransfers | null>(null);
-  const [active, setActive] = useState<ActiveTransfer[]>([]);
-  const [preparing, setPreparing] = useState<string | null>(null);
   /** A picture pasted with Ctrl+V, waiting for "Send". */
   const [pasted, setPasted] = useState<File | null>(null);
-  const urlsRef = useRef(new Map<string, string>());
-
-  function upsertActive(item: ActiveTransfer) {
-    setActive((prev) => [...prev.filter((a) => a.id !== item.id), item]);
-  }
-  function dropActive(id: string) {
-    setActive((prev) => prev.filter((a) => a.id !== id));
-  }
-  /** Keeps a file (up to 25 MB) encrypted on the device and returns its card for the history. */
-  async function keepFile(meta: FileMeta, blob: Blob): Promise<FileCard> {
-    const url = URL.createObjectURL(blob);
-    urlsRef.current.set(meta.id, url);
-    let stored = canStore(meta.size);
-    if (stored) {
-      try {
-        await saveFile(historyKey, contact.did, meta.id, blob);
-      } catch {
-        stored = false;
-      }
-    }
-    return { id: meta.id, name: meta.name, size: meta.size, mime: meta.mime, stored };
-  }
 
   // Sends and receives are chained so counters and chain keys advance in order.
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
@@ -149,6 +86,32 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     queueRef.current = next.catch(() => undefined);
     return next;
   };
+
+  /** Writes a message (with the chat's timer) to the history and shows it. */
+  async function addMessage(msg: ChatMessage): Promise<void> {
+    const kept = withTimer(msg);
+    await appendMessage(historyKey, contact.did, kept);
+    setMessages((prev) => [...prev, kept]);
+  }
+
+  // Calls (Н6): the controller on this link (ui/useChatCall.ts).
+  const calls = useChatCall(link, session, enqueue);
+  const { call, cameras } = calls;
+  const callRef = calls.controller;
+
+  // Files (Н5): transfers on this link, resumable across links (ui/useChatFiles.ts).
+  const files = useChatFiles({
+    link,
+    session,
+    enqueue,
+    historyKey,
+    contact,
+    addMessage,
+    notice: (text) => setNotice(tRef.current(text)),
+    incoming: (name) => alertIncomingRef.current(tRef.current("Файл: {name}", { name })),
+  });
+  // Set by the mounted effect (it needs the contact's notification settings).
+  const alertIncomingRef = useRef<(preview: string) => void>(() => undefined);
 
   /** Applies a negotiation step: stores the new state, switches the send suite, sends the reply. */
   function runSuiteStep(step: Step) {
@@ -181,7 +144,6 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
   useEffect(() => {
     let alive = true;
-    let offDevices = () => undefined as void;
     // Queued like every other operation: a wipe that arrives while the history is still
     // decrypting must run after the load, or the old list would come back on screen.
     void enqueue(async () => {
@@ -198,29 +160,6 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       setNotice(tRef.current("Другият човек е със стара версия: прекъснатите файлове няма да продължат и изчезващите съобщения няма да работят при него."));
     }
 
-    const controller = new CallController({
-      pc: link.pc,
-      acquire: acquireMedia,
-      send: (signal) =>
-        enqueue(async () => {
-          for (const part of encodeSignal(signal)) link.send(await session.seal(part));
-        }),
-      onChange: (snap) => alive && setCall(snap),
-      acquireVideo: acquireCamera,
-      acquireScreen,
-      // Perfect negotiation needs one polite side for an ICE restart outside a call.
-      polite: !session.isInitiator,
-      network: networkTargets(),
-    });
-    // Before camera permission some browsers list only one camera; the list is read again
-    // when a call starts and whenever devices change.
-    const recount = () => void hasSeveralCameras().then((several) => alive && setCameras(several));
-    recount();
-    navigator.mediaDevices?.addEventListener?.("devicechange", recount);
-    offDevices = () => navigator.mediaDevices?.removeEventListener?.("devicechange", recount);
-    callRef.current = controller;
-    setCall(controller.state);
-
     // A sound and, with the window in the background, a system notification (src/notify).
     const alertIncoming = (preview: string) =>
       notifyIncoming(
@@ -233,76 +172,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         },
         true,
       );
-
-    const files = new FileTransfers(
-      {
-        sendControl: (plaintext) =>
-          enqueue(async () => {
-            link.send(await session.seal(plaintext));
-          }),
-        sendBinary: (bytes) => link.sendBinary(bytes),
-      },
-      {
-        offered: (m) => {
-          if (!alive) return;
-          upsertActive({ id: m.id, name: m.name, size: m.size, direction: "in", phase: "offer", done: 0 });
-          alertIncoming(tRef.current("Файл: {name}", { name: m.name }));
-        },
-        outgoing: (m) => {
-          if (!alive) return;
-          setPreparing(null);
-          upsertActive({ id: m.id, name: m.name, size: m.size, direction: "out", phase: "waiting", done: 0 });
-        },
-        progress: (id, done) =>
-          alive && setActive((prev) => prev.map((a) => (a.id === id ? { ...a, phase: "moving", done } : a))),
-        paused: (m, done, direction) => {
-          if (!alive) return;
-          upsertActive({ id: m.id, name: m.name, size: m.size, direction, phase: "paused", done });
-        },
-        resumed: (m, done, direction) => {
-          if (!alive) return;
-          upsertActive({ id: m.id, name: m.name, size: m.size, direction, phase: direction === "in" ? "moving" : "waiting", done });
-        },
-        received: (meta, blob) => {
-          void (async () => {
-            const card = await keepFile(meta, blob);
-            const msg: ChatMessage = withTimer({ text: "", file: card, direction: "in", timestamp: Date.now() });
-            await appendMessage(historyKey, contact.did, msg);
-            if (!alive) return;
-            dropActive(meta.id);
-            setMessages((prev) => [...prev, msg]);
-          })();
-        },
-        // The history entry for a sent file is written here, also for one that resumed on this
-        // link after an earlier link dropped (that chat screen is gone).
-        sent: (meta, blob) => {
-          void (async () => {
-            const card = await keepFile(meta, new Blob([blob], { type: meta.mime }));
-            const msg: ChatMessage = withTimer({ text: "", file: card, direction: "out", timestamp: Date.now() });
-            await appendMessage(historyKey, contact.did, msg);
-            if (!alive) return;
-            dropActive(meta.id);
-            setMessages((prev) => [...prev, msg]);
-          })();
-        },
-        failed: (id, reason) => {
-          if (!alive) return;
-          dropActive(id);
-          if (reason !== "Отказано.") setNotice(tRef.current(reason));
-        },
-      },
-      MAX_FILE_BYTES,
-      { store: parkedFiles, peer: contact.did },
-    );
-    filesRef.current = files;
-    // Files the last link with this contact left half-way continue here.
-    void files.resume();
-    // A dropped link parks transfers in progress at once, so the list says "paused".
-    const offClose = link.onClose(() => files.close());
-    const urls = urlsRef.current;
-    const offBinary = link.onBinary((bytes) => {
-      files.handleBinary(bytes);
-    });
+    alertIncomingRef.current = alertIncoming;
 
     const off = link.onMessage((text) => {
       if (!isEncryptedMessage(text)) return;
@@ -310,9 +180,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         try {
           const plaintext = await session.open(text);
           if (isCallSignal(plaintext)) {
-            const signal = assemblerRef.current.feed(plaintext);
-            // Not awaited: the controller may send a reply, which needs this queue to be free.
-            if (signal) void callRef.current?.handle(signal);
+            calls.handleFrame(plaintext);
             return;
           }
           if (isControlMessage(plaintext)) {
@@ -323,11 +191,8 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
               return;
             }
             if (control.t === "timer") {
-              const mine = timerRef.current;
-              const winner = newerTimer(mine, { ms: control.ms, at: control.at });
-              if (winner.ms === mine.ms && winner.at === mine.at) return; // ours stands
-              await applyTimer(winner);
-              if (alive && winner.ms !== mine.ms) {
+              const result = await timer.receive({ ms: control.ms, at: control.at });
+              if (alive && result === "changed-value") {
                 setNotice(
                   control.ms
                     ? tRef.current("{name} включи изчезващи съобщения: {time}.", {
@@ -341,7 +206,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             }
             if (control.t === "wipe") {
               receiverRef.current.discardInProgress();
-              parkedFiles.drop(contact.did);
+              files.forgetAll();
               await deleteHistory(contact.did);
               await deleteFilesFor(contact.did);
               if (alive) {
@@ -357,7 +222,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             alertIncoming(tRef.current("Местоположение"));
             return;
           }
-          if (filesRef.current?.handleControl(plaintext)) return;
+          if (files.filesRef.current?.handleControl(plaintext)) return;
           const result = receiverRef.current.feed(plaintext);
           if (result.kind === "discarded") return;
           if (result.kind === "progress") {
@@ -392,13 +257,13 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
     // apart (or on a moved device) converge; the receiver keeps whichever newerTimer() picks.
     void enqueue(async () => {
       try {
-        link.send(await session.seal(encodeControl({ t: "timer", ...timerRef.current })));
+        link.send(await session.seal(encodeControl({ t: "timer", ...timer.current() })));
       } catch {
         /* not connected: the next chat sends it */
       }
     });
 
-    const timer = setInterval(() => {
+    const ticker = setInterval(() => {
       if (!alive) return;
       setConnected(link.isOpen());
       // Expired messages leave the screen, and the decrypted copy of an expired file is
@@ -406,30 +271,13 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
       const now = Date.now();
       const expired = messagesRef.current.filter((m) => m.expiresAt !== undefined && m.expiresAt <= now);
       if (expired.length === 0) return;
-      for (const m of expired) {
-        const id = m.file?.id;
-        const url = id ? urlsRef.current.get(id) : undefined;
-        if (id && url) {
-          URL.revokeObjectURL(url);
-          urlsRef.current.delete(id);
-        }
-      }
+      files.release(expired.flatMap((m) => (m.file ? [m.file.id] : [])));
       setMessages((prev) => prev.filter((m) => m.expiresAt === undefined || m.expiresAt > now));
     }, 1000);
     return () => {
       alive = false;
       off();
-      offBinary();
-      offClose();
-      offDevices();
-      files.close();
-      filesRef.current = null;
-      for (const url of urls.values()) URL.revokeObjectURL(url);
-      urls.clear();
-      clearInterval(timer);
-      const c = callRef.current;
-      callRef.current = null;
-      if (c) void c.hangup().finally(() => c.dispose());
+      clearInterval(ticker);
     };
     // Mount-only: the link and session are owned by the parent for this chat.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -524,8 +372,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         delivered = false;
       }
       receiverRef.current.discardInProgress();
-      for (const a of active) void filesRef.current?.cancel(a.id);
-      parkedFiles.drop(contact.did);
+      files.forgetAll();
       await deleteHistory(contact.did);
       await deleteFilesFor(contact.did);
       setMessages([]);
@@ -540,17 +387,18 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
   /** Turns the chat's timer on, changes or turns it off for both people. Needs the link. */
   function onChooseTimer(ms: number) {
-    if (ms === timerRef.current.ms) return;
+    if (ms === timer.ms) return;
     setNotice(null);
     void enqueue(async () => {
-      const setting: TimerSetting = { ms, at: Math.max(Date.now(), timerRef.current.at + 1) };
       try {
-        link.send(await session.seal(encodeControl({ t: "timer", ...setting })));
+        const changed = await timer.choose(ms, async (setting) => {
+          link.send(await session.seal(encodeControl({ t: "timer", ...setting })));
+        });
+        if (!changed) return;
       } catch {
         setNotice(t("Връзката е прекъсната. Опитайте отново, когато се свържете."));
         return;
       }
-      await applyTimer(setting);
       setNotice(
         ms
           ? t("Изчезващи съобщения: {time}. Важи за новите съобщения и при двама ви.", { time: t(disappearLabel(ms)) })
@@ -561,21 +409,16 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
 
   /** Sends any file up to 100 MB. The other side sees a card and decides whether to take it. */
   async function onPickFile(file: File | undefined) {
-    const files = filesRef.current;
-    if (!file || !files) return;
+    if (!file) return;
     setNotice(null);
     if (file.size > MAX_FILE_BYTES) {
       setNotice(t("Файлът е по-голям от {mb} MB.", { mb: Math.round(MAX_FILE_BYTES / 1048576) }));
       return;
     }
-    setPreparing(file.name);
     try {
-      // The offer is out once the file is hashed; from then on the list shows its progress.
-      // The "sent" event writes the history entry.
-      await files.send(file, file.name).finally(() => setPreparing(null));
+      await files.sendFile(file);
     } catch (err) {
-      if (err instanceof FileTransferError && err.paused) setNotice(t(PAUSED_REASON));
-      else setNotice(t(err instanceof Error ? err.message : "Файлът не беше изпратен."));
+      setNotice(t(err instanceof Error ? err.message : "Файлът не беше изпратен."));
     }
   }
 
@@ -759,7 +602,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             {m.file ? (
               <FileBubble
                 card={m.file}
-                url={urlsRef.current.get(m.file.id)}
+                url={files.urlFor(m.file.id)}
                 load={() => loadFile(historyKey, contact.did, m.file!.id)}
               />
             ) : m.location ? (
@@ -784,18 +627,16 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         </p>
       )}
 
-      {preparing && (
+      {files.preparing && (
         <p className="chat-notice" role="status">
-          {t("Подготвям „{name}“…", { name: preparing })}
+          {t("Подготвям „{name}“…", { name: files.preparing })}
         </p>
       )}
       <TransferList
-        items={active}
-        onAccept={(id) => void filesRef.current?.accept(id)}
+        items={files.active}
+        onAccept={files.accept}
         onCancel={(id) => {
-          dropActive(id);
-          parkedFiles.dropTransfer(contact.did, id);
-          void filesRef.current?.cancel(id);
+          files.cancel(id);
         }}
       />
 
@@ -874,7 +715,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
         <button
           type="button"
           className="secondary"
-          disabled={!connected || !!preparing}
+          disabled={!connected || !!files.preparing}
           onClick={() => fileInput.current?.click()}
           aria-label={t("Прикачи файл или видео до 100 MB")}
         >
