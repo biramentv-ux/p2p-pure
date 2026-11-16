@@ -64,7 +64,7 @@
     "vite-plugin-pwa": "^2.0.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.6.0",
+    "@capacitor/cli": "^8.6.2",
     "@tauri-apps/cli": "2.12.4",
     "@types/node": "^26.6.6",
     "@types/qrcode": "^1.5.6",
