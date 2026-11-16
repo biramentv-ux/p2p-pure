@@ -130,6 +130,45 @@ describe("disappearing messages in a group", () => {
     for (const m of [admin, alice, bob]) m.g.closeAll();
   });
 
+  it("a member admitted after the timer was set gets it", async () => {
+    clock = Date.now();
+    const mk = (name: string): M => ({ p: person(name), g: null as unknown as GroupSession, store: new FileResumeStore() });
+    const admin = mk("Ани");
+    const alice = mk("Алиса");
+    const bob = mk("Боб");
+    admin.g = GroupSession.create(admin.p.keys, "g-late", "Късно", "Ани", { now });
+    alice.g = new GroupSession(alice.p.keys, { now });
+    bob.g = new GroupSession(bob.p.keys, { now });
+    link(admin, alice);
+    await admin.g.invite(alice.p.did, "Алиса");
+    await until(() => alice.g.snapshot.joined, "alice");
+    await alice.g.setTimer(HOUR);
+    await until(() => admin.g.snapshot.timerMs === HOUR, "admin has it");
+    link(admin, bob);
+    link(alice, bob);
+    await admin.g.invite(bob.p.did, "Боб");
+    await until(() => bob.g.snapshot.joined, "bob joined");
+    await until(() => bob.g.snapshot.timerMs === HOUR, "bob gets the timer");
+    for (const m of [admin, alice, bob]) m.g.closeAll();
+  });
+
+  it("a timer frame from someone who is not a member changes nothing", async () => {
+    const { admin, alice, bob } = await trio();
+    const stranger = person("Непознат");
+    const pair = connectedPair(alice.p, stranger);
+    alice.g.attach(stranger.contact, pair.la, pair.sa);
+    // The stranger answers alice's first message, then sends a timer frame on the pairwise link.
+    pair.lb.onMessage((wire) => {
+      void (async () => {
+        await pair.sb.open(wire);
+        pair.lb.send(await pair.sb.seal('\u0001T|{"ms":3600000,"at":99999999999999}'));
+      })().catch(() => undefined);
+    });
+    await quiet(300);
+    expect(alice.g.snapshot.timerMs).toBe(0);
+    for (const m of [admin, alice, bob]) m.g.closeAll();
+  });
+
   it("a text that starts like a timer frame stays text and changes nothing", async () => {
     const { admin, alice, bob } = await trio();
     await alice.g.sendText('\u0001T|{"ms":300000,"at":99999999999999}');

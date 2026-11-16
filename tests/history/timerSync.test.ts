@@ -32,6 +32,19 @@ describe("TimerSync", () => {
     expect(await a.receive({ ms: DAY, at: 70 })).toBe("changed-value");
   });
 
+  it("a newer setting that arrives while ours is being sent wins over ours", async () => {
+    const t = new TimerSync(null, { persist: async () => undefined, now: () => 100 });
+    const changed = await t.choose(HOUR, async () => {
+      expect(await t.receive({ ms: DAY, at: 101 })).toBe("changed-value");
+    });
+    expect(changed).toBe(false);
+    expect(t.current()).toEqual({ ms: DAY, at: 101 });
+    // An older one arriving meanwhile does not stop ours.
+    const u = new TimerSync(null, { persist: async () => undefined, now: () => 100 });
+    expect(await u.choose(HOUR, async () => void (await u.receive({ ms: DAY, at: 50 })))).toBe(true);
+    expect(u.current()).toEqual({ ms: HOUR, at: 100 });
+  });
+
   it("gives the expiry under the current timer", async () => {
     const t = new TimerSync({ ms: HOUR, at: 1 }, { persist: async () => undefined });
     expect(t.expiryFor(1000)).toBe(1000 + HOUR);

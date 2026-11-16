@@ -202,6 +202,8 @@ function App() {
     state.kind === "unlocked",
     () => {
       dropEverything()?.closeAll();
+      // Closing group links parks accepted transfers (keys, plaintext): forget them after that.
+      parkedFiles.clear();
       getUnlockMethod()
         .then((method) => setState(method ? { kind: "locked", method } : { kind: "no-identity" }))
         .catch(() => setState({ kind: "no-identity" }));

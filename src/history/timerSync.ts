@@ -42,13 +42,20 @@ export class TimerSync {
     return expiryFor(timestamp, this.setting.ms);
   }
 
-  /** The person picked `ms`. `send` must deliver the setting or throw; returns false when unchanged. */
+  /**
+   * The person picked `ms`. `send` must deliver the setting or throw. Returns false when nothing
+   * changed, or when a newer setting arrived during the send and won.
+   */
   async choose(ms: number, send: (setting: TimerSetting) => Promise<void>): Promise<boolean> {
     const value = validDisappearMs(ms);
     if (value === null || value === this.setting.ms) return false;
     const now = (this.o.now ?? Date.now)();
     const next: TimerSetting = { ms: value, at: Math.max(now, this.setting.at + 1) };
     await send(next);
+    // A newer setting from someone else may have arrived while ours was on its way: the same
+    // rule as receive() decides, so every device still ends on the same winner.
+    const winner = newerTimer(this.setting, next);
+    if (winner.ms !== next.ms || winner.at !== next.at) return false;
     await this.apply(next);
     return true;
   }

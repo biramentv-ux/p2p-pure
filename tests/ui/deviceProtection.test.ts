@@ -129,6 +129,16 @@ describe("panic wipe", () => {
     spy.mockRestore();
   });
 
+  it("forgets transfers that closing the group links parks again", async () => {
+    // Closing a group link parks accepted transfers (key, plaintext) into the shared store.
+    const writer = {
+      closeAll: () => parkedFiles.park("group:g:did:key:zX", [{ meta: { id: "f" }, key: new Uint8Array([1, 2]) } as never], []),
+      flush: async () => undefined,
+    };
+    await panicWipe([writer]);
+    expect(parkedFiles.count("group:g:did:key:zX")).toBe(0);
+  });
+
   it("a cleared resume store zeroes the keys it held", () => {
     const store = new FileResumeStore();
     const key = new Uint8Array(32).fill(7);

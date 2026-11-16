@@ -47,6 +47,8 @@ function safeLocalStorage(): KeyedStore | null {
 export async function panicWipe(writers: Iterable<BackgroundWriter | null | undefined>): Promise<void> {
   parkedFiles.clear();
   await stopWritersAndWipe(writers);
+  // Closing the group links in stopWritersAndWipe parks accepted transfers again: forget them.
+  parkedFiles.clear();
   clearAppSettings();
   try {
     sessionStorage.clear();

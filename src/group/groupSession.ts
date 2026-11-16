@@ -257,6 +257,10 @@ export class GroupSession {
   private readonly resumeStore: FileResumeStore;
   private readonly now: () => number;
   private pruner: ReturnType<typeof setInterval> | null = null;
+  /** Members this device has sent the timer to on their current link. */
+  private readonly timerSentTo = new Set<string>();
+  /** Timer frames that came before this device joined (no member list to check yet). */
+  private earlyTimers: Array<{ from: string; text: string }> = [];
 
   constructor(keys: Ed25519KeyPair, chatOrOptions: GroupChat | null | GroupSessionOptions = null) {
     const options: GroupSessionOptions =
@@ -291,6 +295,8 @@ export class GroupSession {
         for (const did of [...this.links.keys()]) {
           if (!this.mesh.isKnownPeer(did) && !this.mesh.isInvitee(did)) this.drop(did);
         }
+        // Someone just admitted gets the group's timer from every member linked to it.
+        this.syncTimer();
         // Files paused with someone who left the group never continue, linked now or not.
         if (this.groupId) {
           const prefix = groupResumePeer(this.groupId, "");
@@ -315,6 +321,11 @@ export class GroupSession {
         this.refresh();
         this.persist();
         this.maybeRequestPhoto();
+        // Settings that arrived while this device was still a candidate, now checked.
+        const early = this.earlyTimers;
+        this.earlyTimers = [];
+        for (const e of early) if (this.isMember(e.from)) void this.onTimer(e.from, e.text);
+        this.syncTimer();
       },
       removed: () => this.onRemoved(),
       error: (message) => this.notice(message),
@@ -464,7 +475,13 @@ export class GroupSession {
           await this.mesh.handle(contact.did, plaintext);
           this.persist();
         } else if (plaintext.startsWith(TIMER_MARK)) {
-          if (this.mesh.isKnownPeer(contact.did)) await this.onTimer(contact.did, plaintext);
+          // Only admitted members set the timer; an introduced candidate does not (isKnownPeer
+          // is wider). Before this device joined there is no list yet: hold the frame till then.
+          if (!this.mesh.state) {
+            if (this.earlyTimers.length < 16) this.earlyTimers.push({ from: contact.did, text: plaintext });
+          } else if (this.isMember(contact.did)) {
+            await this.onTimer(contact.did, plaintext);
+          }
         } else if (isFileFrame(plaintext)) {
           entry.files?.handleControl(plaintext);
         } else if (plaintext.startsWith(PHOTO_HEADER) || plaintext.startsWith(PHOTO_CHUNK)) {
@@ -480,8 +497,8 @@ export class GroupSession {
       link.send(await session.seal(LINK_PING));
     }).catch(() => undefined);
     // A member who missed a timer change (offline, a moved device) catches up on this link.
-    const setting = this.timer.current();
-    if (setting.at > 0) void this.sendOn(entry, TIMER_MARK + JSON.stringify(setting)).catch(() => undefined);
+    this.timerSentTo.delete(contact.did);
+    this.syncTimer();
     // Files the last link with this member left half-way continue here.
     void entry.files?.resume();
     this.refresh();
@@ -501,6 +518,7 @@ export class GroupSession {
     entry.files?.close();
     entry.link.close();
     this.links.delete(did);
+    this.timerSentTo.delete(did);
     this.mesh.detach(did);
     if (this.photoFrom === did) this.photoFrom = null;
     this.refresh();
@@ -601,11 +619,30 @@ export class GroupSession {
     return changed;
   }
 
+  private isMember(did: string): boolean {
+    return this.mesh.state?.members.some((m) => m.did === did) ?? false;
+  }
+
+  /** Sends the group's timer, once per link, to every linked member that has not had it. */
+  private syncTimer(): void {
+    const setting = this.timer.current();
+    if (setting.at === 0 || !this.view.joined) return;
+    const frame = TIMER_MARK + JSON.stringify(setting);
+    for (const [did, entry] of this.links) {
+      if (this.timerSentTo.has(did) || !this.isMember(did)) continue;
+      this.timerSentTo.add(did);
+      void this.sendOn(entry, frame).catch(() => this.timerSentTo.delete(did));
+    }
+  }
+
   private async onTimer(from: string, text: string): Promise<void> {
     if (from === this.myDid) return;
     const incoming = parseTimer(text);
     if (!incoming) return;
     const result = await this.timer.receive(incoming);
+    // A new setting: links already synced with the old one learn it from the sender.
+    if (result === "kept-ours") return;
+    for (const did of this.links.keys()) this.timerSentTo.add(did);
     if (result !== "changed-value") return;
     const name = this.mesh.peerName(from) ?? "Участник";
     if (incoming.ms) this.notice("{name} включи изчезващи съобщения: {time}.", { name, time: disappearLabel(incoming.ms) }, ["time"]);
