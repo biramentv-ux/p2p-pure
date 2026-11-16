@@ -252,6 +252,50 @@ describe("call controller: an offer rolled back during gathering (review)", () =
   });
 });
 
+describe("call controller: a new offer while our answer gathers (review)", () => {
+  beforeEach(() => vi.stubGlobal("MediaStream", TestStream));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("waits until the answer is sent, then makes its offer", async () => {
+    const { pc, ctl, sent } = await activeVideoCall();
+    const p = pc as unknown as {
+      iceGatheringState: string;
+      setRemoteDescription: (d: { type: string }) => Promise<void>;
+      setLocalDescription: () => Promise<void>;
+    };
+    p.setRemoteDescription = async (d) => {
+      if (d.type === "offer") pc.signalingState = "have-remote-offer";
+    };
+    p.setLocalDescription = async () => {
+      if (pc.signalingState === "have-remote-offer") {
+        pc.signalingState = "stable";
+        pc.localDescription = { type: "answer", sdp: "v=0 answer" };
+      } else {
+        pc.signalingState = "have-local-offer";
+        pc.localDescription = { type: "offer", sdp: "v=0 offer" };
+      }
+    };
+    const before = sent.length;
+    p.iceGatheringState = "gathering";
+    const answering = ctl.handle({ t: "sdp", type: "offer", sdp: "v=0 remote" } as CallSignal);
+    await vi.waitFor(() => expect(pc.localDescription?.type).toBe("answer"));
+    // The network changes while the answer gathers.
+    expect(ctl.restartIce("network")).toBe(true);
+    await Promise.resolve();
+    expect(pc.localDescription?.type).toBe("answer"); // not replaced by an offer yet
+    p.iceGatheringState = "complete";
+    pc.dispatchEvent(new Event("icegatheringstatechange"));
+    await answering;
+    await vi.waitFor(() => expect(sent.slice(before).filter((x) => x.t === "sdp").length).toBe(2));
+    const sdps = sent.slice(before).filter((x) => x.t === "sdp") as Array<{ type: string; sdp: string }>;
+    expect(sdps.map((x) => [x.type, x.sdp])).toEqual([
+      ["answer", "v=0 answer"],
+      ["offer", "v=0 offer"],
+    ]);
+    ctl.dispose();
+  });
+});
+
 describe("call controller: media opened after the call ended (Н6 review)", () => {
   beforeEach(() => vi.stubGlobal("MediaStream", TestStream));
   afterEach(() => vi.unstubAllGlobals());

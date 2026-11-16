@@ -87,6 +87,10 @@ export class CallController {
   private snap: CallSnapshot = { ...EMPTY };
   private polite = false;
   private makingOffer = false;
+  /** Our answer waits for ICE gathering: no new offer may replace it before it is sent. */
+  private answering = false;
+  /** Negotiation asked for while answering: run once the answer is out. */
+  private negotiationDeferred = false;
   private ignoreOffer = false;
   private settingRemoteAnswer = false;
   /** Caller only: our tracks are added after we answer the callee's first offer. */
@@ -520,6 +524,10 @@ export class CallController {
 
   private async negotiate(): Promise<void> {
     if (!this.negotiationEnabled || this.disposed) return;
+    if (this.answering) {
+      this.negotiationDeferred = true;
+      return;
+    }
     const pc = this.deps.pc;
     try {
       this.makingOffer = true;
@@ -561,10 +569,19 @@ export class CallController {
     if (this.ignoreOffer) return;
     this.negotiationEnabled = true;
     await pc.setRemoteDescription({ type, sdp });
-    await pc.setLocalDescription();
-    await waitForGathering(pc);
-    const desc = pc.localDescription;
-    if (desc) await this.deps.send({ t: "sdp", type: "answer", sdp: desc.sdp });
+    this.answering = true;
+    try {
+      await pc.setLocalDescription();
+      await waitForGathering(pc);
+      const desc = pc.localDescription;
+      if (desc) await this.deps.send({ t: "sdp", type: "answer", sdp: desc.sdp });
+    } finally {
+      this.answering = false;
+      if (this.negotiationDeferred) {
+        this.negotiationDeferred = false;
+        void this.negotiate();
+      }
+    }
     // Caller: the callee's offer is answered, so now our own tracks can be added.
     if (this.callerTracksPending && this.snap.local) {
       this.callerTracksPending = false;
