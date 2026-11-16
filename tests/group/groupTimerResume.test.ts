@@ -152,6 +152,32 @@ describe("disappearing messages in a group", () => {
     for (const m of [admin, alice, bob]) m.g.closeAll();
   });
 
+  it("a candidate linked during a timer change still gets it once admitted", async () => {
+    clock = Date.now();
+    const mk = (name: string): M => ({ p: person(name), g: null as unknown as GroupSession, store: new FileResumeStore() });
+    const admin = mk("Ани");
+    const alice = mk("Алиса");
+    const bob = mk("Боб");
+    admin.g = GroupSession.create(admin.p.keys, "g-cand", "К", "Ани", { now });
+    alice.g = new GroupSession(alice.p.keys, { now });
+    bob.g = new GroupSession(bob.p.keys, { now });
+    link(admin, alice);
+    await admin.g.invite(alice.p.did, "Алиса");
+    await until(() => alice.g.snapshot.joined, "alice");
+    // Bob is linked to both before admission, while the two members change the timer.
+    link(admin, bob);
+    link(alice, bob);
+    await alice.g.setTimer(HOUR);
+    await until(() => admin.g.snapshot.timerMs === HOUR, "admin");
+    await admin.g.setTimer(DAY_MS);
+    await until(() => alice.g.snapshot.timerMs === DAY_MS, "alice");
+    await quiet();
+    await admin.g.invite(bob.p.did, "Боб");
+    await until(() => bob.g.snapshot.joined, "bob joined");
+    await until(() => bob.g.snapshot.timerMs === DAY_MS, "bob gets the timer");
+    for (const m of [admin, alice, bob]) m.g.closeAll();
+  });
+
   it("a timer frame from someone who is not a member changes nothing", async () => {
     const { admin, alice, bob } = await trio();
     const stranger = person("Непознат");
@@ -224,6 +250,24 @@ describe("group files continue after a dropped link", () => {
     // Only one card on the sender's side.
     expect(admin.g.snapshot.messages.filter((m) => m.file).length).toBe(1);
     for (const m of [admin, alice, bob]) m.g.closeAll();
+  });
+
+  it("after this device is removed, closing its links parks nothing", async () => {
+    const { admin, alice, bob } = await trio();
+    const sending = bob.g.sendFile(new Blob([payload(CHUNK_BYTES * 40 + 5) as BlobPart]), "r.bin");
+    await until(() => alice.g.snapshot.transfers.some((t) => t.phase === "offer"), "alice offer");
+    await until(() => admin.g.snapshot.transfers.some((t) => t.phase === "offer"), "admin offer");
+    const tAdmin = admin.g.snapshot.transfers[0];
+    await admin.g.cancelFile(tAdmin.peer, tAdmin.id);
+    const ta = alice.g.snapshot.transfers[0];
+    await alice.g.acceptFile(ta.peer, ta.id);
+    await until(() => (alice.g.snapshot.transfers.find((t) => t.id === ta.id)?.done ?? 0) > 0, "moving");
+    await admin.g.remove(alice.p.did);
+    await until(() => alice.g.snapshot.removed, "alice removed");
+    alice.g.closeAll();
+    expect(alice.store.peers()).toEqual([]);
+    await sending.catch(() => undefined);
+    for (const m of [admin, bob]) m.g.closeAll();
   });
 
   it("a paused file with a member who is then removed never continues", async () => {

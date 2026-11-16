@@ -642,7 +642,9 @@ export class GroupSession {
     const result = await this.timer.receive(incoming);
     // A new setting: links already synced with the old one learn it from the sender.
     if (result === "kept-ours") return;
-    for (const did of this.links.keys()) this.timerSentTo.add(did);
+    // Only admitted members: a linked candidate cannot read group messages yet and still needs
+    // the setting from syncTimer() once it is admitted.
+    for (const did of this.links.keys()) if (this.isMember(did)) this.timerSentTo.add(did);
     if (result !== "changed-value") return;
     const name = this.mesh.peerName(from) ?? "Участник";
     if (incoming.ms) this.notice("{name} включи изчезващи съобщения: {time}.", { name, time: disappearLabel(incoming.ms) }, ["time"]);
@@ -814,7 +816,8 @@ export class GroupSession {
       MAX_GROUP_FILE_BYTES,
       // Asked when the link drops: a link made before joining has no group id yet, and then
       // a dropped link fails the transfer instead.
-      { store: this.resumeStore, peer: () => (this.groupId ? groupResumePeer(this.groupId, peer) : null) },
+      // After this device was removed nothing parks: the group's keys and files are gone.
+      { store: this.resumeStore, peer: () => (this.groupId && !this.view.removed ? groupResumePeer(this.groupId, peer) : null) },
     );
   }
 
