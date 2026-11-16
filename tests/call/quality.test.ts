@@ -230,6 +230,28 @@ describe("call controller: camera, screen, quality, handover (Н6)", () => {
   });
 });
 
+describe("call controller: an offer rolled back during gathering (review)", () => {
+  beforeEach(() => vi.stubGlobal("MediaStream", TestStream));
+  afterEach(() => vi.unstubAllGlobals());
+  it("is not sent; the answer that replaced it is not sent as an offer", async () => {
+    const { pc, ctl, sent } = await activeVideoCall();
+    const before = sent.length;
+    (pc as unknown as { iceGatheringState: string }).iceGatheringState = "gathering";
+    expect(ctl.restartIce("network")).toBe(true);
+    await vi.waitFor(() => expect(pc.signalingState).toBe("have-local-offer"));
+    // The polite side takes the other side's offer meanwhile and answers it.
+    pc.signalingState = "stable";
+    pc.localDescription = { type: "answer", sdp: "v=0 answer" };
+    (pc as unknown as { iceGatheringState: string }).iceGatheringState = "complete";
+    pc.dispatchEvent(new Event("icegatheringstatechange"));
+    await Promise.resolve();
+    await Promise.resolve();
+    const offers = sent.slice(before).filter((x) => x.t === "sdp" && (x as { type: string }).type === "offer");
+    expect(offers).toEqual([]);
+    ctl.dispose();
+  });
+});
+
 describe("call controller: media opened after the call ended (Н6 review)", () => {
   beforeEach(() => vi.stubGlobal("MediaStream", TestStream));
   afterEach(() => vi.unstubAllGlobals());

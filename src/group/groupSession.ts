@@ -32,7 +32,10 @@ import { bytesEqual } from "../p2p/invitation";
 import { bytesToBase64Url } from "../p2p/encoding";
 import { buildPhotoFrames, chunkCount, FRAME_MARK, PhotoReceiver, sanitizeText, sniffMime, toDataUrl } from "../p2p/photo";
 import {
+  cleanFileName,
+  DOWNLOAD_MIME,
   FileTransferError,
+  sniffInlineMime,
   FileTransfers,
   isFileFrame,
   MAX_GROUP_FILE_BYTES,
@@ -640,11 +643,13 @@ export class GroupSession {
     const incoming = parseTimer(text);
     if (!incoming) return;
     const result = await this.timer.receive(incoming);
-    // A new setting: links already synced with the old one learn it from the sender.
     if (result === "kept-ours") return;
-    // Only admitted members: a linked candidate cannot read group messages yet and still needs
-    // the setting from syncTimer() once it is admitted.
-    for (const did of this.links.keys()) if (this.isMember(did)) this.timerSentTo.add(did);
+    // A new winner: pass it on to every linked member but the sender. A member that came back
+    // may have reached only this device, and group messages are not forwarded. Members who
+    // already have it answer nothing ("kept-ours"), so this stops after one round.
+    this.timerSentTo.clear();
+    this.timerSentTo.add(from);
+    this.syncTimer();
     if (result !== "changed-value") return;
     const name = this.mesh.peerName(from) ?? "Участник";
     if (incoming.ms) this.notice("{name} включи изчезващи съобщения: {time}.", { name, time: disappearLabel(incoming.ms) }, ["time"]);
@@ -753,7 +758,13 @@ export class GroupSession {
     if (metas.length > 0 || paused > 0) {
       // One card in our own history, under an id of our own (each recipient got its own id).
       const meta: FileMeta = {
-        ...(metas[0] ?? { name, size: blob.size, mime: blob.type || "application/octet-stream" }),
+        // Nobody finished: describe the file the way FileTransfers.send() does, so the card
+        // passes validFileCard() when the history is loaded again.
+        ...(metas[0] ?? {
+          name: cleanFileName(name),
+          size: blob.size,
+          mime: sniffInlineMime(new Uint8Array(await blob.slice(0, 16).arrayBuffer())) ?? DOWNLOAD_MIME,
+        }),
         id: bytesToBase64Url(crypto.getRandomValues(new Uint8Array(8))),
       } as FileMeta;
       const card = await this.keepFile(meta, new Blob([blob], { type: meta.mime }));

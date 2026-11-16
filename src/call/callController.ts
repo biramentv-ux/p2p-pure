@@ -527,8 +527,11 @@ export class CallController {
       // After an ICE restart the new network's candidates are only in the description once
       // gathering is done (there is no trickle path): wait for it, briefly.
       await waitForGathering(pc);
+      // While we waited, the polite side may have rolled our offer back for the other side's
+      // offer and answered it: then there is no offer of ours left to send.
       const desc = pc.localDescription;
-      if (desc) await this.deps.send({ t: "sdp", type: "offer", sdp: desc.sdp });
+      if (!desc || desc.type !== "offer" || pc.signalingState !== "have-local-offer") return;
+      await this.deps.send({ t: "sdp", type: "offer", sdp: desc.sdp });
     } catch (err) {
       // An ICE restart offer that cannot leave (the old path is already gone) is not a call
       // failure: the person sees "reconnecting" and the chat's link reports the drop.

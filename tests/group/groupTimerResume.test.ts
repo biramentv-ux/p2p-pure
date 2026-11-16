@@ -178,6 +178,23 @@ describe("disappearing messages in a group", () => {
     for (const m of [admin, alice, bob]) m.g.closeAll();
   });
 
+  it("a setting that reaches one member is passed on to the members linked to it", async () => {
+    const { admin, alice, bob } = await trio();
+    // Bob is cut off from both, changes the timer alone, then comes back to Alice only.
+    bob.g.drop(admin.p.did);
+    bob.g.drop(alice.p.did);
+    admin.g.drop(bob.p.did);
+    alice.g.drop(bob.p.did);
+    await bob.g.setTimer(HOUR).catch(() => undefined);
+    if (bob.g.timerMs !== HOUR) return; // a mesh that refuses to send with no links: nothing to relay
+    await quiet();
+    expect(admin.g.snapshot.timerMs).toBe(0);
+    link(alice, bob);
+    await until(() => alice.g.snapshot.timerMs === HOUR, "alice gets it from bob");
+    await until(() => admin.g.snapshot.timerMs === HOUR, "admin gets it from alice");
+    for (const m of [admin, alice, bob]) m.g.closeAll();
+  });
+
   it("a timer frame from someone who is not a member changes nothing", async () => {
     const { admin, alice, bob } = await trio();
     const stranger = person("Непознат");
@@ -268,6 +285,38 @@ describe("group files continue after a dropped link", () => {
     expect(alice.store.peers()).toEqual([]);
     await sending.catch(() => undefined);
     for (const m of [admin, bob]) m.g.closeAll();
+  });
+
+  it("a paused file with a very long name still makes a card that loads again", async () => {
+    const { admin, alice, bob } = await trio();
+    const name = "д".repeat(250) + ".bin";
+    const sending = admin.g.sendFile(new Blob([payload(CHUNK_BYTES * 40 + 5) as BlobPart]), name);
+    await until(() => alice.g.snapshot.transfers.some((t) => t.phase === "offer"), "alice offer");
+    await until(() => bob.g.snapshot.transfers.some((t) => t.phase === "offer"), "bob offer");
+    const tb = bob.g.snapshot.transfers[0];
+    await bob.g.cancelFile(tb.peer, tb.id);
+    const ta = alice.g.snapshot.transfers[0];
+    let cut = false;
+    const off = alice.g.subscribe(() => {
+      const t = alice.g.snapshot.transfers.find((x) => x.id === ta.id);
+      if (!cut && t && t.phase === "moving" && t.done > 0) {
+        cut = true;
+        queueMicrotask(() => {
+          alice.g.drop(admin.p.did);
+          admin.g.drop(alice.p.did);
+        });
+      }
+    });
+    await alice.g.acceptFile(ta.peer, ta.id);
+    expect((await sending).paused).toBe(1);
+    off();
+    await admin.g.flush();
+    const saved = await loadGroupHistory(keyOf(admin.p), "g-timer");
+    const restored = new GroupSession(admin.p.keys, { history: saved });
+    const card = restored.snapshot.messages.find((m) => m.file)?.file;
+    expect(card?.name.length).toBeLessThanOrEqual(200);
+    expect(card?.mime).toBe("application/octet-stream");
+    for (const m of [admin, alice, bob, { g: restored }]) m.g.closeAll();
   });
 
   it("a paused file with a member who is then removed never continues", async () => {
