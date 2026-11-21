@@ -11,6 +11,30 @@
  */
 import { STUN_SERVERS, buildRtcConfiguration, getActiveTurn } from "./turnConfig";
 import type { PeerProtocol } from "./protocol";
+import { stripNativeLines } from "../native/endpoint";
+
+/**
+ * The native transport (П4, experiment) as PeerLink sees it: a second way to open. `parallel`
+ * starts it next to WebRTC; otherwise it runs only after WebRTC failed. It resolves with an
+ * open channel or rejects. src/native/nativeConnect.ts makes these.
+ */
+export interface NativeArm {
+  parallel: boolean;
+  start(): Promise<DatagramChannel>;
+  cancel(): void;
+}
+
+/** What PeerLink needs from the native channel (src/native/datagramLink.ts has it). */
+export interface DatagramChannel {
+  isOpen(): boolean;
+  send(text: string): void;
+  sendBinary(bytes: Uint8Array): Promise<void>;
+  waitForDrain(): Promise<void>;
+  onMessage(h: (text: string) => void): () => void;
+  onBinary(h: (bytes: Uint8Array) => void): () => void;
+  onClose(h: (reason: string) => void): () => void;
+  close(): void;
+}
 
 export const ICE_SERVERS: RTCIceServer[] = STUN_SERVERS;
 /** Pause sending while this many bytes wait in the browser's buffer (photos are many frames). */
@@ -46,9 +70,16 @@ export class PeerLink {
   /** Notified once when the link stops working after (or before) it opened. */
   private closeHandlers = new Set<(reason: string) => void>();
   private closeReason: string | null = null;
+  /** The native channel (П4) once it took over from WebRTC; null on a normal WebRTC link. */
+  private datagram: DatagramChannel | null = null;
+  private nativeArm: NativeArm | null = null;
+  private nativeAttempt: Promise<void> | null = null;
+  /** True once the WebRTC data channel opened (then a native/Tor attempt is no longer needed). */
+  private webrtcOpened = false;
 
-  private constructor() {
-    this.pc = new RTCPeerConnection(buildRtcConfiguration(getActiveTurn()));
+  /** `rtc`: a different configuration (П6 onion-only: nothing gathered); default STUN (+ TURN). */
+  private constructor(rtc?: RTCConfiguration) {
+    this.pc = new RTCPeerConnection(rtc ?? buildRtcConfiguration(getActiveTurn()));
     this.openPromise = new Promise<void>((resolve, reject) => {
       this.resolveOpen = resolve;
       this.rejectOpen = reject;
@@ -60,14 +91,17 @@ export class PeerLink {
       const state = this.pc.connectionState;
       if (state === "failed" || state === "closed") {
         this.rejectOpen(new PeerLinkError(`Connection ${state}. The network may block direct P2P.`));
+        // WebRTC never opened and a native/Tor way is still to try: the link is not over yet
+        // (waitForOpen tries it; if that fails too, the caller closes the link).
+        if (this.nativeArm && !this.webrtcOpened && !this.closed) return;
         this.notifyClose(`connection ${state}`);
       }
     };
   }
 
   /** Initiator side: creates the data channel and an offer with full ICE. */
-  static async createOffer(): Promise<{ link: PeerLink; sdp: string }> {
-    const link = new PeerLink();
+  static async createOffer(rtc?: RTCConfiguration): Promise<{ link: PeerLink; sdp: string }> {
+    const link = new PeerLink(rtc);
     link.attachChannel(link.pc.createDataChannel(DATA_CHANNEL_LABEL, { ordered: true }));
     const offer = await link.pc.createOffer();
     await link.pc.setLocalDescription(offer);
@@ -76,10 +110,10 @@ export class PeerLink {
   }
 
   /** Responder side: consumes an offer SDP and produces an answer with full ICE. */
-  static async createAnswer(offerSdp: string): Promise<{ link: PeerLink; sdp: string }> {
-    const link = new PeerLink();
+  static async createAnswer(offerSdp: string, rtc?: RTCConfiguration): Promise<{ link: PeerLink; sdp: string }> {
+    const link = new PeerLink(rtc);
     link.pc.ondatachannel = (ev) => link.attachChannel(ev.channel);
-    await link.pc.setRemoteDescription({ type: "offer", sdp: offerSdp });
+    await link.pc.setRemoteDescription({ type: "offer", sdp: stripNativeLines(offerSdp) });
     const answer = await link.pc.createAnswer();
     await link.pc.setLocalDescription(answer);
     const sdp = await link.gatheredSdp();
@@ -88,10 +122,68 @@ export class PeerLink {
 
   /** Initiator side: applies the responder's answer SDP. */
   async acceptAnswer(answerSdp: string): Promise<void> {
-    await this.pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+    await this.pc.setRemoteDescription({ type: "answer", sdp: stripNativeLines(answerSdp) });
   }
 
-  waitForOpen(timeoutMs = CONNECT_TIMEOUT_MS): Promise<void> {
+  /** True when the native transport (П4) carries this link: no WebRTC, so no calls. */
+  get native(): boolean {
+    return this.datagram !== null;
+  }
+
+  /**
+   * Gives the link the native transport as a second way to open (П4). With `parallel` it starts
+   * now, next to WebRTC; otherwise waitForOpen() starts it after WebRTC failed.
+   */
+  armNative(arm: NativeArm): void {
+    if (this.closed || this.datagram) return;
+    this.nativeArm = arm;
+    if (arm.parallel) this.startNative();
+  }
+
+  private startNative(): Promise<void> {
+    const arm = this.nativeArm;
+    if (!arm) return Promise.reject(new PeerLinkError("No native transport."));
+    this.nativeAttempt ??= arm.start().then((channel) => {
+      // WebRTC won meanwhile, or the link was closed: the native channel is not needed.
+      if (this.closed || this.channel?.readyState === "open") {
+        channel.close();
+        return;
+      }
+      this.adoptDatagram(channel);
+    });
+    this.nativeAttempt.catch(() => undefined);
+    return this.nativeAttempt;
+  }
+
+  /** The native channel takes over: WebRTC is closed quietly, the link opens on the channel. */
+  private adoptDatagram(channel: DatagramChannel): void {
+    this.datagram = channel;
+    this.pc.onconnectionstatechange = null;
+    if (this.channel) {
+      this.channel.onclose = null;
+      this.channel.onmessage = null;
+      this.channel.onopen = null;
+      this.channel = null;
+    }
+    this.pc.close();
+    channel.onMessage((text) => {
+      if (this.handlers.size === 0) {
+        this.pending.push(text);
+        return;
+      }
+      for (const h of [...this.handlers]) h(text);
+    });
+    channel.onBinary((bytes) => {
+      for (const h of [...this.binaryHandlers]) h(bytes);
+    });
+    channel.onClose((reason) => {
+      this.rejectOpen(new PeerLinkError("Native link closed."));
+      this.notifyClose(reason);
+    });
+    this.resolveOpen();
+  }
+
+  async waitForOpen(timeoutMs = CONNECT_TIMEOUT_MS): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(
@@ -99,14 +191,33 @@ export class PeerLink {
         timeoutMs,
       );
     });
-    return Promise.race([this.openPromise, timeout]).finally(() => clearTimeout(timer));
+    try {
+      // A parallel native attempt that wins also resolves openPromise (adoptDatagram).
+      await Promise.race([this.openPromise, timeout]);
+    } catch (err) {
+      if (!this.nativeArm || this.closed) throw err;
+      // WebRTC did not open: the native transport is the last try.
+      try {
+        await this.startNative();
+      } catch {
+        throw err; // keep WebRTC's error: the screen's diagnosis is about that network
+      }
+      if (!this.datagram) throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   isOpen(): boolean {
+    if (this.datagram) return this.datagram.isOpen();
     return this.channel?.readyState === "open";
   }
 
   send(text: string): void {
+    if (this.datagram) {
+      this.datagram.send(text);
+      return;
+    }
     if (!this.channel || this.channel.readyState !== "open") {
       throw new PeerLinkError("Data channel is not open.");
     }
@@ -115,6 +226,10 @@ export class PeerLink {
 
   /** Sends a binary message (an encrypted file chunk), then waits until the buffer drains. */
   async sendBinary(bytes: Uint8Array): Promise<void> {
+    if (this.datagram) {
+      await this.datagram.sendBinary(bytes);
+      return;
+    }
     if (!this.channel || this.channel.readyState !== "open") {
       throw new PeerLinkError("Data channel is not open.");
     }
@@ -129,6 +244,7 @@ export class PeerLink {
 
   /** Resolves when the outgoing buffer has drained enough to send more. */
   async waitForDrain(): Promise<void> {
+    if (this.datagram) return this.datagram.waitForDrain().catch(() => undefined);
     const ch = this.channel;
     if (!ch || ch.bufferedAmount < SEND_BUFFER_HIGH) return;
     await new Promise<void>((resolve) => {
@@ -179,6 +295,8 @@ export class PeerLink {
     if (this.closed) return;
     this.closed = true;
     this.rejectOpen(new PeerLinkError("Link closed."));
+    this.nativeArm?.cancel();
+    this.datagram?.close();
     this.channel?.close();
     this.pc.close();
   }
@@ -186,9 +304,13 @@ export class PeerLink {
   private attachChannel(channel: RTCDataChannel): void {
     this.channel = channel;
     channel.binaryType = "arraybuffer";
-    channel.onopen = () => this.resolveOpen();
+    channel.onopen = () => {
+      this.webrtcOpened = true;
+      this.resolveOpen();
+    };
     channel.onclose = () => {
       this.rejectOpen(new PeerLinkError("Data channel closed."));
+      if (this.nativeArm && !this.webrtcOpened && !this.closed) return;
       this.notifyClose("data channel closed");
     };
     channel.onmessage = (ev) => {

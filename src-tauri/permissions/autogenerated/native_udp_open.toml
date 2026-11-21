@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-udp-open"
+description = "Enables the native_udp_open command without any pre-configured scope."
+commands.allow = ["native_udp_open"]
+
+[[permission]]
+identifier = "deny-native-udp-open"
+description = "Denies the native_udp_open command without any pre-configured scope."
+commands.deny = ["native_udp_open"]

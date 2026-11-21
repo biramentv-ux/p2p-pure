@@ -473,6 +473,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             disabled={!connected || !call || (call.phase !== "idle" && call.phase !== "ended")}
             onClick={() => void callRef.current?.startCall("audio")}
             aria-label={t("Аудио разговор")}
+            title={link.native ? t("Разговорите не работят през експерименталния нативен транспорт.") : undefined}
           >
             {t("Аудио")}
           </button>
@@ -481,6 +482,7 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             disabled={!connected || !call || (call.phase !== "idle" && call.phase !== "ended")}
             onClick={() => void callRef.current?.startCall("video")}
             aria-label={t("Видео разговор")}
+            title={link.native ? t("Разговорите не работят през експерименталния нативен транспорт.") : undefined}
           >
             {t("Видео")}
           </button>

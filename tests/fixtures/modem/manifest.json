@@ -1,0 +1,44 @@
+[
+  {
+    "file": "sound-quiet-room.wav",
+    "kind": "sound",
+    "source": "synthetic",
+    "description": "quiet room, 16 kHz, SNR 30 dB",
+    "payloadHex": "345088e38daf03853a80a131223e5af60d813b35b890dd1da3ad3c29dd12fcfabf5f5ba823845ee27bdace00b446ee5ba4bfeeb9f3372313bc34653cfe2d6f6ebfe207abde79bf52615bdd8422301e78fe1eb545554cdd5812b04ddef133cfc870064fbec11963133c73b6479b7b09e4d9da8a5795763487",
+    "sampleRate": 16000
+  },
+  {
+    "file": "sound-office-echo.wav",
+    "kind": "sound",
+    "source": "synthetic",
+    "description": "office: echo 18 ms × 0.35, SNR 18 dB, 22.05 kHz with +80 ppm drift",
+    "payloadHex": "22c38aa462b196f63a1362cb64e0791c0f6a0732c2450ea50a970d6fdc6fbfeba01128258400a41f2c0af56e25c556c03779ed24479af36f5dc31ed4a09373e05d382856a5a4171cc61fbaa8973f9bb1b2d530e2d5a19e8e3259802b8bf5d08c282baafd1362a47c1bdb19e599d16f64874c84156eb67896",
+    "sampleRate": 22050
+  },
+  {
+    "file": "sound-phone-speaker.wav",
+    "kind": "sound",
+    "source": "synthetic",
+    "description": "phone speaker: gain wobble 30%, SNR 14 dB, 16 kHz",
+    "payloadHex": "b08bc1fcecb5afcd7d2885ebd0cfb5cf52981b75aae1697bebc246d548bb480e7d21ff1c75e91c7c706a11bc72bb2f3cd96df6f559ebf946b6516e26d1854a9c0c4de5bb88b29d18b18c1dd39549570e4068adace184cde106075f152d5881a031b280ff1735c0c5ac2d1e90f4d935955ce6b9edf2d4fe0d",
+    "sampleRate": 16000
+  },
+  {
+    "file": "light-desk-tilt.rgba.gz",
+    "kind": "light",
+    "source": "synthetic",
+    "description": "256×192, tilt 18°/−12°, noise σ 4",
+    "payloadHex": "4e9b7da6cc76f047e851ded5de43f8f7b56cef32a25fff98a158a28e0ef49d5debdfb8e690e4f3c7bf95cf26bde39f2f11a1a71e9eadd7a872b67364fd60a8bd89a11c6bef01e36ae1cc7ac6ffd15de021ad96ee592e47f2046d7f77119d001fa9a60f99b03af4d56385e7b966ec90ffa5fa510f6da9f55b",
+    "width": 256,
+    "height": 192
+  },
+  {
+    "file": "light-dim-warm.rgba.gz",
+    "kind": "light",
+    "source": "synthetic",
+    "description": "200×150, dim warm light, tilt −10°/14°, noise σ 3",
+    "payloadHex": "706e60d70d29716080e3e9d5e83c1b590c79a567be2edb0e956e2bc159f964622b34c64c4b56aa3f061499b2e5b2d53ca36fa0901cbd9186a4803bcc346ddf3b0b21a82ee4454c14981d6ef6cb67b7f45d80c54d0738058f073ff0ba7ff3707cce5a84b2f2609fe140be5bb3b820de1300fa9ac660aaf6ff",
+    "width": 200,
+    "height": 150
+  }
+]

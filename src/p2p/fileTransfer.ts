@@ -618,6 +618,8 @@ export class FileTransfers {
     } catch {
       return;
     }
+    // JSON.parse also returns null, numbers and arrays: only an object is a frame.
+    if (typeof o !== "object" || o === null || Array.isArray(o)) return;
     const { id, next } = o;
     if (typeof id !== "string" || !ID_RE.test(id)) return;
     // A repeated request (the receiver also answers our "W"): the file is already streaming.
@@ -695,6 +697,8 @@ export class FileTransfers {
     } catch {
       return;
     }
+    // JSON.parse also returns null, numbers and arrays: only an object is a frame.
+    if (typeof o !== "object" || o === null || Array.isArray(o)) return;
     const { id, name, size, mime, sha256: hash, key, n } = o;
     if (typeof id !== "string" || !ID_RE.test(id) || this.inc.has(id)) return;
     if (typeof name !== "string" || typeof hash !== "string" || typeof key !== "string") return;

@@ -7,7 +7,7 @@
 **Личен, децентрализиран, шифрован от край до край.**
 **A private, decentralised, end-to-end encrypted messenger.**
 
-[![Tests](https://img.shields.io/badge/unit_tests-1090%2B_passing-1f6fc4?style=for-the-badge)](#-тестове)
+[![Tests](https://img.shields.io/badge/unit_tests-1200%2B_passing-1f6fc4?style=for-the-badge)](#-тестове)
 [![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-13213a?style=for-the-badge)](#-тестове)
 [![Platforms](https://img.shields.io/badge/web_·_Windows_·_Linux_·_Android_·_iOS-PWA_+_Tauri_+_Electron_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
 [![Languages](https://img.shields.io/badge/app-BG_·_EN_·_RU_·_DE_·_ES_·_PT-d41b7f?style=for-the-badge)](#-език) [![Site](https://img.shields.io/badge/site-8_languages-0ea5e9?style=for-the-badge)](https://dyrakarmy.online/)
@@ -32,7 +32,7 @@
 > Съобщенията се шифроват на устройството и се пращат **директно** между хората през WebRTC.
 > Няма централен сървър, който пази съобщения, акаунти или телефонни номера.
 
-*Състояние към 21 ноември 2026: работеща PWA за уеб и телефон; програми за Windows (инсталатор, portable, winget) и Linux (.deb, .rpm, AppImage, Flatpak); подписан APK за Android; сайт с меню и сваляне на [dyrakarmy.online](https://dyrakarmy.online/) на 8 езика; интерфейс на 6 езика; седем начина за първа връзка (QR, кратък код с PAKE, Bluetooth, QR + звук, QR + светлина, запознаване чрез общ приятел, Telegram бот) — виж [docs/CONNECTING.md](docs/CONNECTING.md); тестове на всички нива. Изходният код е отворен, тук; изданията и сайтът се публикуват в публичното репо [p2p-pure-releases](https://github.com/biramentv-ux/p2p-pure-releases). iOS проектът и TestFlight workflow-ът са написани, но не са пускани с Apple акаунт.*
+*Състояние към 22 ноември 2026: работеща PWA за уеб и телефон; програми за Windows (инсталатор, portable, winget) и Linux (.deb, .rpm, AppImage, Flatpak); подписан APK за Android; сайт с меню и сваляне на [dyrakarmy.online](https://dyrakarmy.online/) на 8 езика; интерфейс на 6 езика; седем начина за първа връзка (QR, кратък код с PAKE, Bluetooth, QR + звук, QR + светлина, запознаване чрез общ приятел, Telegram бот) — виж [docs/CONNECTING.md](docs/CONNECTING.md); тестове на всички нива. Изходният код е отворен, тук; изданията и сайтът се публикуват в публичното репо [p2p-pure-releases](https://github.com/biramentv-ux/p2p-pure-releases). iOS проектът и TestFlight workflow-ът са написани, но не са пускани с Apple акаунт.*
 
 ## ✨ Какво може
 
@@ -105,6 +105,14 @@ flowchart LR
 
 <img src="docs/assets/tutorial-connect-bg.gif" alt="Анимация: 7 начина да се свържете. 1 QR лице в лице, 2 кратък код (демо стая), 3 Bluetooth, 4 QR + звук, 5 QR + светлина, 6 запознаване чрез общ приятел, 7 Telegram бот или копирана покана. После двамата сравняват 12-те думи" width="640">
 
+**Видео за всеки начин** (около 27 секунди, без звук; кликни картинката). На английски: [по-долу](#-tutorial-7-ways-to-connect).
+
+<table>
+<tr><td align="center"><a href="docs/public/assets/tutorial-qr-bg.mp4"><img src="docs/public/assets/tutorial-qr-bg.jpg" alt="QR лице в лице (видео урок)" width="200"></a><br><b>1. QR лице в лице</b></td><td align="center"><a href="docs/public/assets/tutorial-short-code-bg.mp4"><img src="docs/public/assets/tutorial-short-code-bg.jpg" alt="Кратък код (видео урок)" width="200"></a><br><b>2. Кратък код</b></td><td align="center"><a href="docs/public/assets/tutorial-bluetooth-bg.mp4"><img src="docs/public/assets/tutorial-bluetooth-bg.jpg" alt="Bluetooth (видео урок)" width="200"></a><br><b>3. Bluetooth</b></td><td align="center"><a href="docs/public/assets/tutorial-sound-bg.mp4"><img src="docs/public/assets/tutorial-sound-bg.jpg" alt="QR + звук (видео урок)" width="200"></a><br><b>4. QR + звук</b></td></tr>
+<tr><td align="center"><a href="docs/public/assets/tutorial-light-bg.mp4"><img src="docs/public/assets/tutorial-light-bg.jpg" alt="QR + светлина (видео урок)" width="200"></a><br><b>5. QR + светлина</b></td><td align="center"><a href="docs/public/assets/tutorial-introduction-bg.mp4"><img src="docs/public/assets/tutorial-introduction-bg.jpg" alt="Общ приятел (видео урок)" width="200"></a><br><b>6. Общ приятел</b></td><td align="center"><a href="docs/public/assets/tutorial-telegram-bg.mp4"><img src="docs/public/assets/tutorial-telegram-bg.jpg" alt="Telegram бот (видео урок)" width="200"></a><br><b>7. Telegram бот</b></td></tr>
+</table>
+
+
 1. **QR лице в лице.** „Локален (QR)“: единият показва QR, другият го сканира и показва свой QR в отговор. Без сървър.
 2. **Кратък код.** „Демо (стая)“: код от 5 знака и 3 думи, казан на глас. Сървърът вижда само номера на стаята.
 3. **Bluetooth.** Само в приложението: единият показва 4-знаков код, другият го избира от списъка.
@@ -113,7 +121,7 @@ flowchart LR
 6. **Общ приятел.** Той избира двама свои контакти с „Запознай двама“; и двамата приемат. Тримата трябва да са свързани едновременно.
 7. **Telegram бот / копирана покана.** Поканата (`p2p1:…`) се праща през бота или през какъвто канал искате.
 
-След всеки начин сравнете **12-те думи** по друг канал и натиснете „Думите съвпадат“. Сравнение на начините, сигурност и платформи: [docs/CONNECTING.md](docs/CONNECTING.md). Анимацията се прави със `node scripts/docs/tutorial-connect-gif.mjs`.
+След всеки начин сравнете **12-те думи** по друг канал и натиснете „Думите съвпадат“. Сравнение на начините, сигурност и платформи: [docs/CONNECTING.md](docs/CONNECTING.md). Анимацията се прави със `node scripts/docs/tutorial-connect-gif.mjs`, видеата със `MODE=video node scripts/docs/tutorial-connect-gif.mjs`.
 
 ### Пътят на Ани и Петър от край до край
 
@@ -281,6 +289,18 @@ bash install.sh              # или: bash install.sh --appimage  (само з�
 
 Разширението не събира данни; само отваря приложението.
 
+## 🧪 Експерименти (изключени по подразбиране)
+
+| | Какво е | Къде | Документ |
+|---|---|---|---|
+| **П4 Нативен транспорт** | Когато WebRTC не мине (restricted↔symmetric, symmetric↔symmetric NAT), собствени UDP сокети: порт от рутера (PCP, NAT-PMP, UPnP-IGD) и „рожденно“ пробиване с 256 сокета. ChaCha20-Poly1305 за всеки датаграм, отгоре същият Double Ratchet. | Electron, Tauri (`--features native-transport`), Android | [ADR-007](.10x/adrs/007-p4-native-transport.md), [PROTOCOL §9a](docs/PROTOCOL.md) |
+| **П5 Mesh** | Пакети през Bluetooth и Wi-Fi Aware от телефон на телефон, TTL ≤ 7, съхрани-и-препрати, сменящи се id. Кратки текстове през LoRa (Meshtastic). Без нов криптографски формат. | Ядро и Android плъгин; още без екран | [ADR-008](.10x/adrs/008-p5-mesh.md), [PROTOCOL §9c](docs/PROTOCOL.md) |
+| **П6 Само през Tor** | Arti в настолното приложение: връзка само между две onion услуги, в поканата няма IP адрес. | Tauri (`--features tor-transport`) | [ADR-009](.10x/adrs/009-p6-tor-onion-only.md), [PROTOCOL §9b](docs/PROTOCOL.md) |
+| **Н8 NAT лаборатория** | Linux namespaces с cone, restricted и symmetric NAT, загуба на пакети, локален STUN и два браузъра; ферма от телефони; грешката казва защо не става. | `sudo npm run test:natlab`, `npm run farm` | [docs/NAT-LAB.md](docs/NAT-LAB.md), [docs/DEVICE-FARM.md](docs/DEVICE-FARM.md) |
+| **Н9 Fuzz тестове** | fast-check върху всички парсери: никой вход не хвърля нещо извън определените грешки. | `npm run test:fuzz` | [ADR-006](.10x/adrs/006-n8-nat-lab-and-fuzzing.md) |
+
+Какво още не е проверено: Android и Windows обвивките на нативния транспорт и mesh радиото на истински телефони; Tor срещу истинската мрежа; IPv6 сценариите в лабораторията (вървят само в CI).
+
 ## ⚠️ Ограничения, които приемаме
 
 - **По подразбиране само публични STUN сървъри.** Приложението не включва TURN релей, затова строги NAT или корпоративни firewall-и може да блокират връзката. По избор можеш да въведеш **собствен** `turn:`/`turns:` сървър (раздел Идентичност, "собствен TURN релей"). Релеят вижда метаданни (IP адреси, време, размер), но не съдържанието, защото всичко е криптирано от край до край. Данните му се пазат само криптирани на устройството ([SECURITY.md](SECURITY.md)).
@@ -322,7 +342,7 @@ docs/               ръководства: начини за свързване
 
 | Команда | Какво проверява |
 |---|---|
-| `npm test` | Unit тестове: 1090+ теста |
+| `npm test` | Unit тестове: 1200+ теста |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Двама души в браузър: QR, 12 думи за проверка, шифрован обмен, replay защита |
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
@@ -330,6 +350,8 @@ docs/               ръководства: начини за свързване
 | `npm run test:pages` | Билдът за GitHub Pages под подпът `/p2p-pure/` (6 проверки) |
 | `npm run test:files` | Файлове между двама: GIF, 100 MB байт по байт, продължаване след прекъсване, лимит, отказ, HTML като изтегляне |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) на всички екрани, на двата езика |
+| `npm run test:fuzz` | fast-check върху парсерите (`FUZZ_RUNS=2000` за по-дълго) |
+| `sudo npm run test:natlab` | NAT лабораторията: WebRTC и нативният транспорт през истински NAT-ове в Linux |
 | `npm run test:call` | Аудио и видео разговор |
 | `npm run test:extension-browser` | Разширението в Chromium |
 
@@ -375,7 +397,7 @@ docs/               ръководства: начини за свързване
 > Messages are encrypted on the device and sent **directly** between people over WebRTC.
 > There is no central server that stores messages, accounts or phone numbers.
 
-*Status as of 21 November 2026: a working PWA for web and phone; apps for Windows (installer, portable, winget) and Linux (.deb, .rpm, AppImage, Flatpak); a signed Android APK; a website with menu and downloads at [dyrakarmy.online](https://dyrakarmy.online/en/) in 8 languages; an interface in 6 languages; seven ways to make the first connection (QR, short code with PAKE, Bluetooth, QR + sound, QR + light, introduction by a mutual friend, Telegram bot), see [docs/CONNECTING.md](docs/CONNECTING.md); tests at every level. The source code is open, here; releases and the site are published in the public [p2p-pure-releases](https://github.com/biramentv-ux/p2p-pure-releases) repository. The iOS project and TestFlight workflow are written but have not been run with an Apple account.*
+*Status as of 22 November 2026: a working PWA for web and phone; apps for Windows (installer, portable, winget) and Linux (.deb, .rpm, AppImage, Flatpak); a signed Android APK; a website with menu and downloads at [dyrakarmy.online](https://dyrakarmy.online/en/) in 8 languages; an interface in 6 languages; seven ways to make the first connection (QR, short code with PAKE, Bluetooth, QR + sound, QR + light, introduction by a mutual friend, Telegram bot), see [docs/CONNECTING.md](docs/CONNECTING.md); tests at every level. The source code is open, here; releases and the site are published in the public [p2p-pure-releases](https://github.com/biramentv-ux/p2p-pure-releases) repository. The iOS project and TestFlight workflow are written but have not been run with an Apple account.*
 
 ## ✨ What it does
 
@@ -448,6 +470,14 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 
 <img src="docs/assets/tutorial-connect-en.gif" alt="Animation: 7 ways to connect. 1 QR face to face, 2 short code (demo room), 3 Bluetooth, 4 QR + sound, 5 QR + light, 6 introduction by a mutual friend, 7 Telegram bot or copied invitation. Then both compare the 12 words" width="640">
 
+**A video for every method** (about 27 seconds, no sound; click the picture). In Bulgarian: [above](#-урок-7-начина-да-се-свържете).
+
+<table>
+<tr><td align="center"><a href="docs/public/assets/tutorial-qr-en.mp4"><img src="docs/public/assets/tutorial-qr-en.jpg" alt="QR, face to face (video tutorial)" width="200"></a><br><b>1. QR, face to face</b></td><td align="center"><a href="docs/public/assets/tutorial-short-code-en.mp4"><img src="docs/public/assets/tutorial-short-code-en.jpg" alt="Short code (video tutorial)" width="200"></a><br><b>2. Short code</b></td><td align="center"><a href="docs/public/assets/tutorial-bluetooth-en.mp4"><img src="docs/public/assets/tutorial-bluetooth-en.jpg" alt="Bluetooth (video tutorial)" width="200"></a><br><b>3. Bluetooth</b></td><td align="center"><a href="docs/public/assets/tutorial-sound-en.mp4"><img src="docs/public/assets/tutorial-sound-en.jpg" alt="QR + sound (video tutorial)" width="200"></a><br><b>4. QR + sound</b></td></tr>
+<tr><td align="center"><a href="docs/public/assets/tutorial-light-en.mp4"><img src="docs/public/assets/tutorial-light-en.jpg" alt="QR + light (video tutorial)" width="200"></a><br><b>5. QR + light</b></td><td align="center"><a href="docs/public/assets/tutorial-introduction-en.mp4"><img src="docs/public/assets/tutorial-introduction-en.jpg" alt="Mutual friend (video tutorial)" width="200"></a><br><b>6. Mutual friend</b></td><td align="center"><a href="docs/public/assets/tutorial-telegram-en.mp4"><img src="docs/public/assets/tutorial-telegram-en.jpg" alt="Telegram bot (video tutorial)" width="200"></a><br><b>7. Telegram bot</b></td></tr>
+</table>
+
+
 1. **QR, face to face.** "Local (QR)": one shows a QR, the other scans it and shows a QR back. No server.
 2. **Short code.** "Demo (room)": a code of 5 characters and 3 words, said aloud. The server sees only the room number.
 3. **Bluetooth.** App only: one phone shows a 4-character code, the other picks it from the list.
@@ -456,7 +486,7 @@ Signalling is separate from WebRTC (`src/signaling/`, interface `ISignalingProvi
 6. **Mutual friend.** They pick two of their contacts with "Introduce two people"; both accept. All three must be connected at the same time.
 7. **Telegram bot / copied invitation.** The invitation (`p2p1:…`) is sent through the bot or any channel you like.
 
-After any method, compare the **12 words** over another channel and tap "The words match". Comparison of the methods, security and platforms: [docs/CONNECTING.md](docs/CONNECTING.md). The animation is built with `node scripts/docs/tutorial-connect-gif.mjs`.
+After any method, compare the **12 words** over another channel and tap "The words match". Comparison of the methods, security and platforms: [docs/CONNECTING.md](docs/CONNECTING.md). The animation is built with `node scripts/docs/tutorial-connect-gif.mjs`, the videos with `MODE=video node scripts/docs/tutorial-connect-gif.mjs`.
 
 ### Ani and Petar, end to end
 
@@ -624,6 +654,18 @@ GPG signing and an `apt`/`dnf` repository (`bash install.sh --add-repo`) switch 
 
 The extension collects no data; it only opens the app.
 
+## 🧪 Experiments (off by default)
+
+| | What it is | Where | Document |
+|---|---|---|---|
+| **P4 Native transport** | When WebRTC can't get through (restricted↔symmetric, symmetric↔symmetric NAT), the app's own UDP sockets: a port from the router (PCP, NAT-PMP, UPnP-IGD) and "birthday" punching with 256 sockets. ChaCha20-Poly1305 per datagram, the same Double Ratchet on top. | Electron, Tauri (`--features native-transport`), Android | [ADR-007](.10x/adrs/007-p4-native-transport.md), [PROTOCOL §9a](docs/PROTOCOL.md) |
+| **P5 Mesh** | Packets over Bluetooth and Wi-Fi Aware from phone to phone, TTL ≤ 7, store and forward, rotating ids. Short texts over LoRa (Meshtastic). No new crypto format. | Core and Android plugin; no screen yet | [ADR-008](.10x/adrs/008-p5-mesh.md), [PROTOCOL §9c](docs/PROTOCOL.md) |
+| **P6 Tor only** | Arti in the desktop app: a link only between two onion services, no IP address in the invitation. | Tauri (`--features tor-transport`) | [ADR-009](.10x/adrs/009-p6-tor-onion-only.md), [PROTOCOL §9b](docs/PROTOCOL.md) |
+| **N8 NAT lab** | Linux namespaces with cone, restricted and symmetric NAT, packet loss, a local STUN and two browsers; a phone farm; the error says why it didn't connect. | `sudo npm run test:natlab`, `npm run farm` | [docs/NAT-LAB.md](docs/NAT-LAB.md), [docs/DEVICE-FARM.md](docs/DEVICE-FARM.md) |
+| **N9 Fuzz tests** | fast-check on every parser: no input throws anything but the defined errors. | `npm run test:fuzz` | [ADR-006](.10x/adrs/006-n8-nat-lab-and-fuzzing.md) |
+
+Not verified yet: the Android and Windows shells of the native transport and the mesh radio on real phones; Tor against the real network; the IPv6 lab scenarios (they run in CI only).
+
 ## ⚠️ Trade-offs we accept
 
 - **Public STUN servers only by default.** The app ships no TURN relay, so strict NATs or corporate firewalls may block the connection. Optionally you can enter **your own** `turn:`/`turns:` server (Identity tab, "own TURN relay"). A relay sees metadata (IP addresses, timing, sizes) but not content, because everything is end-to-end encrypted. Its credentials are stored only encrypted on the device ([SECURITY.md](SECURITY.md)).
@@ -665,7 +707,7 @@ docs/               guides: ways to connect, Windows, Linux, demo signalling, Bl
 
 | Command | What it checks |
 |---|---|
-| `npm test` | Unit tests: 1090+ tests |
+| `npm test` | Unit tests: 1200+ tests |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Two people in a browser: QR, 12 verification words, encrypted exchange, replay protection |
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |
@@ -673,6 +715,8 @@ docs/               guides: ways to connect, Windows, Linux, demo signalling, Bl
 | `npm run test:pages` | The GitHub Pages build under the `/p2p-pure/` sub-path (6 checks) |
 | `npm run test:files` | Files between two people: GIF, 100 MB byte for byte, resume after a drop, limit, decline, HTML as a download |
 | `npm run test:a11y` / `test:a11y:dark` | axe-core (WCAG 2.2 AA) on every screen, in both languages |
+| `npm run test:fuzz` | fast-check on the parsers (`FUZZ_RUNS=2000` for a longer run) |
+| `sudo npm run test:natlab` | The NAT lab: WebRTC and the native transport through real NATs on Linux |
 | `npm run test:call` | Audio and video call |
 | `npm run test:extension-browser` | The extension in Chromium |
 

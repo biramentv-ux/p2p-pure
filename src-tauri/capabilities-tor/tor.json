@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "tor-transport",
+  "description": "П6 (experiment): Tor commands for the main window; only in builds with --features tor-transport.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-tor-start",
+    "allow-tor-status",
+    "allow-tor-connect",
+    "allow-tor-send",
+    "allow-tor-close",
+    "allow-tor-recv"
+  ]
+}

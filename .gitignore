@@ -32,3 +32,8 @@ release-sbom
 
 # GIF tutorial work folder (scripts/docs/tutorial-connect-gif.mjs)
 tutorial-connect-work/
+dist-natlab/
+natlab-report.json
+scripts/devicefarm/farm.json
+scripts/devicefarm/.devicectl.json
+devicefarm-report.json

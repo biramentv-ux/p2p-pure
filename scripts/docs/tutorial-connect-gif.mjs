@@ -9,6 +9,10 @@
  * Env: CHROME_PATH, OUT_DIR (default docs/assets), LANGS=bg,en, WORK_DIR (keeps the per-frame PNGs there),
  *      HOLD (seconds per frame, default 2.8), COLORS (palette size, default 128).
  * The older scripts/docs/tutorial-gif.mjs (nine-step "far away" tutorial) is independent and still works.
+ *
+ * MODE=video: one MP4 per method and language instead (docs/public/assets/tutorial-<slug>-<lang>.mp4
+ * plus a .jpg poster): a title card for the method, its steps, the 12 words, "Connected". 2× pixels,
+ * HOLD 4.5 s by default (there is text to read), H.264 at -preset veryfast, +faststart. ADR-010.
  */
 import { createServer } from "vite";
 import { chromium } from "playwright-core";
@@ -22,7 +26,11 @@ const CHROME_PATH = process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium-1243/c
 const OUT_DIR = process.env.OUT_DIR ?? join(root, "docs/assets");
 const WORK = process.env.WORK_DIR ?? join(root, "tutorial-connect-work");
 const LANGS = (process.env.LANGS ?? "bg,en").split(",").map((s) => s.trim()).filter(Boolean);
-const HOLD = Number(process.env.HOLD ?? 2.8), FADE = 0.25, FPS = 6, COLORS = Number(process.env.COLORS ?? 128);
+const MODE = process.env.MODE ?? "gif";
+const VIDEO = MODE === "video";
+const HOLD = Number(process.env.HOLD ?? (VIDEO ? 4.5 : 2.8)), FADE = VIDEO ? 0.4 : 0.25, FPS = VIDEO ? 30 : 6, COLORS = Number(process.env.COLORS ?? 128);
+const VIDEO_DIR = process.env.VIDEO_DIR ?? join(root, "docs/public/assets");
+const SLUGS = ["qr", "short-code", "bluetooth", "sound", "light", "introduction", "telegram"];
 const W = 720, H = 616;
 mkdirSync(WORK, { recursive: true });
 mkdirSync(OUT_DIR, { recursive: true });
@@ -104,6 +112,10 @@ body{width:${W}px;height:${H}px;background:#f1f5fa;color:#13213a;font-family:San
 .meth b{width:28px;height:28px;border-radius:50%;background:#1f6fc4;color:#fff;font:500 14px/28px Mono;text-align:center;flex:none}
 .meth small{display:block;font:400 12px Sans;color:#5c6880;margin-top:1px}
 .end{position:absolute;top:110px;left:0;right:0;text-align:center}
+.mi{position:absolute;top:120px;left:60px;right:60px}
+.mi .n{width:84px;height:84px;border-radius:50%;background:#1f6fc4;color:#fff;font:500 40px/84px Mono;text-align:center;margin-bottom:22px}
+.mi h1{font:500 44px/1.1 Serif;color:#0c1628;margin-bottom:12px}.mi p{font-size:19px;line-height:1.45;color:#3d4a62;max-width:560px}
+.mi .foot{margin-top:28px}
 .end .big{width:96px;height:96px;margin:0 auto 18px;border:5px solid #d41b7f;border-radius:50%;display:flex;align-items:center;justify-content:center}
 .end .big:after{content:"";width:40px;height:40px;border:3px solid #d41b7f;border-radius:50%}
 .end h1{font:500 48px Serif;color:#0c1628;margin-bottom:10px}.end p{font-size:18px;color:#3d4a62;line-height:1.5;padding:0 60px}`;
@@ -272,18 +284,28 @@ function build(lang) {
   methods.forEach((m) => m.steps.forEach((s, k) => frames.push({ kind: "step", m, s, k, total: m.steps.length })));
   frames.push({ kind: "safety" });
   frames.push({ kind: "end" });
-  return { frames, T, L, nm };
+  return { frames, methods, T, L, nm };
 }
 
+
+function methodList(lang) {
+  return lang === "bg"
+    ? [["QR лице в лице", "два QR кода, без сървър"], ["Кратък код", "5 знака и 3 думи, отдалеч"], ["Bluetooth", "само в приложението"], ["QR + звук", "отговорът се чува"], ["QR + светлина", "отговорът се вижда"], ["Общ приятел", "запознава ви трети човек"], ["Telegram бот / копирана покана", "отдалеч, през какъвто канал искате"]]
+    : [["QR, face to face", "two QR codes, no server"], ["Short code", "5 characters and 3 words, remote"], ["Bluetooth", "app only"], ["QR + sound", "the reply is heard"], ["QR + light", "the reply is seen"], ["Mutual friend", "a third person introduces you"], ["Telegram bot / copied invitation", "remote, over any channel you like"]];
+}
 
 function pageHtml(lang, f) {
   const { T, L, nm } = build(lang);
   const dots = (cur, done) => `<div class="dots">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<i class="${n === cur ? "on" : n < done ? "done" : ""}">${n}</i>`).join("")}</div>`;
   const top = (cur, done) => `<div class="top"><b>${T("brand")} · ${L("как се свързват двама", "how two people connect")}</b>${dots(cur, done)}</div>`;
+  if (f.kind === "mintro") {
+    const [name, sub] = methodList(lang)[f.m.n - 1];
+    return `<!doctype html><meta charset=utf-8><style>${css}</style>${top(f.m.n, f.m.n)}
+    <div class="mi"><div class="n">${f.m.n}</div><h1>${name}</h1><p>${sub[0].toUpperCase() + sub.slice(1)}.</p>
+    <div class="foot">${L("Накрая двамата <b>сравняват 12 думи</b>.", "At the end both of you <b>compare 12 words</b>.")}</div></div>`;
+  }
   if (f.kind === "intro") {
-    const list = lang === "bg"
-      ? [["QR лице в лице", "два QR кода, без сървър"], ["Кратък код", "5 знака и 3 думи, отдалеч"], ["Bluetooth", "само в приложението"], ["QR + звук", "отговорът се чува"], ["QR + светлина", "отговорът се вижда"], ["Общ приятел", "запознава ви трети човек"], ["Telegram бот / копирана покана", "отдалеч, през какъвто канал искате"]]
-      : [["QR, face to face", "two QR codes, no server"], ["Short code", "5 characters and 3 words, remote"], ["Bluetooth", "app only"], ["QR + sound", "the reply is heard"], ["QR + light", "the reply is seen"], ["Mutual friend", "a third person introduces you"], ["Telegram bot / copied invitation", "remote, over any channel you like"]];
+    const list = methodList(lang);
     return `<!doctype html><meta charset=utf-8><style>${css}</style>${top(0, 0)}
     <div class="intro"><h1>${T("title7")}</h1><div class="sub">${T("sub7")}</div>
     <div class="meth">${list.map(([a, b], n) => `<div><b>${n + 1}</b><span>${a}<small>${b}</small></span></div>`).join("")}</div>
@@ -328,11 +350,10 @@ function pageHtml(lang, f) {
 }
 
 const browser = await chromium.launch({ executablePath: CHROME_PATH, headless: true, args: ["--no-sandbox", "--allow-file-access-from-files", "--force-color-profile=srgb"] });
-for (const lang of LANGS) {
-  const { frames } = build(lang);
-  const dir = join(WORK, lang);
+
+async function renderStills(lang, frames, dir, scale) {
   mkdirSync(dir, { recursive: true });
-  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, locale: lang === "bg" ? "bg-BG" : "en-GB" });
+  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: scale, locale: lang === "bg" ? "bg-BG" : "en-GB" });
   const pg = await ctx.newPage();
   for (let i = 0; i < frames.length; i++) {
     const f = join(dir, `f${String(i + 1).padStart(2, "0")}.html`);
@@ -342,17 +363,49 @@ for (const lang of LANGS) {
     await pg.screenshot({ path: join(dir, `f${String(i + 1).padStart(2, "0")}.png`) });
   }
   await ctx.close();
+}
 
-  // Stills -> crossfaded GIF, one shared palette.
-  const n = frames.length;
-  const inputs = frames.flatMap((_, i) => ["-loop", "1", "-t", String(HOLD + FADE), "-i", join(dir, `f${String(i + 1).padStart(2, "0")}.png`)]);
+function xfadeChain(n, w, h) {
   let chain = "";
-  frames.forEach((_, i) => { chain += `[${i}:v]scale=${W}:${H}:flags=lanczos,format=yuv420p,fps=${FPS}[v${i}];`; });
+  for (let i = 0; i < n; i++) chain += `[${i}:v]scale=${w}:${h}:flags=lanczos,format=yuv420p,fps=${FPS},setsar=1[v${i}];`;
   let prev = "[v0]";
   for (let i = 1; i < n; i++) {
     chain += `${prev}[v${i}]xfade=transition=fade:duration=${FADE}:offset=${(HOLD * i).toFixed(2)}[x${i}];`;
     prev = `[x${i}]`;
   }
+  return { chain, last: prev };
+}
+
+if (VIDEO) {
+  mkdirSync(VIDEO_DIR, { recursive: true });
+  for (const lang of LANGS) {
+    const { methods } = build(lang);
+    for (const m of methods) {
+      const frames = [{ kind: "mintro", m }, ...m.steps.map((s, k) => ({ kind: "step", m, s, k, total: m.steps.length })), { kind: "safety" }, { kind: "end" }];
+      const dir = join(WORK, `video-${lang}-${m.n}`);
+      await renderStills(lang, frames, dir, 2);
+      const png = (i) => join(dir, `f${String(i + 1).padStart(2, "0")}.png`);
+      const inputs = frames.flatMap((_, i) => ["-loop", "1", "-t", String(HOLD + FADE), "-i", png(i)]);
+      const { chain, last } = xfadeChain(frames.length, W * 2, H * 2);
+      const out = join(VIDEO_DIR, `tutorial-${SLUGS[m.n - 1]}-${lang}.mp4`);
+      execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", chain.replace(/;$/, "") , "-map", last, "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-tune", "stillimage", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", out], { stdio: "inherit" });
+      execFileSync("ffmpeg", ["-v", "error", "-y", "-i", png(2), "-vf", `scale=${W}:-2`, "-q:v", "4", out.replace(/\.mp4$/, ".jpg")], { stdio: "inherit" });
+      console.log("wrote", out, readFileSync(out).length, "bytes;", frames.length, "frames");
+    }
+  }
+  await browser.close();
+  process.exit(0);
+}
+
+for (const lang of LANGS) {
+  const { frames } = build(lang);
+  const dir = join(WORK, lang);
+  await renderStills(lang, frames, dir, 1);
+
+  // Stills -> crossfaded GIF, one shared palette.
+  const n = frames.length;
+  const inputs = frames.flatMap((_, i) => ["-loop", "1", "-t", String(HOLD + FADE), "-i", join(dir, `f${String(i + 1).padStart(2, "0")}.png`)]);
+  let { chain, last: prev } = xfadeChain(n, W, H);
   chain += `${prev}split[a][b];[a]palettegen=max_colors=${COLORS}:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle`;
   const out = join(OUT_DIR, `tutorial-connect-${lang}.gif`);
   execFileSync("ffmpeg", ["-v", "error", "-y", ...inputs, "-filter_complex", chain, "-loop", "0", out], { stdio: "inherit" });

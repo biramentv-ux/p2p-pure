@@ -13,7 +13,7 @@ import {
   type Invitation,
 } from "../../p2p/invitation";
 import { PeerLink, PeerLinkError, CONNECT_TIMEOUT_MS } from "../../p2p/peer";
-import { describeReachability, reachability, summarizeCandidates } from "../../p2p/network";
+import { describeFailure, describeReachability, diagnoseFailure, summarizeCandidates } from "../../p2p/network";
 import { completeHandshake } from "../../p2p/session";
 import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "../../p2p/secureSession";
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
@@ -34,6 +34,8 @@ import { SoundPairingPanel } from "../components/SoundPairingPanel";
 import { LightPairingPanel } from "../components/LightPairingPanel";
 import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
 import type { Rendezvous } from "../../rendezvous/rendezvous";
+import { armNativeLink, dropNative, prepareNative, withNative, type NativePrep } from "../../native/nativePairing";
+import { armTorLink, prepareTor, TOR_ONLY_RTC, torMismatch, torOnlyEnabled, withOnion, type TorPrep } from "../../tor/torPairing";
 
 export interface ConnectedResult {
   contact: Contact;
@@ -152,6 +154,12 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
   const ephemeralRef = useRef<EphemeralKeyPair | null>(null);
   /** Our own SDP, kept so a failed connection can explain this network's reachability. */
   const mySdpRef = useRef<string | null>(null);
+  /** The other side's SDP (from its invitation or answer), for the failure diagnosis. */
+  const peerSdpRef = useRef<string | null>(null);
+  /** П4 (experiment): our native endpoint, until the link is armed with it (native shells only). */
+  const nativeRef = useRef<NativePrep | null>(null);
+  /** П6 (experiment): our onion address in onion-only mode (desktop app with Tor only). */
+  const torRef = useRef<TorPrep | null>(null);
   const busyRef = useRef(false);
   // Offline signaling: generated offers and answers come back through the provider.
   const providerRef = useRef<OfflineSignalingProvider | null>(null);
@@ -227,6 +235,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
   useEffect(() => {
     return () => {
       if (!doneRef.current) linkRef.current?.close();
+      dropNative(nativeRef.current);
     };
   }, []);
 
@@ -243,31 +252,42 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
     mySdpRef.current = null;
     offerRef.current = null;
     ephemeralRef.current = null;
+    peerSdpRef.current = null;
+    dropNative(nativeRef.current);
+    nativeRef.current = null;
+    torRef.current = null;
     compactAnswerRef.current = null;
     busyRef.current = false;
   }
 
   function fail(err: unknown) {
     const mySdp = mySdpRef.current;
+    const peerSdp = peerSdpRef.current;
+    const viaTor = torRef.current !== null;
     clearAll();
     mySdpRef.current = null;
+    peerSdpRef.current = null;
     let message: string;
     if (err instanceof PakeError) {
       message = pakeErrorMessage(err);
+    } else if (err instanceof PeerLinkError && viaTor) {
+      message = t("Връзката през Tor не се установи навреме. Двамата трябва да са в режим „Само през Tor“ и с отворено приложение; публикуването на onion адреса понякога отнема няколко минути.");
     } else if (err instanceof PeerLinkError && mySdp) {
-      // Timeouts and closed channels: say what it usually means and what to try next.
-      const summary = summarizeCandidates(mySdp);
+      // Timeouts and closed channels: say why, from both sides' candidates, and what to try next.
+      const cause = diagnoseFailure(mySdp, peerSdp);
       message =
-        reachability(summary) === "relay"
+        cause === "relay"
           ? [
               t("Връзката не се установи и през TURN релея. Провери адреса, потребителя и паролата му в раздел Идентичност."),
               t("Ако и другото устройство е зад строга мрежа, то също може да има нужда от релей."),
             ].join(" ")
-          : [
-              t("Връзката не се установи навреме. Мрежата може да блокира директната връзка."),
-              t(describeReachability(summary)),
-              t("Опитайте с една Wi-Fi мрежа за първото сдвояване."),
-            ].join(" ");
+          : cause === "unknown"
+            ? [
+                t("Връзката не се установи навреме. Мрежата може да блокира директната връзка."),
+                t(describeReachability(summarizeCandidates(mySdp))),
+                t("Опитайте с една Wi-Fi мрежа за първото сдвояване."),
+              ].join(" ")
+            : t(describeFailure(cause));
     } else {
       message = err instanceof Error ? t(err.message) : t("Неизвестна грешка при свързване.");
     }
@@ -317,18 +337,30 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
     setView({ k: "confirm", peerPublicKey, words, link, session });
   }
 
+  /** П6: onion-only on and Tor in this shell: start Tor first (the first time takes up to a minute). */
+  async function prepareTorIfOn(): Promise<TorPrep | null> {
+    if (!torOnlyEnabled()) return null;
+    setView({ k: "busy", label: t("Свързвам се с мрежата Tor… Първия път отнема до минута.") });
+    return prepareTor();
+  }
+
   /* ---------- Initiator: show offer, then scan answer ---------- */
 
   async function startAsInitiator() {
     setError(null);
     setView({ k: "busy", label: t("Подготвям покана…") });
     try {
-      const { link, sdp } = await PeerLink.createOffer();
+      const tor = await prepareTorIfOn();
+      const { link, sdp } = await PeerLink.createOffer(tor ? TOR_ONLY_RTC : undefined);
       linkRef.current = link;
       mySdpRef.current = sdp;
+      torRef.current = tor;
+      // Sound and light carry the answer compactly, without room for the native line. Onion-only
+      // never uses it: it would show the public address.
+      nativeRef.current = tor || compactVia(mode) ? null : await prepareNative();
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;
-      const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
+      const offer = createInvitation("offer", withOnion(withNative(sdp, nativeRef.current), tor), identity.keyPair, eph.publicKey);
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
       pendingHexRef.current = await encodeInvitationHex(offer);
@@ -355,12 +387,17 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
     setError(null);
     setView({ k: "busy", label: t("Подготвям покана…") });
     try {
-      const { link, sdp } = await PeerLink.createOffer();
+      const tor = await prepareTorIfOn();
+      const { link, sdp } = await PeerLink.createOffer(tor ? TOR_ONLY_RTC : undefined);
       linkRef.current = link;
       mySdpRef.current = sdp;
+      torRef.current = tor;
+      // Sound and light carry the answer compactly, without room for the native line. Onion-only
+      // never uses it: it would show the public address.
+      nativeRef.current = tor || compactVia(mode) ? null : await prepareNative();
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;
-      const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
+      const offer = createInvitation("offer", withOnion(withNative(sdp, nativeRef.current), tor), identity.keyPair, eph.publicKey);
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
       setView({ k: "busy", label: t("Търся {name} през интернет… Приложението трябва да е отворено и при него.", { name: expected.name }), cancellable: true });
@@ -425,6 +462,24 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
       throw new InvitationError("Този отговор не е за тази покана.", "INVALID_FIELD");
     }
     setView({ k: "busy", label: t("Свързвам…") });
+    peerSdpRef.current = answer.sdp;
+    const torProblem = torMismatch(torRef.current, answer.sdp);
+    if (torProblem) throw new Error(t(torProblem));
+    armTorLink(link, torRef.current, {
+      side: "A",
+      peerSdp: answer.sdp,
+      myEphemeralSecret: eph.secretKey,
+      peerEphemeralPublic: answer.ephemeralPublicKey,
+      offerNonce: offer.nonce,
+    });
+    armNativeLink(link, nativeRef.current, {
+      side: "A",
+      peerSdp: answer.sdp,
+      myEphemeralSecret: eph.secretKey,
+      peerEphemeralPublic: answer.ephemeralPublicKey,
+      offerNonce: offer.nonce,
+    });
+    nativeRef.current = null; // the link owns the socket now (or it was closed)
     await link.acceptAnswer(answer.sdp);
     await completeHandshake(link, identity.did, answer.publicKey, CONNECT_TIMEOUT_MS);
     const session = SecureSession.derive({
@@ -589,12 +644,33 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
       // Over Bluetooth the panel stays on screen until it has sent the answer back.
       const ble = bleAnswerRef.current;
       if (!ble) setView({ k: "busy", label: t("Подготвям отговор…") });
-      const { link, sdp } = await PeerLink.createAnswer(offer.sdp);
+      peerSdpRef.current = offer.sdp;
+      const tor = await prepareTorIfOn();
+      const torProblem = torMismatch(tor, offer.sdp);
+      if (torProblem) throw new Error(t(torProblem));
+      const { link, sdp } = await PeerLink.createAnswer(offer.sdp, tor ? TOR_ONLY_RTC : undefined);
       mySdpRef.current = sdp;
       linkRef.current = link;
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;
-      const answer = createInvitation("answer", sdp, identity.keyPair, eph.publicKey, {
+      // П6: onion-only, both sides: the link opens over the two onion services.
+      armTorLink(link, tor, {
+        side: "B",
+        peerSdp: offer.sdp,
+        myEphemeralSecret: eph.secretKey,
+        peerEphemeralPublic: offer.ephemeralPublicKey,
+        offerNonce: offer.nonce,
+      });
+      // П4: only when the offer carries a native endpoint and the answer can carry ours.
+      const native = !tor && !compactVia(mode) && /a=x-p2p-native:/.test(offer.sdp) ? await prepareNative() : null;
+      armNativeLink(link, native, {
+        side: "B",
+        peerSdp: offer.sdp,
+        myEphemeralSecret: eph.secretKey,
+        peerEphemeralPublic: offer.ephemeralPublicKey,
+        offerNonce: offer.nonce,
+      });
+      const answer = createInvitation("answer", withOnion(withNative(sdp, native), tor), identity.keyPair, eph.publicKey, {
         answersNonce: offer.nonce,
       });
       const payload = await encodeInvitation(answer);

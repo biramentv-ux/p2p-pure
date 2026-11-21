@@ -4,11 +4,13 @@
  */
 import { PROTECT_DE } from "./protect";
 import { GROUP_TIMER_DE } from "./groupTimer";
+import { NATIVE_NET_DE } from "./nativeNet";
 import { CONNECT_DE } from "./connectCalls";
 
 export const DE_DICTIONARY: Record<string, string> = {
   ...PROTECT_DE,
   ...GROUP_TIMER_DE,
+  ...NATIVE_NET_DE,
   ...CONNECT_DE,
   "Премести на ново устройство": "Auf neues Gerät umziehen",
   "Имам друго устройство": "Ich habe ein anderes Gerät",

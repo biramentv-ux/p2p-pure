@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tor-connect"
+description = "Enables the tor_connect command without any pre-configured scope."
+commands.allow = ["tor_connect"]
+
+[[permission]]
+identifier = "deny-tor-connect"
+description = "Denies the tor_connect command without any pre-configured scope."
+commands.deny = ["tor_connect"]

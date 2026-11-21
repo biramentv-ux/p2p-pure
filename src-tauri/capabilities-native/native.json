@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "native-transport",
+  "description": "П4 (experiment, only in builds with --features native-transport): UDP sockets, SSDP and LAN HTTP for the native transport.",
+  "windows": ["main"],
+  "permissions": [
+    "allow-native-udp-open",
+    "allow-native-udp-send",
+    "allow-native-udp-close",
+    "allow-native-udp-recv",
+    "allow-native-ssdp",
+    "allow-native-lan-http"
+  ]
+}

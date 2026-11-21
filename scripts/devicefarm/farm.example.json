@@ -1,0 +1,9 @@
+{
+  "devices": [
+    { "name": "android10", "platform": "android", "os": "Android 10", "serial": "R58M12345AB", "network": "home Wi-Fi" },
+    { "name": "android14", "platform": "android", "os": "Android 14", "serial": "33081FDH2000AB", "network": "mobile data (carrier A)" },
+    { "name": "android16", "platform": "android", "os": "Android 16", "serial": "4C101FDAP000CD", "network": "mobile data (carrier B)" },
+    { "name": "iphone-ios18", "platform": "ios", "os": "iOS 18", "udid": "00008110-001234567890801E", "network": "guest Wi-Fi" },
+    { "name": "iphone-ios26", "platform": "ios", "os": "iOS 26", "udid": "00008120-0009876543210ABC", "network": "IPv6-only mobile data" }
+  ]
+}

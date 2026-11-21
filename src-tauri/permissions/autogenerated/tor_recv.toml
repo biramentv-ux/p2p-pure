@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tor-recv"
+description = "Enables the tor_recv command without any pre-configured scope."
+commands.allow = ["tor_recv"]
+
+[[permission]]
+identifier = "deny-tor-recv"
+description = "Denies the tor_recv command without any pre-configured scope."
+commands.deny = ["tor_recv"]

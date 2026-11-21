@@ -741,3 +741,12 @@ main > section { position: relative; max-width: var(--wrap); margin: 0 auto; pad
   .grain { display: none; }
   .track { animation: none; flex-wrap: wrap; width: auto; justify-content: center; padding: 0 var(--gut); }
 }
+
+/* video tutorials (ADR-010) and experiments */
+.vids { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.vid { margin: 0; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.vid video { display: block; width: 100%; height: auto; aspect-ratio: 720 / 616; border-radius: 10px; background: var(--surface-2, #e6eef8); }
+.vid figcaption { font-weight: 600; display: flex; gap: 8px; align-items: baseline; padding: 0 4px 4px; }
+.exps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.exp { padding: 18px 18px 22px; }
+.exp h3 { margin: 0 0 8px; }

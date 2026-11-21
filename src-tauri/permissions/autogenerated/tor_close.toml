@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tor-close"
+description = "Enables the tor_close command without any pre-configured scope."
+commands.allow = ["tor_close"]
+
+[[permission]]
+identifier = "deny-tor-close"
+description = "Denies the tor_close command without any pre-configured scope."
+commands.deny = ["tor_close"]

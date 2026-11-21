@@ -4,11 +4,13 @@
  */
 import { PROTECT_RU } from "./protect";
 import { GROUP_TIMER_RU } from "./groupTimer";
+import { NATIVE_NET_RU } from "./nativeNet";
 import { CONNECT_RU } from "./connectCalls";
 
 export const RU_DICTIONARY: Record<string, string> = {
   ...PROTECT_RU,
   ...GROUP_TIMER_RU,
+  ...NATIVE_NET_RU,
   ...CONNECT_RU,
   "Премести на ново устройство": "Перенести на новое устройство",
   "Имам друго устройство": "У меня есть другое устройство",

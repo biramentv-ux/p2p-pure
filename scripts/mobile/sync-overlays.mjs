@@ -29,6 +29,26 @@ const MEDIA_PERMISSIONS = [
 // Lint (PermissionImpliesUnsupportedChromeOsHardware): a permission that implies
 // hardware needs a uses-feature tag. required="false" keeps the app installable
 // on devices without the hardware (Chrome OS, tablets without a camera).
+// П4/П5 experiments: SSDP multicast for UPnP port mapping (NativeNetPlugin) and Wi-Fi Aware
+// for the mesh (MeshRadioPlugin). Both idle unless the experiment is turned on in Settings.
+const EXPERIMENT_MANIFEST = [
+  {
+    needle: 'android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"',
+    line: '    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />',
+  },
+  {
+    needle: 'android:name="android.permission.ACCESS_WIFI_STATE"',
+    line: '    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />',
+  },
+  {
+    needle: 'android:name="android.permission.CHANGE_WIFI_STATE"',
+    line: '    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />',
+  },
+  {
+    needle: 'android:name="android.permission.NEARBY_WIFI_DEVICES"',
+    line: '    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />',
+  },
+];
 const MEDIA_FEATURES = [
   '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
   '    <uses-feature android:name="android.hardware.microphone" android:required="false" />',
@@ -148,6 +168,15 @@ function syncAndroid() {
       '<uses-permission android:name="android.permission.INTERNET" />',
       [perm],
       `manifest ${name.split(".").pop()}`,
+    );
+  }
+  for (const { needle, line } of EXPERIMENT_MANIFEST) {
+    ensureLine(
+      "android/app/src/main/AndroidManifest.xml",
+      needle,
+      '<uses-permission android:name="android.permission.INTERNET" />',
+      [line],
+      `manifest ${/android:name="[^"]*?([^."]+)"/.exec(needle)[1]}`,
     );
   }
   for (const { needle, line } of BLE_MANIFEST) {
