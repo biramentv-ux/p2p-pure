@@ -16,11 +16,22 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 # serde is already in the tree through tauri; the native commands (feature below) use its derive.
 serde = { version = "1", features = ["derive"], optional = true }
+# П6 (experiment, feature tor-transport): Arti, the Tor implementation in Rust, with onion services.
+arti-client = { version = "0.48", default-features = false, features = ["tokio", "rustls", "compression", "onion-service-client", "onion-service-service", "static-sqlite"], optional = true }
+tor-hsservice = { version = "0.48", optional = true }
+tor-cell = { version = "0.48", optional = true }
+tor-proto = { version = "0.48", optional = true }
+tor-rtcompat = { version = "0.48", optional = true }
+safelog = { version = "0.10", optional = true }
+futures = { version = "0.3", optional = true }
+tokio = { version = "1", features = ["sync", "time"], optional = true }
 
 [features]
 default = []
 # П4 (experiment): UDP sockets, SSDP and LAN HTTP for the native transport (src/native/bridge.ts).
 native-transport = ["dep:serde"]
+# П6 (experiment): Tor onion services through Arti (src/tor/*.ts). Large: not in the release builds.
+tor-transport = ["native-transport", "dep:arti-client", "dep:tor-hsservice", "dep:tor-cell", "dep:tor-proto", "dep:tor-rtcompat", "dep:safelog", "dep:futures", "dep:tokio"]
 
 # Windows Hello (KeyCredentialManager). Same version tauri already pulls in, so no new crate.
 [target.'cfg(windows)'.dependencies]

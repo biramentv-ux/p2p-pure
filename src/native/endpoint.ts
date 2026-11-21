@@ -26,7 +26,11 @@ const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]
 
 export function addNativeLine(sdp: string, e: NativeEndpoint): string {
   if (!IPV4.test(e.host) || !Number.isInteger(e.port) || e.port < 1 || e.port > 65535) throw new Error("bad native endpoint");
-  const body = stripNativeLines(sdp).replace(/\r?\n$/, "");
+  const body = sdp
+    .split(/(?<=\n)/)
+    .filter((l) => !l.startsWith("a=x-p2p-native:"))
+    .join("")
+    .replace(/\r?\n$/, "");
   return `${body}\r\n${PREFIX}${e.host} ${e.port} ${e.nat}\r\n`;
 }
 
@@ -42,11 +46,12 @@ export function readNativeLine(sdp: string): NativeEndpoint | null {
   return null;
 }
 
+/** Removes our own lines (native endpoint, П4; onion address, П6) before WebRTC sees the SDP. */
 export function stripNativeLines(sdp: string): string {
-  if (!sdp.includes("a=x-p2p-native:")) return sdp;
+  if (!sdp.includes("a=x-p2p-")) return sdp;
   return sdp
     .split(/(?<=\n)/)
-    .filter((l) => !l.startsWith("a=x-p2p-native:"))
+    .filter((l) => !l.startsWith("a=x-p2p-native:") && !l.startsWith("a=x-p2p-onion:"))
     .join("");
 }
 

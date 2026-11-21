@@ -74,9 +74,12 @@ export class PeerLink {
   private datagram: DatagramChannel | null = null;
   private nativeArm: NativeArm | null = null;
   private nativeAttempt: Promise<void> | null = null;
+  /** True once the WebRTC data channel opened (then a native/Tor attempt is no longer needed). */
+  private webrtcOpened = false;
 
-  private constructor() {
-    this.pc = new RTCPeerConnection(buildRtcConfiguration(getActiveTurn()));
+  /** `rtc`: a different configuration (П6 onion-only: nothing gathered); default STUN (+ TURN). */
+  private constructor(rtc?: RTCConfiguration) {
+    this.pc = new RTCPeerConnection(rtc ?? buildRtcConfiguration(getActiveTurn()));
     this.openPromise = new Promise<void>((resolve, reject) => {
       this.resolveOpen = resolve;
       this.rejectOpen = reject;
@@ -88,14 +91,17 @@ export class PeerLink {
       const state = this.pc.connectionState;
       if (state === "failed" || state === "closed") {
         this.rejectOpen(new PeerLinkError(`Connection ${state}. The network may block direct P2P.`));
+        // WebRTC never opened and a native/Tor way is still to try: the link is not over yet
+        // (waitForOpen tries it; if that fails too, the caller closes the link).
+        if (this.nativeArm && !this.webrtcOpened && !this.closed) return;
         this.notifyClose(`connection ${state}`);
       }
     };
   }
 
   /** Initiator side: creates the data channel and an offer with full ICE. */
-  static async createOffer(): Promise<{ link: PeerLink; sdp: string }> {
-    const link = new PeerLink();
+  static async createOffer(rtc?: RTCConfiguration): Promise<{ link: PeerLink; sdp: string }> {
+    const link = new PeerLink(rtc);
     link.attachChannel(link.pc.createDataChannel(DATA_CHANNEL_LABEL, { ordered: true }));
     const offer = await link.pc.createOffer();
     await link.pc.setLocalDescription(offer);
@@ -104,8 +110,8 @@ export class PeerLink {
   }
 
   /** Responder side: consumes an offer SDP and produces an answer with full ICE. */
-  static async createAnswer(offerSdp: string): Promise<{ link: PeerLink; sdp: string }> {
-    const link = new PeerLink();
+  static async createAnswer(offerSdp: string, rtc?: RTCConfiguration): Promise<{ link: PeerLink; sdp: string }> {
+    const link = new PeerLink(rtc);
     link.pc.ondatachannel = (ev) => link.attachChannel(ev.channel);
     await link.pc.setRemoteDescription({ type: "offer", sdp: stripNativeLines(offerSdp) });
     const answer = await link.pc.createAnswer();
@@ -298,9 +304,13 @@ export class PeerLink {
   private attachChannel(channel: RTCDataChannel): void {
     this.channel = channel;
     channel.binaryType = "arraybuffer";
-    channel.onopen = () => this.resolveOpen();
+    channel.onopen = () => {
+      this.webrtcOpened = true;
+      this.resolveOpen();
+    };
     channel.onclose = () => {
       this.rejectOpen(new PeerLinkError("Data channel closed."));
+      if (this.nativeArm && !this.webrtcOpened && !this.closed) return;
       this.notifyClose("data channel closed");
     };
     channel.onmessage = (ev) => {

@@ -9,6 +9,10 @@ mod windows_hello;
 mod native_net;
 #[cfg(feature = "native-transport")]
 mod native_net_cmd;
+#[cfg(feature = "tor-transport")]
+mod tor_net;
+#[cfg(feature = "tor-transport")]
+mod tor_net_cmd;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -19,7 +23,7 @@ pub fn run() {
         windows_hello::windows_hello_sign
     ]);
     // П4 (experiment): UDP sockets and LAN HTTP for the native transport (src/native/bridge.ts).
-    #[cfg(feature = "native-transport")]
+    #[cfg(all(feature = "native-transport", not(feature = "tor-transport")))]
     let builder = builder.manage(native_net::NetHub::new()).invoke_handler(tauri::generate_handler![
         windows_hello::windows_hello_status,
         windows_hello::windows_hello_sign,
@@ -29,6 +33,24 @@ pub fn run() {
         native_net_cmd::native_udp_recv,
         native_net_cmd::native_ssdp,
         native_net_cmd::native_lan_http
+    ]);
+    // П6 (experiment): Tor onion services (src/tor/*.ts), on top of the native transport.
+    #[cfg(feature = "tor-transport")]
+    let builder = builder.manage(native_net::NetHub::new()).manage(tor_net::TorHub::new()).invoke_handler(tauri::generate_handler![
+        windows_hello::windows_hello_status,
+        windows_hello::windows_hello_sign,
+        native_net_cmd::native_udp_open,
+        native_net_cmd::native_udp_send,
+        native_net_cmd::native_udp_close,
+        native_net_cmd::native_udp_recv,
+        native_net_cmd::native_ssdp,
+        native_net_cmd::native_lan_http,
+        tor_net_cmd::tor_start,
+        tor_net_cmd::tor_status,
+        tor_net_cmd::tor_connect,
+        tor_net_cmd::tor_send,
+        tor_net_cmd::tor_close,
+        tor_net_cmd::tor_recv
     ]);
     builder
         .run(tauri::generate_context!())

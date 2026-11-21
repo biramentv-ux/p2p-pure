@@ -6,6 +6,7 @@ import { NotificationSettings } from "../components/NotificationSettings";
 import { SecuritySettings } from "../components/SecuritySettings";
 import { RendezvousSettings } from "../components/RendezvousSettings";
 import { NativeTransportSettings } from "../components/NativeTransportSettings";
+import { TorSettings } from "../components/TorSettings";
 
 interface ShowQrScreenProps {
   identity: UnlockedIdentity;
@@ -34,6 +35,7 @@ export function ShowQrScreen({ identity, onMove, onPanic }: ShowQrScreenProps) {
       <TurnSettings identity={identity} />
       <RendezvousSettings />
       <NativeTransportSettings />
+      <TorSettings />
       {onPanic && <SecuritySettings onPanic={onPanic} />}
     </div>
   );
