@@ -59,8 +59,22 @@ describe("Linux shell: hardening that must not be switched off by accident", () 
     expect(main).toMatch(/nodeIntegration:\s*false/);
     expect(main).toMatch(/webSecurity:\s*true/);
     expect(main).toMatch(/webviewTag:\s*false/);
-    expect(main).not.toMatch(/preload/);
     expect(main).not.toMatch(/--no-sandbox|no-sandbox|disable-web-security|allowRunningInsecureContent:\s*true/);
+  });
+
+  it("has one preload, for the native transport only (П4), with no Node in the page", () => {
+    // The only preload is electron/preload.cjs: sandboxed, contextBridge + ipcRenderer, one object.
+    expect(main.match(/preload:/g)?.length).toBe(1);
+    expect(main).toMatch(/preload: join\(here, "preload\.cjs"\)/);
+    const preload = read("electron/preload.cjs");
+    expect(preload.match(/require\(/g)?.length).toBe(1);
+    expect(preload).toMatch(/const \{ contextBridge, ipcRenderer \} = require\("electron"\)/);
+    expect(preload.match(/exposeInMainWorld\(/g)?.length).toBe(1);
+    expect(preload).toMatch(/exposeInMainWorld\("p2pNative"/);
+    expect(preload).not.toMatch(/process\.|child_process|fs\b|shell\./);
+    // The main process answers the page's native calls only from the app's own origin.
+    expect(main).toMatch(/const own = \(e\) => typeof e\.senderFrame\?\.url === "string" && e\.senderFrame\.url\.startsWith\(`\$\{ORIGIN\}\/`\)/);
+    for (const ch of ["open", "send", "close", "ssdp", "http"]) expect(main).toMatch(new RegExp(`p2p-native:${ch}", \\(e[^)]*\\) => \\{?\\s*\\(?\\s*(if \\()?own\\(e\\)`));
   });
 
   it("allows only camera and microphone, only for its own pages, and never leaves the app", () => {

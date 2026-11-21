@@ -2,12 +2,14 @@
  * Н8 NAT lab: the scenario matrix and the network each scenario builds. Pure functions: they
  * return the shell commands (arrays, no shell), so tests check the plan without root.
  *
- *            hA (10.0.1.2 / 2001:db8:a::2)            hB (10.0.2.2 / 2001:db8:b::2)
- *               │ lan A                                    │ lan B
- *            rA (NAT) 203.0.113.10                      rB (NAT) 203.0.113.20
- *               └────────── wan bridge (203.0.113.0/24, 2001:db8:ffff::/64) ──┘
- *                                    │
- *                          STUN 203.0.113.1 / 2001:db8:ffff::1 :3478
+ *     hA (10.0.1.2 / 2001:db8:a::2)                         hB (10.0.2.2 / 2001:db8:b::2)
+ *        │ lan A                                                 │ lan B
+ *     rA (NAT) 198.51.100.10 ──── wan (a router) ──── 203.0.113.20 (NAT) rB
+ *                                  │ STUN 192.0.2.1 / [2001:db8:ffff::1]:3478
+ *
+ * The wan namespace is a router, not a bridge: a packet from hA to hB crosses three routers, so
+ * a packet sent with TTL 2 opens hA's own NAT but dies in the wan (the "low TTL" trick that
+ * birthday punching uses, П4).
  *
  * NAT types, with Linux netfilter:
  *  - "cone": full cone. MASQUERADE out (Linux keeps the source port, so the mapping is
@@ -16,20 +18,30 @@
  *    Plain MASQUERADE alone is not used for "cone": the other side's first checks arrive before
  *    anything left, conntrack records them, and that entry takes the very port the outgoing
  *    mapping needs, so Linux picks another one and every check refreshes the clash.
+ *  - "restricted": plain MASQUERADE: endpoint-independent mapping, address-and-port dependent
+ *    filtering (port-restricted cone). WebRTC fails against symmetric from here; П4's birthday
+ *    punching with low-TTL packets does not.
  *  - "symmetric": MASQUERADE --random-fully. A new random port for every destination.
  * IPv6 is routed without NAT, like most real IPv6 networks.
  */
 
 export const NS = { wan: "nl-wan", rA: "nl-rA", rB: "nl-rB", hA: "nl-hA", hB: "nl-hB" };
-export const STUN_V4 = "203.0.113.1";
+export const STUN_V4 = "192.0.2.1";
+/** A second STUN address, so the native transport can tell cone from symmetric NAT (П4). */
+export const STUN2_V4 = "192.0.2.2";
 export const STUN_V6 = "2001:db8:ffff::1";
 export const STUN_PORT = 3478;
 export const STUN_URLS = `stun:${STUN_V4}:${STUN_PORT},stun:[${STUN_V6}]:${STUN_PORT}`;
 
 const SIDE = {
-  A: { r: NS.rA, h: NS.hA, wan4: "203.0.113.10", wan6: "2001:db8:ffff::10", lan4: "10.0.1", lan6: "2001:db8:a", tag: "a" },
-  B: { r: NS.rB, h: NS.hB, wan4: "203.0.113.20", wan6: "2001:db8:ffff::20", lan4: "10.0.2", lan6: "2001:db8:b", tag: "b" },
+  A: { r: NS.rA, h: NS.hA, net4: "198.51.100", wan4: "198.51.100.10", net6: "2001:db8:fa", wan6: "2001:db8:fa::10", lan4: "10.0.1", lan6: "2001:db8:a", tag: "a" },
+  B: { r: NS.rB, h: NS.hB, net4: "203.0.113", wan4: "203.0.113.20", net6: "2001:db8:fb", wan6: "2001:db8:fb::20", lan4: "10.0.2", lan6: "2001:db8:b", tag: "b" },
 };
+
+/** The public address each side's router shows the world (for tests and the native lab). */
+export function publicAddress(side) {
+  return SIDE[side].wan4;
+}
 
 /**
  * The matrix. `expect.connect` is what must happen; for a failure, `expect.causeA/causeB` is
@@ -58,6 +70,13 @@ export const SCENARIOS = [
     expect: { connect: true },
   },
   {
+    name: "restricted-symmetric",
+    note: "port-restricted cone against symmetric: WebRTC has no path (П4 native punching does, see native-*)",
+    a: { nat: "restricted", family: "v4" },
+    b: { nat: "symmetric", family: "v4" },
+    expect: { connect: false, causeA: "nat", causeB: "nat" },
+  },
+  {
     name: "symmetric-symmetric",
     a: { nat: "symmetric", family: "v4" },
     b: { nat: "symmetric", family: "v4" },
@@ -84,6 +103,24 @@ export const SCENARIOS = [
   },
 ];
 
+/**
+ * П4: the native transport (scripts/natlab/native.mjs) on the same networks. No browser: the two
+ * processes are the shells' UDP part. restricted ↔ symmetric is where WebRTC fails (above) and
+ * birthday punching must not.
+ */
+export const NATIVE_SCENARIOS = [
+  { name: "native-restricted-restricted", a: { nat: "restricted", family: "v4" }, b: { nat: "restricted", family: "v4" }, expect: { connect: true, strategy: "direct" } },
+  { name: "native-restricted-symmetric", a: { nat: "restricted", family: "v4" }, b: { nat: "symmetric", family: "v4" }, expect: { connect: true, strategy: "birthday-cone" } },
+  {
+    name: "native-restricted-symmetric-lossy",
+    a: { nat: "restricted", family: "v4" },
+    b: { nat: "symmetric", family: "v4" },
+    impair: { lossPct: 3 },
+    expect: { connect: true, strategy: "birthday-cone" },
+  },
+  { name: "native-symmetric-symmetric", a: { nat: "symmetric", family: "v4" }, b: { nat: "symmetric", family: "v4" }, expect: { connect: false } },
+];
+
 const nsx = (ns, ...cmd) => ["ip", "netns", "exec", ns, ...cmd];
 
 /** True when the scenario needs IPv6 somewhere (skipped on a kernel without IPv6). */
@@ -101,30 +138,37 @@ export function planScenario(scenario, { netem = true, ipv6 = true } = {}) {
   for (const ns of Object.values(NS)) cmds.push(["ip", "netns", "add", ns]);
   for (const ns of Object.values(NS)) cmds.push(nsx(ns, "ip", "link", "set", "lo", "up"));
 
-  // WAN: a bridge in the wan namespace; STUN lives on it.
-  cmds.push(nsx(NS.wan, "ip", "link", "add", "br0", "type", "bridge"));
-  cmds.push(nsx(NS.wan, "ip", "link", "set", "br0", "up"));
-  cmds.push(nsx(NS.wan, "ip", "addr", "add", `${STUN_V4}/24`, "dev", "br0"));
-  if (ipv6) cmds.push(nsx(NS.wan, "ip", "-6", "addr", "add", `${STUN_V6}/64`, "dev", "br0", "nodad"));
+  // WAN: a router with one link to each side's router; STUN listens on its loopback.
+  cmds.push(nsx(NS.wan, "sysctl", "-qw", "net.ipv4.ip_forward=1"));
+  cmds.push(nsx(NS.wan, "ip", "addr", "add", `${STUN_V4}/32`, "dev", "lo"));
+  cmds.push(nsx(NS.wan, "ip", "addr", "add", `${STUN2_V4}/32`, "dev", "lo"));
+  if (ipv6) {
+    cmds.push(nsx(NS.wan, "sysctl", "-qw", "net.ipv6.conf.all.forwarding=1"));
+    cmds.push(nsx(NS.wan, "ip", "-6", "addr", "add", `${STUN_V6}/128`, "dev", "lo"));
+  }
 
   for (const key of ["A", "B"]) {
     const s = SIDE[key];
     const cfg = key === "A" ? scenario.a : scenario.b;
     const wanIf = `w${s.tag}`; // router side of the wan link
-    const brIf = `br${s.tag}`; // bridge side
+    const brIf = `x${s.tag}`; // wan side
     const lanR = `l${s.tag}`; // router side of the lan link
     const lanH = `e${s.tag}`; // host side
     const v4 = cfg.family !== "v6";
     const v6 = cfg.family !== "v4";
 
-    // Router ⇄ WAN bridge
+    // Router ⇄ wan router
     cmds.push(["ip", "link", "add", wanIf, "netns", s.r, "type", "veth", "peer", "name", brIf, "netns", NS.wan]);
-    cmds.push(nsx(NS.wan, "ip", "link", "set", brIf, "master", "br0", "up"));
+    cmds.push(nsx(NS.wan, "ip", "link", "set", brIf, "up"));
+    cmds.push(nsx(NS.wan, "ip", "addr", "add", `${s.net4}.1/24`, "dev", brIf));
     cmds.push(nsx(s.r, "ip", "link", "set", wanIf, "up"));
     cmds.push(nsx(s.r, "ip", "addr", "add", `${s.wan4}/24`, "dev", wanIf));
+    cmds.push(nsx(s.r, "ip", "route", "add", "default", "via", `${s.net4}.1`));
     cmds.push(nsx(s.r, "sysctl", "-qw", "net.ipv4.ip_forward=1"));
     if (ipv6) {
+      cmds.push(nsx(NS.wan, "ip", "-6", "addr", "add", `${s.net6}::1/64`, "dev", brIf, "nodad"));
       cmds.push(nsx(s.r, "ip", "-6", "addr", "add", `${s.wan6}/64`, "dev", wanIf, "nodad"));
+      cmds.push(nsx(s.r, "ip", "-6", "route", "add", "default", "via", `${s.net6}::1`));
       cmds.push(nsx(s.r, "sysctl", "-qw", "net.ipv6.conf.all.forwarding=1"));
     }
 
@@ -148,10 +192,8 @@ export function planScenario(scenario, { netem = true, ipv6 = true } = {}) {
       cmds.push(nsx(s.r, "ip", "-6", "addr", "add", `${s.lan6}::1/64`, "dev", lanR, "nodad"));
       cmds.push(nsx(s.h, "ip", "-6", "addr", "add", `${s.lan6}::2/64`, "dev", lanH, "nodad"));
       cmds.push(nsx(s.h, "ip", "-6", "route", "add", "default", "via", `${s.lan6}::1`));
-      // The wan side and the other router reach this LAN through this router.
+      // The wan router reaches this LAN through this router (the other router via its default).
       cmds.push(nsx(NS.wan, "ip", "-6", "route", "add", `${s.lan6}::/64`, "via", s.wan6));
-      const other = key === "A" ? SIDE.B : SIDE.A;
-      cmds.push(nsx(other.r, "ip", "-6", "route", "add", `${s.lan6}::/64`, "via", s.wan6));
     } else if (ipv6) {
       cmds.push(nsx(s.h, "sysctl", "-qw", "net.ipv6.conf.all.disable_ipv6=1"));
     }

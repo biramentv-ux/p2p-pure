@@ -14,6 +14,13 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+# serde is already in the tree through tauri; the native commands (feature below) use its derive.
+serde = { version = "1", features = ["derive"], optional = true }
+
+[features]
+default = []
+# П4 (experiment): UDP sockets, SSDP and LAN HTTP for the native transport (src/native/bridge.ts).
+native-transport = ["dep:serde"]
 
 # Windows Hello (KeyCredentialManager). Same version tauri already pulls in, so no new crate.
 [target.'cfg(windows)'.dependencies]

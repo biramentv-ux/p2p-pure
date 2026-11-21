@@ -5,11 +5,12 @@
  * in the browser. Electron is used on Linux because the WebKitGTK of Debian and Ubuntu is
  * built without WebRTC, and the direct links between devices need it.
  */
-import { app, BrowserWindow, Menu, protocol, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, protocol, session, shell } from "electron";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { APP_HOST, mimeFor, resolveAppFile } from "./appFiles.mjs";
+import { createNativeNet } from "./nativeNet.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ORIGIN = `app://${APP_HOST}`;
@@ -49,6 +50,9 @@ function createWindow() {
       webviewTag: false,
       spellcheck: false,
       devTools: !app.isPackaged,
+      // П4 (experiment): window.p2pNative for the native transport. Inert until the person
+      // turns the experiment on in Settings; the page asks for every socket itself.
+      preload: join(here, "preload.cjs"),
     },
   });
   void win.loadURL(`${ORIGIN}/`);
@@ -93,6 +97,22 @@ function lockDown() {
   });
 }
 
+/** П4: UDP sockets and LAN HTTP for the native transport, for the app's own page only. */
+function nativeTransport() {
+  const own = (e) => typeof e.senderFrame?.url === "string" && e.senderFrame.url.startsWith(`${ORIGIN}/`);
+  const net = createNativeNet((id, bytes, host, port) => win?.webContents.send("p2p-native:udp", id, bytes, host, port));
+  ipcMain.handle("p2p-native:open", (e) => (own(e) ? net.open() : Promise.reject(new Error("not allowed"))));
+  ipcMain.on("p2p-native:send", (e, id, host, port, bytes, ttl) => {
+    if (own(e) && bytes instanceof Uint8Array) net.send(id, host, port, bytes, ttl);
+  });
+  ipcMain.on("p2p-native:close", (e, id) => {
+    if (own(e)) net.close(id);
+  });
+  ipcMain.handle("p2p-native:ssdp", (e, timeoutMs) => (own(e) ? net.ssdp(timeoutMs) : []));
+  ipcMain.handle("p2p-native:http", (e, url, init) => (own(e) ? net.lanHttp(url, init) : Promise.reject(new Error("not allowed"))));
+  app.on("window-all-closed", () => net.closeAll());
+}
+
 app.on("second-instance", () => {
   if (!win) return;
   if (win.isMinimized()) win.restore();
@@ -101,6 +121,7 @@ app.on("second-instance", () => {
 
 app.whenReady().then(() => {
   lockDown();
+  nativeTransport();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

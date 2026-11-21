@@ -57,7 +57,7 @@ describe("Н8 lab STUN server", () => {
 describe("Н8 lab topology", () => {
   it("has the matrix from the plan, with a diagnosis for every expected failure", () => {
     const names = SCENARIOS.map((s: { name: string }) => s.name);
-    for (const n of ["cone-cone", "cone-symmetric", "symmetric-symmetric", "ipv6-only-vs-ipv4", "udp-blocked"]) expect(names).toContain(n);
+    for (const n of ["cone-cone", "cone-symmetric", "restricted-symmetric", "symmetric-symmetric", "ipv6-only-vs-ipv4", "udp-blocked"]) expect(names).toContain(n);
     for (const s of SCENARIOS) {
       if (s.expect.connect) continue;
       expect(describeFailure(s.expect.causeA)).not.toBe(describeFailure("unknown"));
@@ -94,6 +94,6 @@ describe("Н8 lab topology", () => {
   });
 
   it("builds the lab app with only the lab STUN servers", () => {
-    expect(stunUrls(STUN_URLS)).toEqual(["stun:203.0.113.1:3478", "stun:[2001:db8:ffff::1]:3478"]);
+    expect(stunUrls(STUN_URLS)).toEqual(["stun:192.0.2.1:3478", "stun:[2001:db8:ffff::1]:3478"]);
   });
 });

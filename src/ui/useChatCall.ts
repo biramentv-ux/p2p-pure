@@ -16,6 +16,8 @@ export function useChatCall(link: PeerLink, session: SecureSession, enqueue: <T>
   const assemblerRef = useRef(new SignalAssembler());
 
   useEffect(() => {
+    // П4: the native transport carries the chat only; there is no RTCPeerConnection for media.
+    if (link.native) return;
     let alive = true;
     const controller = new CallController({
       pc: link.pc,

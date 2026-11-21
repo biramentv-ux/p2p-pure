@@ -16,7 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
-import { hostNamespace, needsIpv6, NS, planScenario, SCENARIOS, STUN_PORT, STUN_URLS, STUN_V4, STUN_V6, teardown } from "./topology.mjs";
+import { hostNamespace, NATIVE_SCENARIOS, needsIpv6, NS, planScenario, SCENARIOS, STUN2_V4, STUN_PORT, STUN_URLS, STUN_V4, STUN_V6, teardown } from "./topology.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../..");
@@ -148,7 +148,69 @@ async function runScenario(s, { netem, ipv6, browserA, browserB }) {
   return result;
 }
 
-if (!argv.includes("--no-build") || !fs.existsSync(DIST)) {
+/** П4: two Node processes (the shells' UDP part) punch through and exchange messages. */
+async function runNative(s, { netem }) {
+  for (const c of teardown()) sh(c, { allowFail: true });
+  for (const c of planScenario(s, { netem, ipv6: false })) sh(c);
+  const stuns = [STUN_V4, STUN2_V4].map((host) =>
+    spawn("ip", ["netns", "exec", NS.wan, process.execPath, path.join(HERE, "stun.mjs"), "--host", host, "--port", String(STUN_PORT)], { stdio: "ignore" }),
+  );
+  await new Promise((r) => setTimeout(r, 500));
+  const started = Date.now();
+  const procs = ["A", "B"].map((side) =>
+    spawn("ip", ["netns", "exec", hostNamespace(side), process.execPath, path.join(HERE, "native.mjs"), "--side", side, "--stun", `${STUN_V4}:${STUN_PORT},${STUN2_V4}:${STUN_PORT}`], {
+      stdio: ["pipe", "pipe", "inherit"],
+    }),
+  );
+  const lines = procs.map((p) => {
+    const rl = readline.createInterface({ input: p.stdout });
+    const queue = [];
+    const waiters = [];
+    rl.on("line", (l) => {
+      let m;
+      try {
+        m = JSON.parse(l);
+      } catch {
+        return;
+      }
+      const w = waiters.shift();
+      if (w) w(m);
+      else queue.push(m);
+    });
+    return () => (queue.length ? Promise.resolve(queue.shift()) : new Promise((r) => waiters.push(r)));
+  });
+  const result = { name: s.name, expected: s.expect, ok: false, detail: "" };
+  try {
+    const [ea, eb] = await Promise.all(lines.map((next) => next()));
+    const secret = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex");
+    procs[0].stdin.write(JSON.stringify({ peer: eb.endpoint, secret }) + "\n");
+    procs[1].stdin.write(JSON.stringify({ peer: ea.endpoint, secret }) + "\n");
+    const [ra, rb] = await Promise.race([
+      Promise.all(lines.map((next) => next())),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("no result in 120 s")), 120_000)),
+    ]);
+    result.natA = ea.endpoint.nat;
+    result.natB = eb.endpoint.nat;
+    result.connected = ra.result.ok && rb.result.ok;
+    result.strategy = ra.result.strategy;
+    result.punchMs = Math.max(ra.result.punchMs ?? 0, rb.result.punchMs ?? 0);
+    result.errorA = ra.result.error ?? null;
+    result.errorB = rb.result.error ?? null;
+    result.ok = s.expect.connect ? result.connected && result.strategy === s.expect.strategy : !ra.result.ok && !rb.result.ok;
+    if (!result.ok) result.detail = `A: ${JSON.stringify(ra.result)} B: ${JSON.stringify(rb.result)}`;
+  } catch (e) {
+    result.detail = e instanceof Error ? e.message : String(e);
+  } finally {
+    result.seconds = Math.round((Date.now() - started) / 1000);
+    for (const p of procs) p.kill("SIGKILL");
+    for (const p of stuns) p.kill("SIGKILL");
+    for (const c of teardown()) sh(c, { allowFail: true });
+  }
+  return result;
+}
+
+const nativeOnly = argv.includes("--native-only");
+if (!nativeOnly && (!argv.includes("--no-build") || !fs.existsSync(DIST))) {
   console.log("Building the lab version (local STUN, QR decoder exposed)...");
   const r = spawnSync("npx", ["vite", "build", "--outDir", DIST, "--emptyOutDir"], {
     cwd: ROOT,
@@ -159,13 +221,14 @@ if (!argv.includes("--no-build") || !fs.existsSync(DIST)) {
 }
 
 const only = opt("--only")?.split(",");
-const list = SCENARIOS.filter((s) => !only || only.includes(s.name));
+const list = nativeOnly ? [] : SCENARIOS.filter((s) => !only || only.includes(s.name));
+const nativeList = argv.includes("--no-native") ? [] : NATIVE_SCENARIOS.filter((s) => !only || only.includes(s.name));
 const netem = netemAvailable();
 const ipv6 = ipv6Available();
 const browserA = opt("--browser-a") ?? opt("--browser") ?? "chromium";
 const browserB = opt("--browser-b") ?? opt("--browser") ?? "chromium";
 console.log(
-  `NAT lab: ${list.length} scenarios, ${browserA} ↔ ${browserB}, netem ${netem ? "yes" : "no (loss via netfilter, no delay)"}, IPv6 ${ipv6 ? "yes" : "no (IPv6 scenarios skipped)"}`,
+  `NAT lab: ${list.length + nativeList.length} scenarios, ${browserA} ↔ ${browserB}, netem ${netem ? "yes" : "no (loss via netfilter, no delay)"}, IPv6 ${ipv6 ? "yes" : "no (IPv6 scenarios skipped)"}`,
 );
 
 const results = [];
@@ -185,6 +248,13 @@ for (const s of list) {
   results.push(r);
   const outcome = r.connected ? "connected" : "failed";
   console.log(`${r.ok ? "PASS" : "FAIL"}  ${outcome.padEnd(9)} ${String(r.seconds).padStart(3)} s${r.detail ? "  — " + r.detail : ""}`);
+}
+for (const s of nativeList) {
+  process.stdout.write(`  ${s.name.padEnd(34)} `);
+  const r = await runNative(s, { netem });
+  results.push(r);
+  const how = r.connected ? `connected (${r.strategy}, punch ${(r.punchMs / 1000).toFixed(1)} s)` : "no path";
+  console.log(`${r.ok ? "PASS" : "FAIL"}  ${how}  NAT ${r.natA}/${r.natB}${r.detail ? "  — " + r.detail : ""}`);
 }
 fs.writeFileSync(path.join(ROOT, "natlab-report.json"), JSON.stringify({ date: new Date().toISOString(), netem, browserA, browserB, results }, null, 2));
 const failed = results.filter((r) => !r.ok).length;

@@ -9,6 +9,8 @@ public class MainActivity extends BridgeActivity {
         // Register before super.onCreate so the bridge loads the plugin.
         registerPlugin(PasskeyBridgePlugin.class);
         registerPlugin(BlePairingPlugin.class);
+        // П4 (experiment): UDP sockets for the native transport; idle unless turned on in Settings.
+        registerPlugin(NativeNetPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -34,6 +34,7 @@ import { SoundPairingPanel } from "../components/SoundPairingPanel";
 import { LightPairingPanel } from "../components/LightPairingPanel";
 import { parseScannedInvitation, toSignalingPayload } from "../../signaling/invitationPayload";
 import type { Rendezvous } from "../../rendezvous/rendezvous";
+import { armNativeLink, dropNative, prepareNative, withNative, type NativePrep } from "../../native/nativePairing";
 
 export interface ConnectedResult {
   contact: Contact;
@@ -154,6 +155,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
   const mySdpRef = useRef<string | null>(null);
   /** The other side's SDP (from its invitation or answer), for the failure diagnosis. */
   const peerSdpRef = useRef<string | null>(null);
+  /** П4 (experiment): our native endpoint, until the link is armed with it (native shells only). */
+  const nativeRef = useRef<NativePrep | null>(null);
   const busyRef = useRef(false);
   // Offline signaling: generated offers and answers come back through the provider.
   const providerRef = useRef<OfflineSignalingProvider | null>(null);
@@ -229,6 +232,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
   useEffect(() => {
     return () => {
       if (!doneRef.current) linkRef.current?.close();
+      dropNative(nativeRef.current);
     };
   }, []);
 
@@ -246,6 +250,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
     offerRef.current = null;
     ephemeralRef.current = null;
     peerSdpRef.current = null;
+    dropNative(nativeRef.current);
+    nativeRef.current = null;
     compactAnswerRef.current = null;
     busyRef.current = false;
   }
@@ -333,9 +339,11 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
       const { link, sdp } = await PeerLink.createOffer();
       linkRef.current = link;
       mySdpRef.current = sdp;
+      // Sound and light carry the answer compactly, without room for the native line.
+      nativeRef.current = compactVia(mode) ? null : await prepareNative();
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;
-      const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
+      const offer = createInvitation("offer", withNative(sdp, nativeRef.current), identity.keyPair, eph.publicKey);
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
       pendingHexRef.current = await encodeInvitationHex(offer);
@@ -365,9 +373,11 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
       const { link, sdp } = await PeerLink.createOffer();
       linkRef.current = link;
       mySdpRef.current = sdp;
+      // Sound and light carry the answer compactly, without room for the native line.
+      nativeRef.current = compactVia(mode) ? null : await prepareNative();
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;
-      const offer = createInvitation("offer", sdp, identity.keyPair, eph.publicKey);
+      const offer = createInvitation("offer", withNative(sdp, nativeRef.current), identity.keyPair, eph.publicKey);
       offerRef.current = offer;
       const payload = await encodeInvitation(offer);
       setView({ k: "busy", label: t("Търся {name} през интернет… Приложението трябва да е отворено и при него.", { name: expected.name }), cancellable: true });
@@ -433,6 +443,14 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
     }
     setView({ k: "busy", label: t("Свързвам…") });
     peerSdpRef.current = answer.sdp;
+    armNativeLink(link, nativeRef.current, {
+      side: "A",
+      peerSdp: answer.sdp,
+      myEphemeralSecret: eph.secretKey,
+      peerEphemeralPublic: answer.ephemeralPublicKey,
+      offerNonce: offer.nonce,
+    });
+    nativeRef.current = null; // the link owns the socket now (or it was closed)
     await link.acceptAnswer(answer.sdp);
     await completeHandshake(link, identity.did, answer.publicKey, CONNECT_TIMEOUT_MS);
     const session = SecureSession.derive({
@@ -603,7 +621,16 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
       linkRef.current = link;
       const eph = createEphemeralKeyPair();
       ephemeralRef.current = eph;
-      const answer = createInvitation("answer", sdp, identity.keyPair, eph.publicKey, {
+      // П4: only when the offer carries a native endpoint and the answer can carry ours.
+      const native = !compactVia(mode) && /a=x-p2p-native:/.test(offer.sdp) ? await prepareNative() : null;
+      armNativeLink(link, native, {
+        side: "B",
+        peerSdp: offer.sdp,
+        myEphemeralSecret: eph.secretKey,
+        peerEphemeralPublic: offer.ephemeralPublicKey,
+        offerNonce: offer.nonce,
+      });
+      const answer = createInvitation("answer", withNative(sdp, native), identity.keyPair, eph.publicKey, {
         answersNonce: offer.nonce,
       });
       const payload = await encodeInvitation(answer);
