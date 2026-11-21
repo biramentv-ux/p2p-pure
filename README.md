@@ -7,7 +7,7 @@
 **Личен, децентрализиран, шифрован от край до край.**
 **A private, decentralised, end-to-end encrypted messenger.**
 
-[![Tests](https://img.shields.io/badge/unit_tests-950%2B_passing-1f6fc4?style=for-the-badge)](#-тестове)
+[![Tests](https://img.shields.io/badge/unit_tests-1090%2B_passing-1f6fc4?style=for-the-badge)](#-тестове)
 [![E2E](https://img.shields.io/badge/browser_e2e-Playwright_+_Chromium-13213a?style=for-the-badge)](#-тестове)
 [![Platforms](https://img.shields.io/badge/web_·_Windows_·_Linux_·_Android_·_iOS-PWA_+_Tauri_+_Electron_+_Capacitor-1f6fc4?style=for-the-badge)](#-как-да-го-пробвам)
 [![Languages](https://img.shields.io/badge/app-BG_·_EN_·_RU_·_DE_·_ES_·_PT-d41b7f?style=for-the-badge)](#-език) [![Site](https://img.shields.io/badge/site-8_languages-0ea5e9?style=for-the-badge)](https://dyrakarmy.online/)
@@ -32,7 +32,7 @@
 > Съобщенията се шифроват на устройството и се пращат **директно** между хората през WebRTC.
 > Няма централен сървър, който пази съобщения, акаунти или телефонни номера.
 
-*Състояние към 4 ноември 2026: работеща PWA за уеб и телефон; програми за Windows (инсталатор, portable, winget) и Linux (.deb, .rpm, AppImage, Flatpak); подписан APK за Android; сайт с меню и сваляне на [dyrakarmy.online](https://dyrakarmy.online/) на 8 езика; интерфейс на 6 езика; седем начина за първа връзка (QR, кратък код с PAKE, Bluetooth, QR + звук, QR + светлина, запознаване чрез общ приятел, Telegram бот) — виж [docs/CONNECTING.md](docs/CONNECTING.md); тестове на всички нива. Изходният код е частен, изданията и сайтът са публични. iOS проектът и TestFlight workflow-ът са написани, но не са пускани с Apple акаунт.*
+*Състояние към 21 ноември 2026: работеща PWA за уеб и телефон; програми за Windows (инсталатор, portable, winget) и Linux (.deb, .rpm, AppImage, Flatpak); подписан APK за Android; сайт с меню и сваляне на [dyrakarmy.online](https://dyrakarmy.online/) на 8 езика; интерфейс на 6 езика; седем начина за първа връзка (QR, кратък код с PAKE, Bluetooth, QR + звук, QR + светлина, запознаване чрез общ приятел, Telegram бот) — виж [docs/CONNECTING.md](docs/CONNECTING.md); тестове на всички нива. Изходният код е отворен, тук; изданията и сайтът се публикуват в публичното репо [p2p-pure-releases](https://github.com/biramentv-ux/p2p-pure-releases). iOS проектът и TestFlight workflow-ът са написани, но не са пускани с Apple акаунт.*
 
 ## ✨ Какво може
 
@@ -322,7 +322,7 @@ docs/               ръководства: начини за свързване
 
 | Команда | Какво проверява |
 |---|---|
-| `npm test` | Unit тестове: 950+ теста |
+| `npm test` | Unit тестове: 1090+ теста |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Двама души в браузър: QR, 12 думи за проверка, шифрован обмен, replay защита |
 | `npm run test:ui` | Целият интерфейс: профил, чат, снимки, демо стая, разговори, групи, тъмен режим (29 проверки) |
@@ -375,7 +375,7 @@ docs/               ръководства: начини за свързване
 > Messages are encrypted on the device and sent **directly** between people over WebRTC.
 > There is no central server that stores messages, accounts or phone numbers.
 
-*Status as of 4 November 2026: a working PWA for web and phone; apps for Windows (installer, portable, winget) and Linux (.deb, .rpm, AppImage, Flatpak); a signed Android APK; a website with menu and downloads at [dyrakarmy.online](https://dyrakarmy.online/en/) in 8 languages; an interface in 6 languages; seven ways to make the first connection (QR, short code with PAKE, Bluetooth, QR + sound, QR + light, introduction by a mutual friend, Telegram bot), see [docs/CONNECTING.md](docs/CONNECTING.md); tests at every level. The source code is private; releases and the site are public. The iOS project and TestFlight workflow are written but have not been run with an Apple account.*
+*Status as of 21 November 2026: a working PWA for web and phone; apps for Windows (installer, portable, winget) and Linux (.deb, .rpm, AppImage, Flatpak); a signed Android APK; a website with menu and downloads at [dyrakarmy.online](https://dyrakarmy.online/en/) in 8 languages; an interface in 6 languages; seven ways to make the first connection (QR, short code with PAKE, Bluetooth, QR + sound, QR + light, introduction by a mutual friend, Telegram bot), see [docs/CONNECTING.md](docs/CONNECTING.md); tests at every level. The source code is open, here; releases and the site are published in the public [p2p-pure-releases](https://github.com/biramentv-ux/p2p-pure-releases) repository. The iOS project and TestFlight workflow are written but have not been run with an Apple account.*
 
 ## ✨ What it does
 
@@ -665,7 +665,7 @@ docs/               guides: ways to connect, Windows, Linux, demo signalling, Bl
 
 | Command | What it checks |
 |---|---|
-| `npm test` | Unit tests: 950+ tests |
+| `npm test` | Unit tests: 1090+ tests |
 | `npm run lint` | oxlint |
 | `npm run test:e2e` | Two people in a browser: QR, 12 verification words, encrypted exchange, replay protection |
 | `npm run test:ui` | The whole interface: profile, chat, photos, demo room, calls, groups, dark mode (29 checks) |

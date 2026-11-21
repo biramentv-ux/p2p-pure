@@ -10,11 +10,12 @@
 
 **Сайт и приложение в браузъра:** https://dyrakarmy.online/ · **Изтегляне:** [Издания](../../releases)
 
-Тук са изданията (Windows, Linux, Android) и сайтът. Изходният код е частен; всяко издание има
-контролни суми SHA-256 и подписан SBOM.
+Тук са изданията (Windows, Linux, Android) и сайтът. Изходният код е отворен:
+[biramentv-ux/p2p-pure](https://github.com/biramentv-ux/p2p-pure). Всяко издание има контролни суми
+SHA-256 и подписан SBOM.
 
 **Какво може:** профил без телефон и имейл (passkey или парола), 12 думи за възстановяване, контакт с
-QR или отдалеч с код от 5 знака и 3 думи (думите не стигат до сървъра), 12 думи за проверка срещу човек по средата, шифрован чат, файлове до 100 MB, аудио
+QR или отдалеч с код от 5 знака и 3 думи (думите не стигат до сървъра), 12 думи за проверка срещу човек по средата, шифрован чат, изчезващи съобщения в чатове и групи, файлове до 100 MB, които продължават след прекъсване, аудио
 и видео разговори, групи до 9 души, известия и звуци, местене на нов телефон. Приложението е на
 6 езика (български, English, Русский, Deutsch, Español, Português), сайтът е на 8.
 
@@ -36,11 +37,12 @@ go straight between devices, end-to-end encrypted.
 **Website and browser app:** https://dyrakarmy.online/en/ · **Download:** [Releases](../../releases)
 
 This repository holds the releases (Windows, Linux, Android) and the website. The source code is
-private; every release ships SHA-256 checksums and a signed SBOM. The encryption has not had an
+open: [biramentv-ux/p2p-pure](https://github.com/biramentv-ux/p2p-pure). Every release ships SHA-256
+checksums and a signed SBOM. The encryption has not had an
 independent audit yet.
 
 **What it does:** a profile with no phone or email (passkey or password), 12 recovery words, contacts by
-QR or, from afar, a code of 5 characters and 3 words (the words never reach the server), 12 words to rule out anyone in the middle, encrypted chat, files up to 100 MB, audio and
+QR or, from afar, a code of 5 characters and 3 words (the words never reach the server), 12 words to rule out anyone in the middle, encrypted chat, disappearing messages in chats and groups, files up to 100 MB that resume after a dropped link, audio and
 video calls, groups of up to 9, notifications and sounds, moving to a new phone. The app speaks
 6 languages (Bulgarian, English, Russian, German, Spanish, Portuguese); the site speaks 8.
 
