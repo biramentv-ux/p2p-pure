@@ -11,6 +11,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BlePairingPlugin.class);
         // П4 (experiment): UDP sockets for the native transport; idle unless turned on in Settings.
         registerPlugin(NativeNetPlugin.class);
+        // П5 (experiment): BLE / Wi-Fi Aware radio under the mesh; idle unless the mesh is turned on.
+        registerPlugin(MeshRadioPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
