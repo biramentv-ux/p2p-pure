@@ -124,8 +124,8 @@ async function runScenario(s, { netem, ipv6, browserA, browserB }) {
     if (s.expect.connect) {
       if (result.connected) {
         await Promise.all([
-          a.call("chat", { name: "Боб", send: `здравей от A (${s.name})`, expect: `здравей от B (${s.name})` }),
-          b.call("chat", { name: "Ани", send: `здравей от B (${s.name})`, expect: `здравей от A (${s.name})` }),
+          a.call("chat", { name: "Боб", send: `здравей от A (${s.name})`, expect: `здравей от B (${s.name})`, waitMs: s.impair ? 60_000 : 30_000 }),
+          b.call("chat", { name: "Ани", send: `здравей от B (${s.name})`, expect: `здравей от A (${s.name})`, waitMs: s.impair ? 60_000 : 30_000 }),
         ]);
         result.ok = true;
       } else result.detail = "expected a connection";

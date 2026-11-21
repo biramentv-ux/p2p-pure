@@ -79,15 +79,23 @@ export function createSteps(page, { base, password = "natlab parola 2026" }) {
       if (await safety.isVisible()) return { connected: true, error: null };
       return { connected: false, error: (await alert.first().innerText()).trim() };
     },
-    async chat({ name, send, expect }) {
+    /** `waitMs`: longer on impaired links (loss + jitter: SCTP retransmits can take tens of seconds). */
+    async chat({ name, send, expect, waitMs = 30_000 }) {
+      const step = async (what, fn) => {
+        try {
+          await fn();
+        } catch (e) {
+          throw new Error(`chat/${what}: ${e.message.split("\n")[0]}`);
+        }
+      };
       await page.getByPlaceholder("Например: Иван").fill(name);
       await page.getByRole("button", { name: "Думите съвпадат" }).click();
-      await page.locator(".chat").waitFor({ timeout: 30_000 });
+      await step("open", () => page.locator(".chat").waitFor({ timeout: waitMs }));
       if (send) {
         await page.locator(".composer input").fill(send);
         await page.getByRole("button", { name: "Изпрати" }).click();
       }
-      if (expect) await page.locator(".messages .msg.in").filter({ hasText: expect }).waitFor({ timeout: 30_000 });
+      if (expect) await step("receive", () => page.locator(".messages .msg.in").filter({ hasText: expect }).waitFor({ timeout: waitMs }));
       return { ok: true };
     },
   };
