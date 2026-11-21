@@ -127,6 +127,7 @@ public class NativeNetPlugin extends Plugin {
 
     /** Java has no unicast TTL setter; the socket option goes straight to the file descriptor. */
     private static void setTtl(DatagramSocket sock, int ttl) {
+        if (android.os.Build.VERSION.SDK_INT < 26) return; // Os.setsockoptInt: API 26
         try (ParcelFileDescriptor pfd = ParcelFileDescriptor.fromDatagramSocket(sock)) {
             Os.setsockoptInt(pfd.getFileDescriptor(), OsConstants.IPPROTO_IP, OsConstants.IP_TTL, ttl);
         } catch (Exception ignored) {

@@ -36,6 +36,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
 import android.util.Base64;
+import androidx.annotation.RequiresApi;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -100,7 +101,7 @@ public class MeshRadioPlugin extends Plugin {
         startGattServer(bm);
         startAdvertising();
         startScanning();
-        startAware();
+        if (Build.VERSION.SDK_INT >= 26) startAware();
         JSObject out = new JSObject();
         out.put("aware", aware != null || hasAware());
         call.resolve(out);
@@ -135,9 +136,7 @@ public class MeshRadioPlugin extends Plugin {
             return;
         }
         if (to.startsWith("aware:")) {
-            PeerHandle peer = awarePeers.get(to);
-            if (peer != null && awarePub != null && data.length <= 255) awarePub.sendMessage(peer, awareMsgId++, data);
-            else if (peer != null && awareSub != null && data.length <= 255) awareSub.sendMessage(peer, awareMsgId++, data);
+            if (Build.VERSION.SDK_INT >= 26) sendAware(to, data);
             call.resolve();
             return;
         }
@@ -159,6 +158,14 @@ public class MeshRadioPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         stopAll();
+    }
+
+    @RequiresApi(26)
+    private void sendAware(String to, byte[] data) {
+        PeerHandle peer = awarePeers.get(to);
+        if (peer == null || data.length > 255) return;
+        if (awarePub != null) awarePub.sendMessage(peer, awareMsgId++, data);
+        else if (awareSub != null) awareSub.sendMessage(peer, awareMsgId++, data);
     }
 
     private void emitPiece(String from, byte[] data) {
@@ -266,6 +273,7 @@ public class MeshRadioPlugin extends Plugin {
         return Build.VERSION.SDK_INT >= 26 && getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE);
     }
 
+    @RequiresApi(26)
     private void startAware() {
         if (!hasAware()) return;
         WifiAwareManager m = (WifiAwareManager) getContext().getSystemService(Context.WIFI_AWARE_SERVICE);
@@ -304,6 +312,15 @@ public class MeshRadioPlugin extends Plugin {
         }, main);
     }
 
+    @RequiresApi(26)
+    private void stopAware() {
+        if (awarePub != null) awarePub.close();
+        if (awareSub != null) awareSub.close();
+        if (aware != null) aware.close();
+        awarePub = null;
+        awareSub = null;
+    }
+
     private void stopAll() {
         if (scanner != null && scanning != null) scanner.stopScan(scanning);
         if (advertiser != null && advertising != null) advertiser.stopAdvertising(advertising);
@@ -314,9 +331,7 @@ public class MeshRadioPlugin extends Plugin {
         clientIn.clear();
         if (server != null) server.close();
         server = null;
-        if (awarePub != null) awarePub.close();
-        if (awareSub != null) awareSub.close();
-        if (aware != null) aware.close();
+        if (Build.VERSION.SDK_INT >= 26) stopAware();
         aware = null;
         awarePeers.clear();
     }
