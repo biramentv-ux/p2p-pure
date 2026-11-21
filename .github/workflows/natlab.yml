@@ -41,8 +41,8 @@ jobs:
           npx playwright-core install --with-deps chromium ${{ matrix.browser_b == 'firefox' && 'firefox' || '' }}
           sudo apt-get install -y iproute2 iptables
       - name: Run the scenario matrix
-        # Firefox refuses to start as root with a HOME owned by another user: give root its own.
-        run: sudo -E env "PATH=$PATH" HOME=/root node scripts/natlab/run.mjs --browser-b ${{ matrix.browser_b }}
+        # Firefox refuses to start as root with a HOME or XDG_RUNTIME_DIR owned by another user.
+        run: sudo -E env -u XDG_RUNTIME_DIR "PATH=$PATH" HOME=/root node scripts/natlab/run.mjs --browser-b ${{ matrix.browser_b }}
       - name: Report
         if: always()
         run: |
