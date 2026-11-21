@@ -149,8 +149,14 @@ export function renderLocale(bgHtml, texts, loc) {
   }
   // a gap would show Bulgarian on a foreign page: stop the build instead (the tests check the packs too)
   if (missing.length) throw new Error(`site: ${loc.code} has no text for ${[...new Set(missing)].join(", ")}`);
-  for (const el of d.querySelectorAll("[href], [src]")) {
-    for (const a of ["href", "src"]) if (el.hasAttribute(a)) el.setAttribute(a, fromSub(el.getAttribute(a)));
+  for (const el of d.querySelectorAll("[href], [src], [poster]")) {
+    for (const a of ["href", "src", "poster"]) if (el.hasAttribute(a)) el.setAttribute(a, fromSub(el.getAttribute(a)));
+  }
+  // the tutorial videos exist in Bulgarian and English: every other page shows the English ones
+  if (loc.code !== "bg") {
+    for (const v of d.querySelectorAll("video[data-tutorial]")) {
+      for (const a of ["src", "poster"]) v.setAttribute(a, v.getAttribute(a).replace(/-bg\.(mp4|jpg)$/, "-en.$1"));
+    }
   }
   // the public documents have an English original; the Bulgarian page links the translations
   for (const a of d.querySelectorAll('a[href*="/blob/main/"]')) {
@@ -353,6 +359,12 @@ export async function assemble({ dist = join(ROOT, "dist"), site = join(ROOT, "s
   mkdirSync(dist, { recursive: true });
 
   cpSync(site, dist, { recursive: true });
+  // the tutorial videos (scripts/docs/tutorial-connect-gif.mjs, MODE=video)
+  const tutorials = join(ROOT, "docs/public/assets");
+  if (existsSync(tutorials)) {
+    mkdirSync(join(dist, "assets"), { recursive: true });
+    for (const f of readdirSync(tutorials)) if (/^tutorial-[a-z-]+-(bg|en)\.(mp4|jpg)$/.test(f)) cpSync(join(tutorials, f), join(dist, "assets", f));
+  }
   // fonts, from the packages (no download, no external request)
   const fonts = join(dist, "fonts");
   mkdirSync(fonts, { recursive: true });

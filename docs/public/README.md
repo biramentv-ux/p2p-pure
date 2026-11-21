@@ -19,6 +19,10 @@ QR или отдалеч с код от 5 знака и 3 думи (думите
 и видео разговори, групи до 9 души, известия и звуци, местене на нов телефон. Приложението е на
 6 езика (български, English, Русский, Deutsch, Español, Português), сайтът е на 8.
 
+**Видео уроци:** по едно за всеки начин на свързване, на [сайта](https://dyrakarmy.online/#videos) и в [изходния код](https://github.com/biramentv-ux/p2p-pure#-урок-7-начина-да-се-свържете).
+
+**Експерименти (изключени по подразбиране):** собствено пробиване на NAT в настолните програми и Android, режим „Само през Tor“ в настолната програма, mesh през Bluetooth и Wi-Fi Aware.
+
 **Седем начина за първа връзка:** QR лице в лице (без сървър); кратък код от 5 знака и 3 думи (PAKE, сървърът вижда само номера на стаята и шифрован текст); Bluetooth (само в приложението за Android и iOS); QR + звук; QR + светлина (бавна анимация от цветни квадратчета, без сървър); запознаване чрез общ приятел (без сървър); Telegram бот или копиране на поканата. След всеки начин двамата сравняват 12 думи за проверка.
 
 | | Български | English |
@@ -45,6 +49,10 @@ independent audit yet.
 QR or, from afar, a code of 5 characters and 3 words (the words never reach the server), 12 words to rule out anyone in the middle, encrypted chat, disappearing messages in chats and groups, files up to 100 MB that resume after a dropped link, audio and
 video calls, groups of up to 9, notifications and sounds, moving to a new phone. The app speaks
 6 languages (Bulgarian, English, Russian, German, Spanish, Portuguese); the site speaks 8.
+
+**Video tutorials:** one for each way to connect, on the [website](https://dyrakarmy.online/en/#videos) and in the [source repository](https://github.com/biramentv-ux/p2p-pure#-tutorial-7-ways-to-connect).
+
+**Experiments (off by default):** our own NAT punching in the desktop apps and on Android, a "Tor only" mode in the desktop app, a mesh over Bluetooth and Wi-Fi Aware.
 
 **Seven ways to make the first connection:** QR face to face (no server); a short code of 5 characters and 3 words (PAKE, the server sees only the room id and ciphertext); Bluetooth (Android and iOS app only); QR + sound; QR + light (a slow animation of coloured squares, no server); introduction by a mutual friend (no server); Telegram bot or copying the invitation. After any of them, both sides compare 12 verification words.
 

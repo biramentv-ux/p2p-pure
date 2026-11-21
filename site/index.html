@@ -406,6 +406,60 @@
         </div>
       </section>
 
+      <!-- ================= VIDEO TUTORIALS ================= -->
+      <section class="videos" id="videos" data-palette="8">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="vidKicker">Видео уроци</p>
+          <h2 data-i18n-html="vidTitle">Всеки начин за свързване,<br /><em>стъпка по стъпка.</em></h2>
+          <p class="sec-lead" data-i18n="vidLead">Седем кратки клипа, около половин минута всеки. Без звук: текстът е в самия кадър.</p>
+        </header>
+        <div class="vids">
+          <figure class="card vid reveal">
+            <video controls preload="none" playsinline width="720" height="616" poster="assets/tutorial-qr-bg.jpg" src="assets/tutorial-qr-bg.mp4" data-tutorial="qr"></video>
+            <figcaption><span class="way-n mono" aria-hidden="true">01</span> <span data-i18n="w1t">QR лице в лице</span></figcaption>
+          </figure>
+          <figure class="card vid reveal">
+            <video controls preload="none" playsinline width="720" height="616" poster="assets/tutorial-short-code-bg.jpg" src="assets/tutorial-short-code-bg.mp4" data-tutorial="short-code"></video>
+            <figcaption><span class="way-n mono" aria-hidden="true">02</span> <span data-i18n="w2t">Кратък код от разстояние</span></figcaption>
+          </figure>
+          <figure class="card vid reveal">
+            <video controls preload="none" playsinline width="720" height="616" poster="assets/tutorial-bluetooth-bg.jpg" src="assets/tutorial-bluetooth-bg.mp4" data-tutorial="bluetooth"></video>
+            <figcaption><span class="way-n mono" aria-hidden="true">03</span> <span data-i18n="w3t">Bluetooth</span></figcaption>
+          </figure>
+          <figure class="card vid reveal">
+            <video controls preload="none" playsinline width="720" height="616" poster="assets/tutorial-sound-bg.jpg" src="assets/tutorial-sound-bg.mp4" data-tutorial="sound"></video>
+            <figcaption><span class="way-n mono" aria-hidden="true">04</span> <span data-i18n="w4t">QR + звук</span></figcaption>
+          </figure>
+          <figure class="card vid reveal">
+            <video controls preload="none" playsinline width="720" height="616" poster="assets/tutorial-light-bg.jpg" src="assets/tutorial-light-bg.mp4" data-tutorial="light"></video>
+            <figcaption><span class="way-n mono" aria-hidden="true">05</span> <span data-i18n="w7t">QR + светлина</span></figcaption>
+          </figure>
+          <figure class="card vid reveal">
+            <video controls preload="none" playsinline width="720" height="616" poster="assets/tutorial-introduction-bg.jpg" src="assets/tutorial-introduction-bg.mp4" data-tutorial="introduction"></video>
+            <figcaption><span class="way-n mono" aria-hidden="true">06</span> <span data-i18n="w5t">Чрез общ приятел</span></figcaption>
+          </figure>
+          <figure class="card vid reveal">
+            <video controls preload="none" playsinline width="720" height="616" poster="assets/tutorial-telegram-bg.jpg" src="assets/tutorial-telegram-bg.mp4" data-tutorial="telegram"></video>
+            <figcaption><span class="way-n mono" aria-hidden="true">07</span> <span data-i18n="w6t">Telegram бот или копирана покана</span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ================= EXPERIMENTS ================= -->
+      <section class="experiments" id="experiments" data-palette="2">
+        <header class="sec-head reveal">
+          <p class="kicker" data-i18n="expKicker">Експерименти</p>
+          <h2 data-i18n-html="expTitle">Когато мрежата не помага.<br /><em>Изключени по подразбиране.</em></h2>
+          <p class="sec-lead" data-i18n="expLead">Нови пътища за съобщенията, още в проба. Включват се ръчно в настолното приложение или в Android, а шифроването остава същото.</p>
+        </header>
+        <div class="exps">
+          <article class="card exp reveal"><h3 data-i18n="x1t">Собствено пробиване на NAT</h3><p data-i18n="x1p">Когато WebRTC не успее (два симетрични NAT), приложението пробва със свои UDP сокети, порт от рутера (UPnP, NAT-PMP, PCP) и „рожденно“ пробиване с до 256 сокета.</p></article>
+          <article class="card exp reveal"><h3 data-i18n="x2t">Само през Tor</h3><p data-i18n="x2p">В настолното приложение с Tor: връзка само между две onion услуги. В поканата няма нито един IP адрес.</p></article>
+          <article class="card exp reveal"><h3 data-i18n="x3t">Mesh без интернет</h3><p data-i18n="x3p">Телефони наблизо препращат шифровани пакети през Bluetooth и Wi-Fi Aware, най-много 7 скока. Кратки текстове и през LoRa (Meshtastic).</p></article>
+          <article class="card exp reveal"><h3 data-i18n="x4t">NAT лаборатория</h3><p data-i18n="x4p">Всяка промяна в мрежовия код минава през истински NAT-ове в Linux: cone, restricted, symmetric, със загуба на пакети. Грешката казва защо не става.</p></article>
+        </div>
+      </section>
+
       <!-- ================= SECURITY ================= -->
       <section class="security" id="security" data-palette="4">
         <header class="sec-head reveal">
