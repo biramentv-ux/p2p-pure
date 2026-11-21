@@ -23,6 +23,14 @@ try {
   /* storage blocked or unavailable: the default look stays */
 }
 
+// NAT lab build only (scripts/natlab, VITE_NATLAB=1): lets the lab read the app's own QR codes.
+// The condition is a build-time constant, so release builds drop this branch entirely.
+if (import.meta.env.VITE_NATLAB === '1') {
+  void import('./p2p/qrDecode').then((m) => {
+    ;(window as unknown as { __natlab: unknown }).__natlab = { decodeQr: m.decodeQrFromPixels }
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <I18nProvider>

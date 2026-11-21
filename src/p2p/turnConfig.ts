@@ -238,7 +238,17 @@ export function parseTurnSettings(value: unknown): TurnSettings | null {
 }
 
 /** The only STUN server used when TURN is off or not relay-only (NAT discovery, no data). */
-export const STUN_SERVERS: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302"] }];
+export const STUN_SERVERS: RTCIceServer[] = [{ urls: stunUrls(import.meta.env.VITE_STUN_URLS) }];
+
+/**
+ * The STUN URLs: the public default, or a build-time list (VITE_STUN_URLS, comma separated).
+ * Only the NAT lab (scripts/natlab) sets it, to point at its own STUN server; releases never do.
+ * Anything that is not a stun: URL is dropped, so a typo cannot add a TURN server.
+ */
+export function stunUrls(raw: unknown): string[] {
+  const list = typeof raw === "string" ? raw.split(",").map((u) => u.trim()).filter((u) => /^stuns?:[^\s]+$/i.test(u)) : [];
+  return list.length > 0 ? list : ["stun:stun.l.google.com:19302"];
+}
 
 /**
  * RTCConfiguration for a new connection. With no (or disabled) TURN settings this is exactly

@@ -1,0 +1,51 @@
+# Н8: the NAT lab. Two real browsers behind simulated NATs in Linux network namespaces, a local
+# STUN server, no cloud. Every scenario must give its expected outcome: a connection and a message
+# both ways, or the right diagnosis on both screens (scripts/natlab/topology.mjs).
+name: NAT lab
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/p2p/**"
+      - "src/ui/screens/ConnectScreen.tsx"
+      - "scripts/natlab/**"
+      - ".github/workflows/natlab.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  natlab:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # Chromium ↔ Chromium, and Chromium ↔ Firefox (two different WebRTC stacks).
+        browser_b: [chromium, firefox]
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Browsers and network tools
+        run: |
+          npx playwright-core install --with-deps chromium ${{ matrix.browser_b == 'firefox' && 'firefox' || '' }}
+          sudo apt-get install -y iproute2 iptables
+      - name: Run the scenario matrix
+        run: sudo -E env "PATH=$PATH" node scripts/natlab/run.mjs --browser-b ${{ matrix.browser_b }}
+      - name: Report
+        if: always()
+        run: |
+          {
+            echo "### NAT lab: chromium ↔ ${{ matrix.browser_b }}"
+            node -e 'const r=require("./natlab-report.json");console.log("| Scenario | Result | Outcome | s |\n|---|---|---|---|");for(const x of r.results)console.log(`| ${x.name} | ${x.skipped?"skip":x.ok?"pass":"FAIL"} | ${x.skipped??(x.connected?"connected":"failed")} | ${x.seconds??""} |`)'
+          } >> "$GITHUB_STEP_SUMMARY"

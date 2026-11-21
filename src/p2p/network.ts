@@ -16,6 +16,11 @@ export interface CandidateSummary {
   relay: boolean;
   /** Only relay candidates were gathered (relay-only mode): this device's IP is not in the SDP. */
   relayOnly: boolean;
+  /** STUN answered: at least one server-reflexive candidate. None usually means UDP is blocked. */
+  srflx: boolean;
+  /** Any IPv4 / IPv6 address at all (host or srflx), private ones included. */
+  anyIpv4: boolean;
+  anyIpv6: boolean;
   total: number;
 }
 
@@ -37,6 +42,9 @@ export function summarizeCandidates(sdp: string): CandidateSummary {
     hiddenHost: false,
     relay: false,
     relayOnly: false,
+    srflx: false,
+    anyIpv4: false,
+    anyIpv6: false,
     total: 0,
   };
   let nonRelay = 0;
@@ -58,6 +66,11 @@ export function summarizeCandidates(sdp: string): CandidateSummary {
       summary.hiddenHost = true;
       continue;
     }
+    if (typ === "srflx") summary.srflx = true;
+    if (addr.includes(":")) {
+      // Link-local fe80:: does not leave the network segment: not evidence of IPv6 connectivity.
+      if (!/^fe80:/i.test(addr)) summary.anyIpv6 = true;
+    } else summary.anyIpv4 = true;
     if (isPublicIpv6(addr) && (typ === "host" || typ === "srflx")) summary.publicIpv6 = true;
     if (typ === "srflx" && !addr.includes(":") && !PRIVATE_V4.test(addr)) summary.publicIpv4 = true;
   }
@@ -88,5 +101,52 @@ export function describeReachability(s: CandidateSummary): string {
       return s.hiddenHost
         ? "Адресите на устройството са скрити от браузъра. Връзка от разстояние вероятно няма да успее."
         : "Няма публичен адрес. Връзка от разстояние вероятно няма да успее.";
+  }
+}
+
+/**
+ * Why a connection did not establish, from both sides' candidates (ours, and the ones in the
+ * other person's invitation or answer). Checked in the NAT lab (scripts/natlab) for every scenario.
+ *
+ *  - "relay": we had a TURN relay and still failed (wrong TURN settings, or it is down).
+ *  - "udp-blocked-here" / "udp-blocked-there": STUN never answered on that side and it has no
+ *    public IPv6: the network blocks UDP (or outgoing STUN).
+ *  - "family-mismatch": one side has only IPv6, the other only IPv4. They cannot meet without a relay.
+ *  - "nat": both have only a NAT'ed IPv4 address. Usually symmetric NAT or carrier NAT (CGNAT)
+ *    on at least one side.
+ *  - "unknown": nothing in the candidates explains it (a firewall on the path, a timeout).
+ */
+export type FailureCause = "relay" | "udp-blocked-here" | "udp-blocked-there" | "family-mismatch" | "nat" | "unknown";
+
+export function diagnoseFailure(mySdp: string, peerSdp?: string | null): FailureCause {
+  const me = summarizeCandidates(mySdp);
+  if (me.relay) return "relay";
+  const peer = peerSdp ? summarizeCandidates(peerSdp) : null;
+  if (peer && peer.total > 0) {
+    const v6Only = (s: CandidateSummary) => s.publicIpv6 && !s.anyIpv4;
+    const v4Only = (s: CandidateSummary) => !s.anyIpv6 && s.anyIpv4;
+    if ((v6Only(me) && v4Only(peer)) || (v4Only(me) && v6Only(peer))) return "family-mismatch";
+  }
+  if (!me.srflx && !me.publicIpv6 && me.total > 0) return "udp-blocked-here";
+  if (peer && peer.total > 0 && !peer.relay && !peer.srflx && !peer.publicIpv6) return "udp-blocked-there";
+  if (me.publicIpv4 && !me.publicIpv6 && peer && peer.publicIpv4 && !peer.publicIpv6) return "nat";
+  return "unknown";
+}
+
+/** What to tell the person for each cause (Bulgarian source text; the screen translates it). */
+export function describeFailure(cause: FailureCause): string {
+  switch (cause) {
+    case "relay":
+      return "Връзката не се установи и през TURN релея. Провери адреса, потребителя и паролата му в раздел Идентичност.";
+    case "udp-blocked-here":
+      return "Твоята мрежа не пропуска UDP (STUN не отговори). Директна връзка от тази мрежа няма да мине. Опитай друга Wi-Fi мрежа, мобилни данни или собствен TURN релей.";
+    case "udp-blocked-there":
+      return "Мрежата на другия човек не пропуска UDP (STUN не отговори там). Нека той опита друга Wi-Fi мрежа, мобилни данни или собствен TURN релей.";
+    case "family-mismatch":
+      return "Едното устройство е само с IPv6, а другото само с IPv4. Те не могат да се свържат директно. Нека едното смени мрежата (например Wi-Fi вместо мобилни данни) или ползвайте TURN релей.";
+    case "nat":
+      return "И двете устройства са зад NAT и директната връзка не мина. Обикновено поне едното е зад симетричен NAT или NAT на оператора (CGNAT). Опитайте с една Wi-Fi мрежа или собствен TURN релей.";
+    default:
+      return "Връзката не се установи навреме. Мрежата може да блокира директната връзка. Опитайте с една Wi-Fi мрежа за първото сдвояване.";
   }
 }

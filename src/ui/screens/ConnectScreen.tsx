@@ -13,7 +13,7 @@ import {
   type Invitation,
 } from "../../p2p/invitation";
 import { PeerLink, PeerLinkError, CONNECT_TIMEOUT_MS } from "../../p2p/peer";
-import { describeReachability, reachability, summarizeCandidates } from "../../p2p/network";
+import { describeFailure, describeReachability, diagnoseFailure, summarizeCandidates } from "../../p2p/network";
 import { completeHandshake } from "../../p2p/session";
 import { createEphemeralKeyPair, SecureSession, type EphemeralKeyPair } from "../../p2p/secureSession";
 import { formatSafetyCode, safetyWords } from "../../p2p/safety";
@@ -152,6 +152,8 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
   const ephemeralRef = useRef<EphemeralKeyPair | null>(null);
   /** Our own SDP, kept so a failed connection can explain this network's reachability. */
   const mySdpRef = useRef<string | null>(null);
+  /** The other side's SDP (from its invitation or answer), for the failure diagnosis. */
+  const peerSdpRef = useRef<string | null>(null);
   const busyRef = useRef(false);
   // Offline signaling: generated offers and answers come back through the provider.
   const providerRef = useRef<OfflineSignalingProvider | null>(null);
@@ -243,31 +245,36 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
     mySdpRef.current = null;
     offerRef.current = null;
     ephemeralRef.current = null;
+    peerSdpRef.current = null;
     compactAnswerRef.current = null;
     busyRef.current = false;
   }
 
   function fail(err: unknown) {
     const mySdp = mySdpRef.current;
+    const peerSdp = peerSdpRef.current;
     clearAll();
     mySdpRef.current = null;
+    peerSdpRef.current = null;
     let message: string;
     if (err instanceof PakeError) {
       message = pakeErrorMessage(err);
     } else if (err instanceof PeerLinkError && mySdp) {
-      // Timeouts and closed channels: say what it usually means and what to try next.
-      const summary = summarizeCandidates(mySdp);
+      // Timeouts and closed channels: say why, from both sides' candidates, and what to try next.
+      const cause = diagnoseFailure(mySdp, peerSdp);
       message =
-        reachability(summary) === "relay"
+        cause === "relay"
           ? [
               t("Връзката не се установи и през TURN релея. Провери адреса, потребителя и паролата му в раздел Идентичност."),
               t("Ако и другото устройство е зад строга мрежа, то също може да има нужда от релей."),
             ].join(" ")
-          : [
-              t("Връзката не се установи навреме. Мрежата може да блокира директната връзка."),
-              t(describeReachability(summary)),
-              t("Опитайте с една Wi-Fi мрежа за първото сдвояване."),
-            ].join(" ");
+          : cause === "unknown"
+            ? [
+                t("Връзката не се установи навреме. Мрежата може да блокира директната връзка."),
+                t(describeReachability(summarizeCandidates(mySdp))),
+                t("Опитайте с една Wi-Fi мрежа за първото сдвояване."),
+              ].join(" ")
+            : t(describeFailure(cause));
     } else {
       message = err instanceof Error ? t(err.message) : t("Неизвестна грешка при свързване.");
     }
@@ -425,6 +432,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
       throw new InvitationError("Този отговор не е за тази покана.", "INVALID_FIELD");
     }
     setView({ k: "busy", label: t("Свързвам…") });
+    peerSdpRef.current = answer.sdp;
     await link.acceptAnswer(answer.sdp);
     await completeHandshake(link, identity.did, answer.publicKey, CONNECT_TIMEOUT_MS);
     const session = SecureSession.derive({
@@ -589,6 +597,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
       // Over Bluetooth the panel stays on screen until it has sent the answer back.
       const ble = bleAnswerRef.current;
       if (!ble) setView({ k: "busy", label: t("Подготвям отговор…") });
+      peerSdpRef.current = offer.sdp;
       const { link, sdp } = await PeerLink.createAnswer(offer.sdp);
       mySdpRef.current = sdp;
       linkRef.current = link;

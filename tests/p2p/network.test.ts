@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeReachability, reachability, summarizeCandidates } from "../../src/p2p/network";
+import { describeFailure, describeReachability, diagnoseFailure, reachability, summarizeCandidates } from "../../src/p2p/network";
 
 const c = (addr: string, typ: string) =>
   `a=candidate:1 1 udp 2122260223 ${addr} 50000 typ ${typ} generation 0\r\n`;
@@ -76,6 +76,44 @@ describe("relay candidates (user's own TURN)", () => {
       const bg = describeReachability(summarizeCandidates(sdp));
       expect(translate("en", bg)).not.toBe(bg);
       expect(translate("en", bg)).toContain("TURN relay");
+    }
+  });
+});
+
+describe("failure diagnosis (Н8, checked in the NAT lab too)", () => {
+  const v4nat = c("10.0.1.2", "host") + c("203.0.113.10", "srflx");
+  const v6only = c("2001:db8:1::2", "host") + c("fe80::1", "host");
+  const udpBlocked = c("10.0.1.2", "host");
+
+  it("names a relay that still failed", () => {
+    expect(diagnoseFailure(c("203.0.113.5", "relay"), v4nat)).toBe("relay");
+  });
+
+  it("tells IPv6-only from IPv4-only, in both directions", () => {
+    expect(diagnoseFailure(v6only, v4nat)).toBe("family-mismatch");
+    expect(diagnoseFailure(v4nat, v6only)).toBe("family-mismatch");
+    // Link-local IPv6 on an IPv4 network is not IPv6 connectivity.
+    expect(diagnoseFailure(v4nat + c("fe80::2", "host"), v6only)).toBe("family-mismatch");
+  });
+
+  it("says which side blocks UDP", () => {
+    expect(diagnoseFailure(udpBlocked, v4nat)).toBe("udp-blocked-here");
+    expect(diagnoseFailure(v4nat, udpBlocked)).toBe("udp-blocked-there");
+    expect(diagnoseFailure(udpBlocked)).toBe("udp-blocked-here");
+  });
+
+  it("calls two NAT'ed IPv4 sides a NAT problem", () => {
+    expect(diagnoseFailure(v4nat, c("10.0.2.2", "host") + c("203.0.113.20", "srflx"))).toBe("nat");
+  });
+
+  it("falls back to unknown when the candidates do not explain it", () => {
+    expect(diagnoseFailure(c("2001:db8:1::2", "host") + c("203.0.113.10", "srflx"), v4nat)).toBe("unknown");
+    expect(diagnoseFailure("")).toBe("unknown");
+  });
+
+  it("has a message for every cause", () => {
+    for (const cause of ["relay", "udp-blocked-here", "udp-blocked-there", "family-mismatch", "nat", "unknown"] as const) {
+      expect(describeFailure(cause).length).toBeGreaterThan(20);
     }
   });
 });

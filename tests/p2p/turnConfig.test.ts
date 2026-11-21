@@ -247,3 +247,14 @@ describe("turnStore (encrypted at rest)", () => {
     expect(getActiveTurn()).toBeNull();
   });
 });
+
+describe("STUN URL list (Н8 lab override)", () => {
+  it("uses the public default unless a valid stun: list is given", async () => {
+    const { stunUrls } = await import("../../src/p2p/turnConfig");
+    expect(stunUrls(undefined)).toEqual(["stun:stun.l.google.com:19302"]);
+    expect(stunUrls("")).toEqual(["stun:stun.l.google.com:19302"]);
+    expect(stunUrls("stun:203.0.113.1:3478, stun:[2001:db8::1]:3478")).toEqual(["stun:203.0.113.1:3478", "stun:[2001:db8::1]:3478"]);
+    // A TURN URL or junk never gets in through this switch.
+    expect(stunUrls("turn:evil.example:3478,javascript:alert(1)")).toEqual(["stun:stun.l.google.com:19302"]);
+  });
+});
