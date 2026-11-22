@@ -301,7 +301,7 @@ bash install.sh              # или: bash install.sh --appimage  (само з�
 | **Н8 NAT лаборатория** | Linux namespaces с cone, restricted и symmetric NAT, загуба на пакети, локален STUN и два браузъра; ферма от телефони; грешката казва защо не става. | `sudo npm run test:natlab`, `npm run farm` | [docs/NAT-LAB.md](docs/NAT-LAB.md), [docs/DEVICE-FARM.md](docs/DEVICE-FARM.md) |
 | **Н9 Fuzz тестове** | fast-check върху всички парсери: никой вход не хвърля нещо извън определените грешки. | `npm run test:fuzz` | [ADR-006](.10x/adrs/006-n8-nat-lab-and-fuzzing.md) |
 
-Какво още не е проверено: Android и Windows обвивките на нативния транспорт, mesh радиото и връзката във фона на истински телефони; Tor срещу истинската мрежа и APK-то с Tor; IPv6 сценариите в лабораторията (вървят само в CI).
+Какво още не е проверено: Android и Windows обвивките на нативния транспорт, mesh радиото и връзката във фона на истински телефони; APK-то с Tor на телефон (Tor срещу истинската мрежа вече минава в CI); IPv6 сценариите в лабораторията (вървят само в CI).
 
 ## ⚠️ Ограничения, които приемаме
 
@@ -668,7 +668,7 @@ The extension collects no data; it only opens the app.
 | **N8 NAT lab** | Linux namespaces with cone, restricted and symmetric NAT, packet loss, a local STUN and two browsers; a phone farm; the error says why it didn't connect. | `sudo npm run test:natlab`, `npm run farm` | [docs/NAT-LAB.md](docs/NAT-LAB.md), [docs/DEVICE-FARM.md](docs/DEVICE-FARM.md) |
 | **N9 Fuzz tests** | fast-check on every parser: no input throws anything but the defined errors. | `npm run test:fuzz` | [ADR-006](.10x/adrs/006-n8-nat-lab-and-fuzzing.md) |
 
-Not verified yet: the Android and Windows shells of the native transport, the mesh radio and the background link on real phones; Tor against the real network and the APK with Tor; the IPv6 lab scenarios (they run in CI only).
+Not verified yet: the Android and Windows shells of the native transport, the mesh radio and the background link on real phones; the APK with Tor on a phone (Tor against the real network now passes in CI); the IPv6 lab scenarios (they run in CI only).
 
 ## ⚠️ Trade-offs we accept
 
