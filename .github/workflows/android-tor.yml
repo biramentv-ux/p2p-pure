@@ -1,15 +1,33 @@
 # П6 (experiment): an Android APK that carries Tor (Arti, android-tor/ → libp2ptor.so).
-# Manual only: Arti adds ~10 MB and a long build, and the mode is an experiment (docs/TOR.md).
+# Manual, or on a PR that touches the Tor code: Arti adds ~10 MB and a long build, and the mode is
+# an experiment (docs/TOR.md). Job live-tor checks the same Tor code against the real Tor network.
 # arm64-v8a only (practically every phone in use). Debug-signed: for testing, not for release.
 name: Android APK with Tor (experiment)
 
 on:
   workflow_dispatch:
+  # Also when the Tor code itself changes (a new workflow can only be dispatched from main).
+  pull_request:
+    paths:
+      - "android-tor/**"
+      - "src-tauri/src/tor_net.rs"
+      - "native-overlays/android/java/bg/p2pmessenger/app/TorPlugin.java"
+      - ".github/workflows/android-tor.yml"
 
 permissions:
   contents: read
 
 jobs:
+  live-tor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Two onion services, a round trip over the real Tor network
+        run: cargo test --release --locked --manifest-path android-tor/Cargo.toml -- --include-ignored --nocapture
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60

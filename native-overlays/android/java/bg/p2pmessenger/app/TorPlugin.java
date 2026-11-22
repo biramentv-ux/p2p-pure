@@ -14,16 +14,16 @@ import org.json.JSONArray;
 /**
  * П6 (experiment): Tor onion services on Android through Arti (libp2ptor.so, android-tor/).
  * The library is in the APK only when built by .github/workflows/android-tor.yml; otherwise
- * status() says "unavailable" and the app never shows the "Tor only" setting.
+ * status() says available: false and the app never shows the "Tor only" setting.
  * Same contract as the desktop commands (src-tauri/src/tor_net_cmd.rs, src/tor/torBridge.ts).
  */
 @CapacitorPlugin(name = "Tor")
 public class TorPlugin extends Plugin {
-    private static final boolean LOADED = load();
+    private static final boolean LOADED = loadLibrary();
     private final ExecutorService io = Executors.newCachedThreadPool();
     private volatile String onion;
 
-    private static boolean load() {
+    private static boolean loadLibrary() {
         try {
             System.loadLibrary("p2ptor");
             return true;
@@ -38,13 +38,11 @@ public class TorPlugin extends Plugin {
     static native void nativeClose(long id);
     static native String nativeRecv(int waitMs);
 
+    /** Never rejects: a rejected call is logged as a JS error, and "no Tor in this APK" is normal. */
     @PluginMethod
     public void status(PluginCall call) {
-        if (!LOADED) {
-            call.reject("unavailable");
-            return;
-        }
         JSObject out = new JSObject();
+        out.put("available", LOADED);
         out.put("started", onion != null);
         if (onion != null) out.put("onion", onion);
         call.resolve(out);

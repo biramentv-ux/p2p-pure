@@ -2,7 +2,7 @@
  * П6 (experiment): Tor from the shell, the same Arti code (src-tauri/src/tor_net.rs) in both:
  *  - the Tauri desktop app built with `--features tor-transport` (commands tor_*);
  *  - the Android app when its APK carries libp2ptor.so (TorPlugin, built by
- *    .github/workflows/android-tor.yml). Without the library the plugin says "unavailable".
+ *    .github/workflows/android-tor.yml). Without the library status() says available: false.
  * In a browser there is none.
  */
 export interface TorEvent {
@@ -27,7 +27,7 @@ interface Windowish {
 }
 
 interface TorPluginApi {
-  status(): Promise<{ started: boolean; onion?: string }>;
+  status(): Promise<{ available?: boolean; started: boolean; onion?: string }>;
   start(): Promise<{ onion: string }>;
   connect(o: { onion: string }): Promise<{ id: number }>;
   send(o: { id: number; data: string }): Promise<void>;
@@ -39,8 +39,12 @@ interface TorPluginApi {
 function androidInvoke(p: TorPluginApi): Invoke {
   return async (cmd, args = {}) => {
     switch (cmd) {
-      case "tor_status":
-        return p.status();
+      case "tor_status": {
+        const s = await p.status();
+        // An APK without libp2ptor.so: no Tor here (decided in JS, so nothing is logged as an error).
+        if (s.available === false) throw new Error("unavailable");
+        return s;
+      }
       case "tor_start":
         return (await p.start()).onion;
       case "tor_connect":

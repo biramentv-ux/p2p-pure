@@ -23,6 +23,7 @@ tor-cell = { version = "0.48", optional = true }
 tor-proto = { version = "0.48", optional = true }
 tor-rtcompat = { version = "0.48", optional = true }
 safelog = { version = "0.10", optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"], optional = true }
 futures = { version = "0.3", optional = true }
 tokio = { version = "1", features = ["sync", "time", "rt"], optional = true }
 
@@ -31,7 +32,7 @@ default = []
 # П4 (experiment): UDP sockets, SSDP and LAN HTTP for the native transport (src/native/bridge.ts).
 native-transport = ["dep:serde"]
 # П6 (experiment): Tor onion services through Arti (src/tor/*.ts). Large: not in the release builds.
-tor-transport = ["native-transport", "dep:arti-client", "dep:tor-hsservice", "dep:tor-cell", "dep:tor-proto", "dep:tor-rtcompat", "dep:safelog", "dep:futures", "dep:tokio"]
+tor-transport = ["native-transport", "dep:arti-client", "dep:tor-hsservice", "dep:tor-cell", "dep:tor-proto", "dep:tor-rtcompat", "dep:safelog", "dep:rustls", "dep:futures", "dep:tokio"]
 
 # Windows Hello (KeyCredentialManager). Same version tauri already pulls in, so no new crate.
 [target.'cfg(windows)'.dependencies]
