@@ -152,3 +152,37 @@ describe("П6 Tor channel", () => {
     signal.cancelled = true;
   });
 });
+
+describe("П6 on Android (TorPlugin)", () => {
+  it("is not offered when the APK has no Tor library", async () => {
+    const { torBridge } = await import("../../src/tor/torBridge");
+    const win = { Capacitor: { isNativePlatform: () => true, Plugins: { Tor: { status: () => Promise.reject(new Error("unavailable")) } } } };
+    expect(await torBridge(win as never)).toBeNull();
+  });
+
+  it("maps the plugin to the same commands as the desktop", async () => {
+    const { torBridge } = await import("../../src/tor/torBridge");
+    const sent: Array<[number, string]> = [];
+    const plugin = {
+      status: async () => ({ started: false }),
+      start: async () => ({ onion: DDG }),
+      connect: async () => ({ id: 7 }),
+      send: async (o: { id: number; data: string }) => void sent.push([o.id, o.data]),
+      close: async () => undefined,
+      recv: async () => ({ events: [{ id: 7, kind: "data" as const, data: btoa("hi") }] }),
+    };
+    const bridge = await torBridge({ Capacitor: { isNativePlatform: () => true, Plugins: { Tor: plugin } } } as never);
+    expect(bridge).not.toBeNull();
+    expect(await bridge!.start()).toBe(DDG);
+    expect(await bridge!.connect(DDG)).toBe(7);
+    await bridge!.send(7, new TextEncoder().encode("hi"));
+    expect(sent).toEqual([[7, btoa("hi")]]);
+    const got = await new Promise<string>((resolve) => {
+      const off = bridge!.onEvent((e) => {
+        off();
+        resolve(new TextDecoder().decode(e.data));
+      });
+    });
+    expect(got).toBe("hi");
+  });
+});

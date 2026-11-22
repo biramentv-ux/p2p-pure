@@ -32,6 +32,14 @@ const MEDIA_PERMISSIONS = [
 // П4/П5 experiments: SSDP multicast for UPnP port mapping (NativeNetPlugin) and Wi-Fi Aware
 // for the mesh (MeshRadioPlugin). Both idle unless the experiment is turned on in Settings.
 const EXPERIMENT_MANIFEST = [
+  // П3: notifications (Android 13+) and the foreground service that keeps links up (LinkKeeperService).
+  { needle: 'android:name="android.permission.POST_NOTIFICATIONS"', line: '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />' },
+  { needle: 'android:name="android.permission.FOREGROUND_SERVICE"', line: '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' },
+  {
+    needle: 'android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING"',
+    line: '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />',
+  },
+  { needle: 'android:name="android.permission.WAKE_LOCK"', line: '    <uses-permission android:name="android.permission.WAKE_LOCK" />' },
   {
     needle: 'android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"',
     line: '    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />',
@@ -170,6 +178,17 @@ function syncAndroid() {
       `manifest ${name.split(".").pop()}`,
     );
   }
+  ensureLine(
+    "android/app/src/main/AndroidManifest.xml",
+    'android:name=".LinkKeeperService"',
+    "        </activity>",
+    [
+      "",
+      "        <!-- П3: keeps links up with the screen off (docs/NOTIFICATIONS.md). Started only by the user's setting. -->",
+      '        <service android:name=".LinkKeeperService" android:exported="false" android:foregroundServiceType="remoteMessaging" />',
+    ],
+    "manifest LinkKeeperService",
+  );
   for (const { needle, line } of EXPERIMENT_MANIFEST) {
     ensureLine(
       "android/app/src/main/AndroidManifest.xml",

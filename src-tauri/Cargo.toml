@@ -24,7 +24,7 @@ tor-proto = { version = "0.48", optional = true }
 tor-rtcompat = { version = "0.48", optional = true }
 safelog = { version = "0.10", optional = true }
 futures = { version = "0.3", optional = true }
-tokio = { version = "1", features = ["sync", "time"], optional = true }
+tokio = { version = "1", features = ["sync", "time", "rt"], optional = true }
 
 [features]
 default = []

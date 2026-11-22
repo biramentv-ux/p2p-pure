@@ -5,12 +5,14 @@
 import { PROTECT_ES } from "./protect";
 import { GROUP_TIMER_ES } from "./groupTimer";
 import { NATIVE_NET_ES } from "./nativeNet";
+import { KEY_CONTINUITY_ES } from "./keyContinuity";
 import { CONNECT_ES } from "./connectCalls";
 
 export const ES_DICTIONARY: Record<string, string> = {
   ...PROTECT_ES,
   ...GROUP_TIMER_ES,
   ...NATIVE_NET_ES,
+  ...KEY_CONTINUITY_ES,
   ...CONNECT_ES,
   "Премести на ново устройство": "Pasar a un dispositivo nuevo",
   "Имам друго устройство": "Tengo otro dispositivo",

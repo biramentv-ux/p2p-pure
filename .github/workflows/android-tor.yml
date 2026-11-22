@@ -1,0 +1,74 @@
+# П6 (experiment): an Android APK that carries Tor (Arti, android-tor/ → libp2ptor.so).
+# Manual only: Arti adds ~10 MB and a long build, and the mode is an experiment (docs/TOR.md).
+# arm64-v8a only (practically every phone in use). Debug-signed: for testing, not for release.
+name: Android APK with Tor (experiment)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Web app and Capacitor project
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+
+      - name: libp2ptor.so (Arti) with the NDK on the runner
+        run: |
+          rustup target add aarch64-linux-android
+          TC="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$TC/aarch64-linux-android26-clang"
+          export AR_aarch64_linux_android="$TC/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TC/aarch64-linux-android26-clang"
+          cargo build --release --locked --target aarch64-linux-android --manifest-path android-tor/Cargo.toml
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp android-tor/target/aarch64-linux-android/release/libp2ptor.so android/app/src/main/jniLibs/arm64-v8a/
+          ls -l android/app/src/main/jniLibs/arm64-v8a/
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          java-version: "21"
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+
+      - name: APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Checksum
+        run: |
+          cd android/app/build/outputs/apk/debug
+          mv app-debug.apk p2p-messenger-tor-arm64-debug.apk
+          sha256sum p2p-messenger-tor-arm64-debug.apk | tee SHA256SUMS
+          {
+            echo "### Android APK with Tor (experiment)"
+            echo "arm64-v8a, debug-signed. Turn on “Tor only” in Settings → Show QR."
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: p2p-messenger-tor-arm64-debug
+          path: |
+            android/app/build/outputs/apk/debug/p2p-messenger-tor-arm64-debug.apk
+            android/app/build/outputs/apk/debug/SHA256SUMS
+          retention-days: 14

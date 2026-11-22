@@ -5,6 +5,10 @@
  *  - timer: disappearing messages for this chat (ms, one of DISAPPEAR_OPTIONS; 0 = off)
  *  - suite: agreement on the cipher suite (see suiteNegotiation.ts)
  *  - intro-*: introduction through a mutual contact (src/intro, docs/INTRODUCTIONS.md)
+ *  - vouch-*: key continuity (П7, src/trust, docs/KEY-CONTINUITY.md):
+ *      vouch-grant  "I checked you: you are the new key of <old>" (a signed statement for the receiver to keep)
+ *      vouch-ask    "show me the statements that you are the new key of <old>"
+ *      vouch-list   the answer: those statements (at most MAX_VOUCHES)
  *
  * Plaintext format: CONTROL_MARK + JSON. User text cannot carry the mark, because the
  * chat sanitizes the \u0001 byte out of typed text.
@@ -13,13 +17,16 @@ import { FRAME_MARK } from "./photo";
 import { validLocation, type LocationFix } from "../history/messageStore";
 import { validSuiteMessage, type SuiteMessage } from "./suiteNegotiation";
 import { validDisappearMs } from "../history/disappearing";
-import { introToJson, isIntroType, validIntroMessage, type IntroMessage } from "../intro/introMessages";
+import { introToJson, isIntroType, validDidKey, validIntroMessage, type IntroMessage } from "../intro/introMessages";
+import { MAX_VOUCHES, parseVouch, type Vouch } from "../trust/vouch";
 
 export type { IntroMessage } from "../intro/introMessages";
 
 export const CONTROL_MARK = `${FRAME_MARK}K|`;
 
-export type ControlMessage = { t: "loc"; fix: LocationFix } | { t: "wipe" } | { t: "timer"; ms: number; at: number } | SuiteMessage;
+export type VouchMessage = { t: "vouch-grant"; v: Vouch } | { t: "vouch-ask"; old: string } | { t: "vouch-list"; old: string; vs: Vouch[] };
+
+export type ControlMessage = { t: "loc"; fix: LocationFix } | { t: "wipe" } | { t: "timer"; ms: number; at: number } | SuiteMessage | VouchMessage;
 
 /** Everything that can be encoded on the control channel, introductions included. */
 export type AnyControlMessage = ControlMessage | IntroMessage;
@@ -36,6 +43,9 @@ export function encodeControl(message: AnyControlMessage): string {
   if (message.t === "suite") {
     return CONTROL_MARK + JSON.stringify(message);
   }
+  if (message.t === "vouch-grant") return CONTROL_MARK + JSON.stringify({ t: message.t, v: message.v });
+  if (message.t === "vouch-ask") return CONTROL_MARK + JSON.stringify({ t: message.t, old: message.old });
+  if (message.t === "vouch-list") return CONTROL_MARK + JSON.stringify({ t: message.t, old: message.old, vs: message.vs.slice(0, MAX_VOUCHES) });
   if (message.t === "loc") {
     return CONTROL_MARK + JSON.stringify({ t: "loc", lat: message.fix.lat, lng: message.fix.lng, accuracy: message.fix.accuracy });
   }
@@ -81,6 +91,16 @@ export function decodeControl(plaintext: string): ControlMessage | null {
     return ms === null || at === null ? null : { t: "timer", ms, at };
   }
   if (o.t === "suite") return validSuiteMessage(o);
+  if (o.t === "vouch-grant") {
+    const v = parseVouch(o.v);
+    return v ? { t: "vouch-grant", v } : null;
+  }
+  if (o.t === "vouch-ask") return validDidKey(o.old) ? { t: "vouch-ask", old: o.old } : null;
+  if (o.t === "vouch-list") {
+    if (!validDidKey(o.old) || !Array.isArray(o.vs) || o.vs.length > MAX_VOUCHES) return null;
+    const vs = o.vs.map(parseVouch);
+    return vs.every((v): v is Vouch => v !== null) ? { t: "vouch-list", old: o.old, vs } : null;
+  }
   if (o.t === "loc") {
     const fix = validLocation({
       lat: o.lat as number,

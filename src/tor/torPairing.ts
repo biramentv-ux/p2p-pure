@@ -83,7 +83,7 @@ export function armTorLink(
 /** Bulgarian source text when one side is onion-only and the other is not (nothing can connect). */
 export function torMismatch(prep: TorPrep | null, peerSdp: string): string | null {
   const peerTor = readOnionLine(peerSdp) !== null;
-  if (prep && !peerTor) return "Ти си в режим „Само през Tor“, а другият човек не е. Нека и той го включи (само в настолното приложение с Tor) или изключи режима.";
-  if (!prep && peerTor) return "Другият човек е в режим „Само през Tor“. Включи го и ти (само в настолното приложение с Tor), за да се свържете.";
+  if (prep && !peerTor) return "Ти си в режим „Само през Tor“, а другият човек не е. Нека и той го включи (в приложение с Tor) или изключи режима.";
+  if (!prep && peerTor) return "Другият човек е в режим „Само през Tor“. Включи го и ти (в приложение с Tor), за да се свържете.";
   return null;
 }

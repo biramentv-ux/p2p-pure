@@ -4,8 +4,8 @@ import { torBridge } from "../../tor/torBridge";
 import { setTorOnlyEnabled, torOnlyEnabled } from "../../tor/torPairing";
 
 /**
- * П6 (experiment): onion-only mode. Shown only in a desktop build that has Tor (Tauri with the
- * "tor-transport" feature); elsewhere there is nothing to switch.
+ * П6 (experiment): onion-only mode. Shown only in a build that has Tor: Tauri with the
+ * "tor-transport" feature, or an Android APK that carries libp2ptor.so; elsewhere there is nothing to switch.
  */
 export function TorSettings() {
   const { t } = useI18n();

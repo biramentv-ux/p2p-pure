@@ -158,7 +158,7 @@ export function ConnectScreen({ identity, expected, onConnected, onCancel, rende
   const peerSdpRef = useRef<string | null>(null);
   /** П4 (experiment): our native endpoint, until the link is armed with it (native shells only). */
   const nativeRef = useRef<NativePrep | null>(null);
-  /** П6 (experiment): our onion address in onion-only mode (desktop app with Tor only). */
+  /** П6 (experiment): our onion address in onion-only mode (an app with Tor: desktop or Android). */
   const torRef = useRef<TorPrep | null>(null);
   const busyRef = useRef(false);
   // Offline signaling: generated offers and answers come back through the provider.

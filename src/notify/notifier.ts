@@ -16,6 +16,7 @@
  *
  * Settings are per device in localStorage. They are not secret (on/off, a sound, a volume).
  */
+import { androidNotify, androidPermission, askAndroidPermission, backgroundLinkPlugin, refreshAndroidPermission } from "../platform/mobile/backgroundLink";
 import { DEFAULT_SOUND, isSoundId, playSound, primeAudio, type SoundId } from "./sounds";
 
 export interface NotifySettings {
@@ -114,12 +115,15 @@ export function previewText(text: string): string {
 /* ------------------------------------------------------------------ the browser side */
 
 export function permission(): string {
+  // П3: in the Android app the system notification goes through the native plugin.
+  if (backgroundLinkPlugin()) return androidPermission();
   const N = (globalThis as { Notification?: typeof Notification }).Notification;
   return N ? N.permission : "unsupported";
 }
 
 /** Asks the system for permission. Must run from a tap (browsers refuse otherwise). */
 export async function askPermission(): Promise<string> {
+  if (backgroundLinkPlugin()) return askAndroidPermission();
   const N = (globalThis as { Notification?: typeof Notification }).Notification;
   if (!N) return "unsupported";
   try {
@@ -152,6 +156,10 @@ function clearUnread(): void {
 
 async function systemNotification(msg: Incoming, settings: NotifySettings): Promise<void> {
   const body = settings.showText ? msg.preview : msg.hidden;
+  if (backgroundLinkPlugin()) {
+    await androidNotify(msg.chatId, msg.title, body);
+    return;
+  }
   const options: NotificationOptions = { body, tag: msg.chatId, icon: "icons/icon-192.png", silent: true };
   try {
     // Android Chrome only shows notifications through the service worker; elsewhere it is the same.
@@ -200,6 +208,7 @@ export function installNotifier(): void {
   installed = true;
   const prime = () => primeAudio();
   window.addEventListener("pointerdown", prime, { passive: true });
+  void refreshAndroidPermission();
   window.addEventListener("keydown", prime);
   const back = () => {
     if (windowVisible()) clearUnread();

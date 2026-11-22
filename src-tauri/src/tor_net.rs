@@ -7,6 +7,9 @@
 //! The web code (src/tor/*.ts) does the rest: it puts the onion address into the signed
 //! invitation, frames messages on the stream and proves on the first frame that it belongs to
 //! this pairing. Everything stays end-to-end encrypted as always; Tor hides the network path.
+//!
+//! No Tauri in here (only tokio, which Tauri runs on): the Android app compiles this same file
+//! into its JNI library (android-tor/, built by .github/workflows/android-tor.yml).
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -86,7 +89,7 @@ impl TorHub {
             .display_unredacted()
             .to_string();
         let hub = Arc::clone(self);
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             let mut streams = Box::pin(handle_rend_requests(requests));
             while let Some(req) = streams.next().await {
                 let ok_port = matches!(req.request(), tor_proto::stream::IncomingStreamRequest::Begin(b) if b.port() == ONION_PORT);
@@ -111,7 +114,7 @@ impl TorHub {
         self.inner.lock().await.writers.insert(id, Arc::new(Mutex::new(writer)));
         self.push(Event::Open { id, incoming });
         let hub = Arc::clone(self);
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             let mut buf = vec![0u8; 16 * 1024];
             loop {
                 match reader.read(&mut buf).await {

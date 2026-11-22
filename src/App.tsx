@@ -1,3 +1,4 @@
+import { backgroundLinkTexts, syncBackgroundLink } from "./platform/mobile/backgroundLink";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getUnlockMethod } from "./identity";
 import type { UnlockedIdentity, UnlockMethod } from "./identity";
@@ -76,6 +77,12 @@ function App() {
   const { t } = useI18n();
   const [state, setState] = useState<AppState>({ kind: "loading" });
   const [screen, setScreen] = useState<Screen>({ k: "identity" });
+
+  // П3 (Android): keep the links up with the screen off while unlocked, if the person turned it on.
+  const unlockedNow = state.kind === "unlocked";
+  useEffect(() => {
+    void syncBackgroundLink(unlockedNow, backgroundLinkTexts(t));
+  }, [unlockedNow, t]);
   // The group lives across screens. It is closed only when the device locks, and it is
   // saved encrypted, so it comes back after unlock.
   const groupRef = useRef<GroupSession | null>(null);
@@ -456,6 +463,7 @@ function App() {
           session={screen.session}
           historyKey={historyKey}
           onClose={closeChat}
+          me={state.kind === "unlocked" ? { did: state.identity.did, keyPair: state.identity.keyPair } : undefined}
         />
       </Frame>
     );
