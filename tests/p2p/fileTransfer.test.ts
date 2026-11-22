@@ -52,14 +52,22 @@ function bytes(n: number, seed = 7): Uint8Array {
   return out;
 }
 
-const settle = () => new Promise((r) => setTimeout(r, 20));
+/**
+ * Waits for `done` (up to 5 s; decryption and SHA-256 are slow on a loaded CI runner), then 20 ms
+ * more so that nothing unexpected arrives right after. Without `done`, only the 20 ms.
+ */
+async function settle(done?: () => boolean): Promise<void> {
+  const until = Date.now() + 5000;
+  while (done && !done() && Date.now() < until) await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => setTimeout(r, 20));
+}
 
 describe("file transfer", () => {
   it("delivers a multi-chunk file byte for byte", async () => {
     const data = bytes(CHUNK_BYTES * 3 + 123);
     const { a, log } = pair();
     const meta = await a.send(new Blob([data as BlobPart]), "отчет.pdf");
-    await settle();
+    await settle(() => log.received.length === 1 && log.sent.length === 1);
     expect(log.sent.map((m) => m.id)).toEqual([meta.id]);
     expect(log.received).toHaveLength(1);
     const got = new Uint8Array(await log.received[0].blob.arrayBuffer());
@@ -71,7 +79,7 @@ describe("file transfer", () => {
   it("waits for the receiver to accept, and a decline ends it on both sides", async () => {
     const { a, b, log } = pair({ autoAccept: false });
     const sending = a.send(new Blob([bytes(1000) as BlobPart]), "a.bin");
-    await settle();
+    await settle(() => log.offered.length === 1);
     expect(log.offered).toHaveLength(1);
     expect(log.received).toHaveLength(0);
     await b.cancel(log.offered[0].id);
@@ -93,7 +101,7 @@ describe("file transfer", () => {
     expect(events.offered).not.toHaveBeenCalled();
     const offer = { id: "AAAAAAAAAAA", name: "x", size: 600, mime: DOWNLOAD_MIME, sha256: "A".repeat(43), key: "A".repeat(43), n: 1 };
     strict.handleControl(`\u0001F|${JSON.stringify(offer)}`);
-    await settle();
+    await settle(() => events.failed.mock.calls.length > 0);
     expect(events.offered).not.toHaveBeenCalled();
     expect(events.failed).toHaveBeenCalledWith("AAAAAAAAAAA", expect.stringContaining("твърде голям"), "in");
     expect(sent).toEqual(["\u0001X|AAAAAAAAAAA"]);
@@ -109,7 +117,7 @@ describe("file transfer", () => {
       },
     });
     await a.send(new Blob([bytes(CHUNK_BYTES * 3) as BlobPart]), "x.bin").catch(() => undefined);
-    await settle();
+    await settle(() => log.failed.some((f) => f.dir === "b:in"));
     expect(log.received).toHaveLength(0);
     expect(log.failed.some((f) => f.dir === "b:in")).toBe(true);
   });
@@ -117,7 +125,7 @@ describe("file transfer", () => {
   it("a dropped chunk fails the file (strict order)", async () => {
     const { a, log } = pair({ tamper: (b, i) => (i === 1 ? null : b) });
     await a.send(new Blob([bytes(CHUNK_BYTES * 3) as BlobPart]), "x.bin").catch(() => undefined);
-    await settle();
+    await settle(() => log.failed.some((f) => f.dir === "b:in"));
     expect(log.received).toHaveLength(0);
     expect(log.failed.find((f) => f.dir === "b:in")?.reason).toMatch(/ред/);
   });
@@ -182,7 +190,7 @@ describe("file transfer", () => {
     expect(sniffInlineMime(html)).toBeNull();
     const { a, log } = pair();
     await a.send(new Blob([html as BlobPart]), "page.html");
-    await settle();
+    await settle(() => log.received.length > 0);
     expect(log.received[0].meta.mime).toBe(DOWNLOAD_MIME);
     expect(log.received[0].blob.type).toBe(DOWNLOAD_MIME);
   });
@@ -271,7 +279,7 @@ describe("file transfer resume", () => {
     const second = r.link();
     await second.a.resume();
     await second.b.resume();
-    await settle();
+    await settle(() => r.log.received.length === 1 && r.log.resumed.length === 2);
     expect(r.log.resumed.sort()).toEqual(["a:out", "b:in"]);
     expect(r.log.received).toHaveLength(1);
     expect(new Uint8Array(await r.log.received[0].arrayBuffer())).toEqual(data);
@@ -290,7 +298,7 @@ describe("file transfer resume", () => {
     r.cutAt(Infinity);
     const second = r.link();
     await second.b.resume();
-    await settle();
+    await settle(() => r.log.failed.includes("b:Изпращачът спря файла."));
     expect(r.log.received).toHaveLength(0);
     expect(r.log.failed).toContain("b:Изпращачът спря файла.");
   });
@@ -399,7 +407,7 @@ describe("file transfer resume: lost first frames", () => {
     make();
     await b.resume(); // its R is lost
     await a.resume(); // its W reaches b, which asks again
-    await settle();
+    await settle(() => got.length === 1);
     expect(got).toHaveLength(1);
     expect(new Uint8Array(await got[0].arrayBuffer())).toEqual(data);
     expect(sent).toHaveLength(1);
