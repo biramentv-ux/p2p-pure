@@ -74,6 +74,9 @@ impl TorHub {
         if let Some(onion) = &inner.onion {
             return Ok(onion.clone());
         }
+        // Arti leaves the TLS crypto provider to the application (tor-rtcompat, impls/rustls.rs):
+        // without one, rustls panics on the first connection. ring, once per process.
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let config = TorClientConfigBuilder::from_directories(state_dir, cache_dir).build().map_err(|e| e.to_string())?;
         let client = TorClient::create_bootstrapped(config).await.map_err(|e| e.to_string())?;
         // A fresh nickname per run: a new key, so a new address every time the app starts.

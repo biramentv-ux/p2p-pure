@@ -21,6 +21,8 @@ tor-cell = "0.48"
 tor-proto = "0.48"
 tor-rtcompat = "0.48"
 safelog = "0.10"
+# The TLS crypto provider Arti leaves to the application (tor_net.rs installs it).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 futures = "0.3"
 
 [profile.release]

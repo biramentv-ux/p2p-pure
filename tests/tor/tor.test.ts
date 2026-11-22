@@ -156,7 +156,7 @@ describe("П6 Tor channel", () => {
 describe("П6 on Android (TorPlugin)", () => {
   it("is not offered when the APK has no Tor library", async () => {
     const { torBridge } = await import("../../src/tor/torBridge");
-    const win = { Capacitor: { isNativePlatform: () => true, Plugins: { Tor: { status: () => Promise.reject(new Error("unavailable")) } } } };
+    const win = { Capacitor: { isNativePlatform: () => true, Plugins: { Tor: { status: async () => ({ available: false, started: false }) } } } };
     expect(await torBridge(win as never)).toBeNull();
   });
 
@@ -164,7 +164,7 @@ describe("П6 on Android (TorPlugin)", () => {
     const { torBridge } = await import("../../src/tor/torBridge");
     const sent: Array<[number, string]> = [];
     const plugin = {
-      status: async () => ({ started: false }),
+      status: async () => ({ available: true, started: false }),
       start: async () => ({ onion: DDG }),
       connect: async () => ({ id: 7 }),
       send: async (o: { id: number; data: string }) => void sent.push([o.id, o.data]),
