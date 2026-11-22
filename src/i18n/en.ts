@@ -8,6 +8,7 @@ import { EN_PAIRING } from "./enPairing";
 import { PROTECT_EN } from "./protect";
 import { GROUP_TIMER_EN } from "./groupTimer";
 import { NATIVE_NET_EN } from "./nativeNet";
+import { KEY_CONTINUITY_EN } from "./keyContinuity";
 import { CONNECT_EN } from "./connectCalls";
 
 export const EN_DICTIONARY: Record<string, string> = {
@@ -16,6 +17,7 @@ export const EN_DICTIONARY: Record<string, string> = {
   ...PROTECT_EN,
   ...GROUP_TIMER_EN,
   ...NATIVE_NET_EN,
+  ...KEY_CONTINUITY_EN,
   ...CONNECT_EN,
   // App shell and tabs
   "Език": "Language",

@@ -37,3 +37,7 @@ natlab-report.json
 scripts/devicefarm/farm.json
 scripts/devicefarm/.devicectl.json
 devicefarm-report.json
+
+# П6 Android Tor library (built by .github/workflows/android-tor.yml)
+android-tor/target/
+android/app/src/main/jniLibs/

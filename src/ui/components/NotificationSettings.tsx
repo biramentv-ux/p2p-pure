@@ -8,12 +8,22 @@ import {
   type NotifySettings,
 } from "../../notify/notifier";
 import { SOUNDS, playSound, primeAudio, type SoundId } from "../../notify/sounds";
+import {
+  backgroundLinkEnabled,
+  backgroundLinkTexts,
+  backgroundLinkPlugin,
+  openBatterySettings,
+  setBackgroundLinkEnabled,
+  syncBackgroundLink,
+} from "../../platform/mobile/backgroundLink";
 
 /** Sounds and notifications for new messages from contacts and groups. Per device. */
 export function NotificationSettings() {
   const { t } = useI18n();
   const [form, setForm] = useState<NotifySettings>(() => loadNotifySettings());
   const [perm, setPerm] = useState<string>(() => permission());
+  const android = backgroundLinkPlugin() !== null;
+  const [keepLink, setKeepLink] = useState(() => backgroundLinkEnabled());
 
   function update(next: NotifySettings) {
     setForm(next);
@@ -36,6 +46,28 @@ export function NotificationSettings() {
       <p role="note">
         {t("Известие идва само докато приложението е отворено или е във фона. Няма сървър, който да го изпрати, когато е затворено.")}
       </p>
+      {android && (
+        <div className="keep-link">
+          <label className="confirm-row">
+            <input
+              type="checkbox"
+              checked={keepLink}
+              onChange={(e) => {
+                setKeepLink(e.target.checked);
+                setBackgroundLinkEnabled(e.target.checked);
+                void syncBackgroundLink(true, backgroundLinkTexts(t));
+              }}
+            />
+            {t("Дръж връзките отворени и при изключен екран")}
+          </label>
+          <p className="hint">
+            {t("Приложението остава будно с постоянно известие, така че съобщенията идват и при заключен телефон. Харчи батерия. Ако системата все пак го спира, изключи оптимизацията на батерията за него.")}
+          </p>
+          <button type="button" className="secondary" onClick={() => void openBatterySettings()}>
+            {t("Настройки за батерията")}
+          </button>
+        </div>
+      )}
       <label className="confirm-row">
         <input type="checkbox" checked={form.enabled} onChange={(e) => update({ ...form, enabled: e.target.checked })} />
         {t("Звук и известие при ново съобщение от контакт или група")}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { notifyIncoming, previewText } from "../../notify/notifier";
 import type { Contact } from "../../contacts/contacts";
 import { DISAPPEAR_OPTIONS, disappearLabel } from "../../history/disappearing";
@@ -16,7 +16,7 @@ import { MAX_FILE_BYTES } from "../../p2p/fileTransfer";
 import { FileBubble, TransferList } from "../components/FileBubble";
 import { PastePreview } from "../components/PastePreview";
 import { usePasteImage } from "../pasteImage";
-import { decodeControl, encodeControl, isControlMessage, type ControlMessage } from "../../p2p/control";
+import { decodeControl, encodeControl, isControlMessage, type ControlMessage, type VouchMessage } from "../../p2p/control";
 import type { PeerLink } from "../../p2p/peer";
 import { isEncryptedMessage, type SecureSession } from "../../p2p/secureSession";
 import { buildPhotoFrames, PhotoReceiver, sanitizeText, sniffMime } from "../../p2p/photo";
@@ -25,6 +25,8 @@ import { isCallSignal } from "../../call/signal";
 import { useChatCall } from "../useChatCall";
 import { CallPanel } from "../components/CallPanel";
 import { LanguageSwitch } from "../components/LanguageSwitch";
+import { KeyContinuityPanel } from "../components/KeyContinuityPanel";
+import { useKeyContinuity, type Me } from "../useKeyContinuity";
 import { useI18n } from "../../i18n";
 import { CIPHER_SUITES, suiteLabel, type CipherSuite } from "../../p2p/cipherSuite";
 import {
@@ -46,9 +48,11 @@ interface ChatScreenProps {
   session: SecureSession;
   historyKey: Uint8Array;
   onClose: () => void;
+  /** Me (П7: signing "this is the new key of …"). Without it the key-continuity panel is hidden. */
+  me?: Me;
 }
 
-export function ChatScreen({ contact, link, session, historyKey, onClose }: ChatScreenProps) {
+export function ChatScreen({ contact, link, session, historyKey, onClose, me }: ChatScreenProps) {
   const { t, locale } = useI18n();
   // The mounted effect below runs once, so it reads the latest translator through a ref.
   const tRef = useRef(t);
@@ -62,6 +66,16 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
   }, [messages]);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  // П7: key continuity (src/trust, docs/KEY-CONTINUITY.md).
+  const sendVouch = useCallback(async (m: VouchMessage) => link.send(await session.seal(encodeControl(m))), [link, session]);
+  const kc = useKeyContinuity(contact, me, sendVouch);
+  const kcRef = useRef(kc);
+  useEffect(() => {
+    kcRef.current = kc;
+  });
+  useEffect(() => {
+    if (kc.notice) setNotice(kc.notice);
+  }, [kc.notice]);
   const [connected, setConnected] = useState(link.isOpen());
   // Disappearing messages (Н7): the same value on both sides (history/timerSync.ts).
   const { timerMs, sync: timer, withTimer } = useDisappearingTimer(contact);
@@ -188,6 +202,10 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
             if (!control) return;
             if (control.t === "suite") {
               if (alive) onSuiteMessage(control);
+              return;
+            }
+            if (control.t === "vouch-grant" || control.t === "vouch-ask" || control.t === "vouch-list") {
+              await kcRef.current.handle(control);
               return;
             }
             if (control.t === "timer") {
@@ -566,9 +584,15 @@ export function ChatScreen({ contact, link, session, historyKey, onClose }: Chat
               </button>
             ))}
           </div>
+          <KeyContinuityPanel me={me} kc={kc} send={sendVouch} />
         </section>
       )}
 
+      {kc.current.replacedBy && (
+        <p role="note" className="chat-notice">
+          {t("{name} вече има нов ключ ({new}). Пишете си там.", { name: contact.name, new: kc.current.replacedBy.name })}
+        </p>
+      )}
       {notice && <p role="alert" className="chat-notice">{notice}</p>}
 
       {confirmWipe && (

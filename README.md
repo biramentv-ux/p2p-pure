@@ -295,11 +295,13 @@ bash install.sh              # или: bash install.sh --appimage  (само з�
 |---|---|---|---|
 | **П4 Нативен транспорт** | Когато WebRTC не мине (restricted↔symmetric, symmetric↔symmetric NAT), собствени UDP сокети: порт от рутера (PCP, NAT-PMP, UPnP-IGD) и „рожденно“ пробиване с 256 сокета. ChaCha20-Poly1305 за всеки датаграм, отгоре същият Double Ratchet. | Electron, Tauri (`--features native-transport`), Android | [ADR-007](.10x/adrs/007-p4-native-transport.md), [PROTOCOL §9a](docs/PROTOCOL.md) |
 | **П5 Mesh** | Пакети през Bluetooth и Wi-Fi Aware от телефон на телефон, TTL ≤ 7, съхрани-и-препрати, сменящи се id. Кратки текстове през LoRa (Meshtastic). Без нов криптографски формат. | Ядро и Android плъгин; още без екран | [ADR-008](.10x/adrs/008-p5-mesh.md), [PROTOCOL §9c](docs/PROTOCOL.md) |
-| **П6 Само през Tor** | Arti в настолното приложение: връзка само между две onion услуги, в поканата няма IP адрес. | Tauri (`--features tor-transport`) | [ADR-009](.10x/adrs/009-p6-tor-onion-only.md), [PROTOCOL §9b](docs/PROTOCOL.md) |
+| **П6 Само през Tor** | Arti: връзка само между две onion услуги, в поканата няма IP адрес. | Tauri (`--features tor-transport`); Android APK от workflow-а „Android APK with Tor“ | [docs/TOR.md](docs/TOR.md), [ADR-009](.10x/adrs/009-p6-tor-onion-only.md), [ADR-013](.10x/adrs/013-p6-tor-android.md) |
+| **П3 Връзка във фона** | Без push сървър: foreground service държи връзките при изключен екран, съобщенията стават системни известия. Харчи батерия. UnifiedPush не се ползва (изисква сървър). | Android | [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md), [ADR-012](.10x/adrs/012-p3-android-keep-alive.md) |
+| **П7 Нов ключ на познат човек** | Който е загубил 12-те думи, получава подписи от общи контакти, проверили новия му ключ; другите броят само подписи от свои проверени контакти. Без лог и без сървър. | Навсякъде (чат → Криптография) | [docs/KEY-CONTINUITY.md](docs/KEY-CONTINUITY.md), [ADR-011](.10x/adrs/011-p7-key-continuity.md) |
 | **Н8 NAT лаборатория** | Linux namespaces с cone, restricted и symmetric NAT, загуба на пакети, локален STUN и два браузъра; ферма от телефони; грешката казва защо не става. | `sudo npm run test:natlab`, `npm run farm` | [docs/NAT-LAB.md](docs/NAT-LAB.md), [docs/DEVICE-FARM.md](docs/DEVICE-FARM.md) |
 | **Н9 Fuzz тестове** | fast-check върху всички парсери: никой вход не хвърля нещо извън определените грешки. | `npm run test:fuzz` | [ADR-006](.10x/adrs/006-n8-nat-lab-and-fuzzing.md) |
 
-Какво още не е проверено: Android и Windows обвивките на нативния транспорт и mesh радиото на истински телефони; Tor срещу истинската мрежа; IPv6 сценариите в лабораторията (вървят само в CI).
+Какво още не е проверено: Android и Windows обвивките на нативния транспорт, mesh радиото и връзката във фона на истински телефони; Tor срещу истинската мрежа и APK-то с Tor; IPv6 сценариите в лабораторията (вървят само в CI).
 
 ## ⚠️ Ограничения, които приемаме
 
@@ -660,11 +662,13 @@ The extension collects no data; it only opens the app.
 |---|---|---|---|
 | **P4 Native transport** | When WebRTC can't get through (restricted↔symmetric, symmetric↔symmetric NAT), the app's own UDP sockets: a port from the router (PCP, NAT-PMP, UPnP-IGD) and "birthday" punching with 256 sockets. ChaCha20-Poly1305 per datagram, the same Double Ratchet on top. | Electron, Tauri (`--features native-transport`), Android | [ADR-007](.10x/adrs/007-p4-native-transport.md), [PROTOCOL §9a](docs/PROTOCOL.md) |
 | **P5 Mesh** | Packets over Bluetooth and Wi-Fi Aware from phone to phone, TTL ≤ 7, store and forward, rotating ids. Short texts over LoRa (Meshtastic). No new crypto format. | Core and Android plugin; no screen yet | [ADR-008](.10x/adrs/008-p5-mesh.md), [PROTOCOL §9c](docs/PROTOCOL.md) |
-| **P6 Tor only** | Arti in the desktop app: a link only between two onion services, no IP address in the invitation. | Tauri (`--features tor-transport`) | [ADR-009](.10x/adrs/009-p6-tor-onion-only.md), [PROTOCOL §9b](docs/PROTOCOL.md) |
+| **P6 Tor only** | Arti: a link only between two onion services, no IP address in the invitation. | Tauri (`--features tor-transport`); Android APK from the "Android APK with Tor" workflow | [docs/TOR.md](docs/TOR.md), [ADR-009](.10x/adrs/009-p6-tor-onion-only.md), [ADR-013](.10x/adrs/013-p6-tor-android.md) |
+| **P3 Background link** | No push server: a foreground service keeps the links up with the screen off and new messages become system notifications. Uses battery. UnifiedPush is not used (it needs a server). | Android | [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md), [ADR-012](.10x/adrs/012-p3-android-keep-alive.md) |
+| **P7 New key of someone you know** | Whoever lost their 12 words gets signatures from mutual contacts who checked the new key; others count only signatures from contacts they verified themselves. No log, no server. | Everywhere (chat → Cryptography) | [docs/KEY-CONTINUITY.md](docs/KEY-CONTINUITY.md), [ADR-011](.10x/adrs/011-p7-key-continuity.md) |
 | **N8 NAT lab** | Linux namespaces with cone, restricted and symmetric NAT, packet loss, a local STUN and two browsers; a phone farm; the error says why it didn't connect. | `sudo npm run test:natlab`, `npm run farm` | [docs/NAT-LAB.md](docs/NAT-LAB.md), [docs/DEVICE-FARM.md](docs/DEVICE-FARM.md) |
 | **N9 Fuzz tests** | fast-check on every parser: no input throws anything but the defined errors. | `npm run test:fuzz` | [ADR-006](.10x/adrs/006-n8-nat-lab-and-fuzzing.md) |
 
-Not verified yet: the Android and Windows shells of the native transport and the mesh radio on real phones; Tor against the real network; the IPv6 lab scenarios (they run in CI only).
+Not verified yet: the Android and Windows shells of the native transport, the mesh radio and the background link on real phones; Tor against the real network and the APK with Tor; the IPv6 lab scenarios (they run in CI only).
 
 ## ⚠️ Trade-offs we accept
 

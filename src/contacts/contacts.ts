@@ -22,6 +22,7 @@ import { asBufferSource } from "../identity/bufferUtils";
 import { STORE_CONTACTS, STORE_CONTACTS_SEALED, openDatabase, withStore } from "../db/database";
 import { base64UrlToBytes, bytesToBase64Url } from "../p2p/encoding";
 import { validDisappearMs } from "../history/disappearing";
+import { parseVouch, type Vouch } from "../trust/vouch";
 
 export interface Contact {
   did: string;
@@ -36,7 +37,24 @@ export interface Contact {
   disappearMs?: number;
   /** When that timer was last set (by either person): the later setting wins on both sides. */
   disappearAt?: number;
+  /** П7: this is the new key of an earlier contact (docs/KEY-CONTINUITY.md). */
+  succeeds?: KeyChange;
+  /** П7: this contact has a new key now; `did` is the new contact. */
+  replacedBy?: KeyChange;
+  /** П7: signed statements this contact gave me ("you are the new key of <old>"), to show others. */
+  vouchesForMe?: Vouch[];
 }
+
+/** One side of a key change: the other contact, and who confirmed it (names, as I saw them). */
+export interface KeyChange {
+  did: string;
+  name: string;
+  at: number;
+  by: string[];
+}
+
+/** At most this many statements kept per contact. */
+const MAX_VOUCHES_PER_CONTACT = 5;
 
 export interface IntroducedBy {
   did: string;
@@ -124,6 +142,9 @@ function toJson(c: Contact): string {
     ...(c.introducedBy ? { ib: { did: c.introducedBy.did, name: c.introducedBy.name } } : {}),
     ...(c.disappearMs ? { dm: c.disappearMs } : {}),
     ...(c.disappearAt ? { dmAt: c.disappearAt } : {}),
+    ...(c.succeeds ? { su: c.succeeds } : {}),
+    ...(c.replacedBy ? { rb: c.replacedBy } : {}),
+    ...(c.vouchesForMe?.length ? { vfm: c.vouchesForMe.slice(-MAX_VOUCHES_PER_CONTACT) } : {}),
   });
 }
 
@@ -147,10 +168,26 @@ function fromJson(text: string): Contact | null {
     if (ib && typeof ib === "object" && typeof ib.did === "string" && typeof ib.name === "string") {
       c.introducedBy = { did: ib.did, name: ib.name };
     }
+    const su = keyChange(o.su);
+    if (su) c.succeeds = su;
+    const rb = keyChange(o.rb);
+    if (rb) c.replacedBy = rb;
+    if (Array.isArray(o.vfm)) {
+      const vs = o.vfm.map(parseVouch).filter((v): v is Vouch => v !== null);
+      if (vs.length) c.vouchesForMe = vs.slice(-MAX_VOUCHES_PER_CONTACT);
+    }
     return c;
   } catch {
     return null;
   }
+}
+
+function keyChange(raw: unknown): KeyChange | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.did !== "string" || typeof o.name !== "string" || typeof o.at !== "number") return null;
+  if (!Array.isArray(o.by) || !o.by.every((n) => typeof n === "string")) return null;
+  return { did: o.did, name: o.name, at: o.at, by: o.by as string[] };
 }
 
 async function seal(k: Keys, c: Contact): Promise<SealedRow> {
@@ -311,6 +348,25 @@ export async function renameContact(did: string, name: string): Promise<void> {
   const c = await getContact(did);
   if (!c) return;
   await saveContact({ ...c, name: name.trim() || c.name });
+}
+
+/**
+ * П7: records that `newDid` is the new key of `oldDid` (both already in the book). `by` = the names
+ * of the people who confirmed it (empty when the user decided on their own safety-word check).
+ */
+export async function linkKeyChange(oldDid: string, newDid: string, by: string[], at = Date.now()): Promise<void> {
+  const [oldC, newC] = await Promise.all([getContact(oldDid), getContact(newDid)]);
+  if (!oldC || !newC || oldDid === newDid) return;
+  await saveContact({ ...newC, succeeds: { did: oldDid, name: oldC.name, at, by } });
+  await saveContact({ ...oldC, replacedBy: { did: newDid, name: newC.name, at, by } });
+}
+
+/** П7: keeps a statement a contact gave me (newest last, at most a few per contact). */
+export async function keepVouchFrom(did: string, v: Vouch): Promise<void> {
+  const c = await getContact(did);
+  if (!c) return;
+  const others = (c.vouchesForMe ?? []).filter((x) => x.old !== v.old);
+  await saveContact({ ...c, vouchesForMe: [...others, v].slice(-MAX_VOUCHES_PER_CONTACT) });
 }
 
 /** The user compared the safety code with this contact and it matched. */

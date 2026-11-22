@@ -1,0 +1,30 @@
+# П6 (experiment): Tor (Arti) for the Android app, as a JNI library (libp2ptor.so).
+# The Tor code is src-tauri/src/tor_net.rs, shared with the desktop app. Not part of normal
+# builds: .github/workflows/android-tor.yml builds it with the NDK and an APK that carries it.
+[package]
+name = "p2ptor"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+jni = { version = "0.21", default-features = false }
+tokio = { version = "1", features = ["sync", "time", "rt", "rt-multi-thread"] }
+arti-client = { version = "0.48", default-features = false, features = ["tokio", "rustls", "compression", "onion-service-client", "onion-service-service", "static-sqlite"] }
+tor-hsservice = "0.48"
+tor-cell = "0.48"
+tor-proto = "0.48"
+tor-rtcompat = "0.48"
+safelog = "0.10"
+futures = "0.3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
