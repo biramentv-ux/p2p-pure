@@ -19,11 +19,11 @@ import org.json.JSONArray;
  */
 @CapacitorPlugin(name = "Tor")
 public class TorPlugin extends Plugin {
-    private static final boolean LOADED = load();
+    private static final boolean LOADED = loadLibrary();
     private final ExecutorService io = Executors.newCachedThreadPool();
     private volatile String onion;
 
-    private static boolean load() {
+    private static boolean loadLibrary() {
         try {
             System.loadLibrary("p2ptor");
             return true;
