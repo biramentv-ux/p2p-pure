@@ -126,6 +126,73 @@ mod tests {
         assert_eq!(b64(b"foobar"), "Zm9vYmFy");
     }
 
+    /// The real Tor network: two onion services in this process, A connects to B's address,
+    /// bytes go both ways. Not run by default (needs the network and a few minutes):
+    /// `cargo test --release -- --ignored --nocapture` (android-tor.yml, job live-tor).
+    #[test]
+    #[ignore = "needs the real Tor network"]
+    fn live_onion_roundtrip() {
+        use std::time::{Duration, Instant};
+        let dir = std::env::temp_dir().join(format!("p2ptor-live-{}", std::process::id()));
+        let a = TorHub::new();
+        let b = TorHub::new();
+        let deadline = Instant::now() + Duration::from_secs(900);
+        runtime().block_on(async {
+            let started = Instant::now();
+            let (oa, ob) = futures::join!(a.start(dir.join("a/state"), dir.join("a/cache")), b.start(dir.join("b/state"), dir.join("b/cache")));
+            let oa = oa.expect("A: Tor and onion service");
+            let ob = ob.expect("B: Tor and onion service");
+            eprintln!("bootstrapped in {:?}; A = {oa}, B = {ob}", started.elapsed());
+            assert!(tor_net::is_onion_v3(&oa) && tor_net::is_onion_v3(&ob) && oa != ob);
+
+            // B's descriptor takes a while to reach the directories: retry until it does.
+            let id = loop {
+                match a.connect(&ob).await {
+                    Ok(id) => break id,
+                    Err(e) => {
+                        assert!(Instant::now() < deadline, "A never reached B: {e}");
+                        eprintln!("not yet ({:?}): {e}", started.elapsed());
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+                    }
+                }
+            };
+            eprintln!("A connected to B after {:?}", started.elapsed());
+            a.send(id, b"hello over tor").await.expect("A sends");
+
+            let mut got = Vec::new();
+            let mut at_b = None;
+            while got.len() < 14 {
+                assert!(Instant::now() < deadline, "B got only {got:?}");
+                for e in b.recv(1000).await {
+                    match e {
+                        Event::Open { id, incoming } => {
+                            assert!(incoming);
+                            at_b = Some(id);
+                        }
+                        Event::Data { data, .. } => got.extend(data),
+                        Event::Close { .. } => {}
+                    }
+                }
+            }
+            assert_eq!(got, b"hello over tor");
+            b.send(at_b.expect("B saw the stream open"), b"pong").await.expect("B answers");
+
+            let mut back = Vec::new();
+            while back.len() < 4 {
+                assert!(Instant::now() < deadline, "A got only {back:?}");
+                for e in a.recv(1000).await {
+                    if let Event::Data { id: from, data } = e {
+                        assert_eq!(from, id);
+                        back.extend(data);
+                    }
+                }
+            }
+            assert_eq!(back, b"pong");
+            eprintln!("round trip over two onion services done after {:?}", started.elapsed());
+        });
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn events_are_json() {
         let j = events_json(vec![Event::Open { id: 1, incoming: true }, Event::Data { id: 1, data: b"hi".to_vec() }, Event::Close { id: 1 }]);
